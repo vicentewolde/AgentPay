@@ -413,9 +413,9 @@ Cuatro decisiones tomadas antes de escribir código, que aplican a las siete
 fases sin excepción — no son de AgentPass, son de AgentPay:
 
 1. **Monorepo público único desde el día uno**, para construir historial de
-   commits visible de cara a SCF. *Estado real: todavía no cumplido —
-   `vicentewolde/agentpass` sigue privado (I-13). Es el ítem más barato de
-   resolver de toda esta lista.*
+   commits visible de cara a SCF. *Cumplido el 2026-09-02 (`P-1`):
+   `vicentewolde/AgentPay` es público, y AgentPass entró fusionado con sus diez
+   commits como ancestros reales, no copiado. Supersede a I-13.*
 2. **Versiones fijadas del toolchain**, resueltas contra la red viva en cada
    corrida, nunca asumidas. *Cumplido en la Fase 1 (`soroban-sdk` 27.0.6 pese
    a protocolo 28 vivo, con `bootstrap` avisando si diverge — I-3). El mismo
