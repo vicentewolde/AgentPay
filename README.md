@@ -30,6 +30,18 @@ Checks 1 and 2 need no network at all — `did:stellar:testnet:<G-address>`
 resolves deterministically, because the Stellar account's public key *is* the
 `Ed25519VerificationKey2020`.
 
+## Project documentation
+
+Written in Spanish, because that is the language its readers use. Code,
+comments and commit messages are in English.
+
+| | |
+|---|---|
+| [docs/CONTEXTO.md](docs/CONTEXTO.md) | What AgentPass is, the thesis, what it is **not** |
+| [docs/BITACORA.md](docs/BITACORA.md) | Running log: current state, what each milestone delivered |
+| [docs/DECISIONES.md](docs/DECISIONES.md) | Every significant decision, with its rationale and the rejected alternative |
+| [docs/evidencia/](docs/evidencia/) | Raw command output for each milestone |
+
 ## Requirements
 
 - Node ≥ 22 and pnpm 11 (`brew install pnpm`)

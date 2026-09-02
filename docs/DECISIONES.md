@@ -1,0 +1,183 @@
+# Decisiones
+
+> Registro de decisiones importantes. Una entrada por decisión, con su motivo y
+> la alternativa que se descartó. **No se borran entradas**: si una decisión se
+> revierte, se marca como `Superada` y se agrega la nueva.
+>
+> Contexto: [CONTEXTO.md](CONTEXTO.md) · Avance: [BITACORA.md](BITACORA.md)
+
+Estados: `Vigente` · `Superada` · `Pendiente`
+
+---
+
+## Parte A — Decisiones del brief
+
+Tomadas por Vicente antes de escribir código. **No se re-litigan.** Si al
+implementarlas aparece un problema, se avisa y se espera; no se cambian
+unilateralmente.
+
+### A-1 · Formato de credencial: perfil VC-JWT · `Vigente`
+Data model W3C VC 2.0 serializado como JWS compacto firmado con EdDSA.
+**Descartado:** JSON-LD con contexts, canonicalización, Data Integrity proofs,
+BBS+. **Motivo:** peso y complejidad injustificados para un piloto de 10 semanas.
+
+### A-2 · Método DID derivable, sin red · `Vigente`
+`did:stellar:testnet:<G-address>`. El documento DID se deriva determinísticamente
+de la dirección; la llave pública de la cuenta *es* la llave de verificación.
+**Motivo:** verificar una firma no debe requerir ninguna llamada de red.
+
+### A-3 · La credencial nunca va on-chain · `Vigente`
+On-chain solo van el SHA-256 del JWS compacto, su estado y el registro de
+emisores. **Motivo:** privacidad. Ver [CONTEXTO.md](CONTEXTO.md).
+
+### A-4 · Superficie del contrato `agent_registry` · `Vigente`
+`register_issuer`, `deactivate_issuer`, `anchor`, `revoke`, `status`. Eventos
+`anchored` y `revoked`. TTL de entradas persistentes extendido en cada `anchor`.
+**Motivo del TTL:** sin extenderlo, el estado se archiva y la demo se cae en
+semanas.
+
+### A-5 · Verificar son exactamente 3 chequeos · `Vigente`
+(a) firma contra la llave derivada del DID del emisor; (b) `now` dentro de
+`validFrom`/`validUntil`; (c) `status(sha256(jws)) == Active` y emisor activo.
+
+### A-6 · Versiones: resolver, no asumir · `Vigente`
+La versión del SDK y el protocolo vivo se consultan, no se suponen.
+Ver [I-3](#i-3--soroban-sdk-2706-pese-a-que-la-red-corre-protocolo-28--vigente).
+
+### A-7 · `scope.limits` es declarativo en esta fase · `Vigente`
+Se firma y se transporta; **nada lo hace cumplir todavía**. El enforcement llega
+después. **Motivo:** identidad primero, enforcement después.
+
+---
+
+## Parte B — Decisiones de implementación
+
+Tomadas durante la construcción. Estas **sí** se pueden discutir.
+
+### I-1 · Raíz del monorepo en `agentpass/`, no en la carpeta padre · `Vigente`
+**Fecha:** 2026-09-01 (T1)
+La carpeta padre `Agenticpay/` ya contenía notas y prompts del usuario. El repo
+vive en el subdirectorio `agentpass/` y esas notas quedan fuera, intactas y sin
+versionar.
+
+### I-2 · Dos workspaces separados, un solo puente · `Vigente`
+**Fecha:** 2026-09-01 (T1)
+El workspace de pnpm cubre `packages/*` y `apps/*`. El workspace de Cargo vive
+en `contracts/` y **no tiene `package.json`**, así que pnpm no lo ve. El único
+artefacto compartido es `deployments/testnet.json`.
+**Motivo:** TypeScript nunca importa Rust y Rust nunca sabe de TypeScript. Un
+solo punto de contacto es un solo punto que puede romperse.
+**Descartado:** Cargo.toml en la raíz junto al package.json (lo que genera
+`stellar contract init` por defecto), y plugins que acoplen cargo con node.
+
+### I-3 · `soroban-sdk` 27.0.6 pese a que la red corre protocolo 28 · `Vigente`
+**Fecha:** 2026-09-01 (T1)
+La regla de [A-6](#a-6--versiones-resolver-no-asumir) dice que la major del SDK
+sigue el protocolo de la red, lo que apuntaría a 28. Al resolverlo:
+
+| fuente | valor |
+|---|---|
+| protocolo vivo de testnet (`getVersionInfo`) | 28 |
+| `stellar-cli` estable | 28.0.0 |
+| `soroban-sdk` último **estable** | **27.0.6** |
+| `soroban-sdk` 28 | solo `28.0.0-rc.1` |
+| template de `stellar contract init` (CLI 28.0.0) | pinea `"27"` |
+
+**Motivo:** un contrato compilado con SDK 27 ejecuta sin problema en una red
+protocolo 28 — la major del SDK gobierna a qué *host functions nuevas* tienes
+acceso, no la compatibilidad de ejecución. El propio CLI 28 pinea 27.
+**Descartado:** `28.0.0-rc.1`, por ser release candidate.
+**Confirmado por Vicente el 2026-09-01.**
+**Vigilancia:** `pnpm run bootstrap` compara el pin contra el protocolo vivo en
+cada corrida e imprime una flecha si divergen. Cuando salga el 28 estable, la
+flecha seguirá apareciendo hasta que se actualice el pin.
+
+### I-4 · Los tests resuelven a `src/`, no a `dist/` · `Vigente`
+**Fecha:** 2026-09-01 (T1)
+Cada paquete tiene un `vitest.config.ts` con alias que apuntan al `src/` de sus
+hermanos del workspace.
+**Motivo:** el ciclo de TDD no requiere un `tsc -b` previo en cada iteración.
+La resolución de producción sigue pasando por `exports` → `dist/`.
+
+### I-5 · Un `AgentPassError` con `code` de unión literal · `Vigente`
+**Fecha:** 2026-09-01 (T1)
+Una sola clase con una propiedad `code` tipada como unión de literales, más
+`details` y `cause`.
+**Motivo:** `hasErrorCode(e, "CredentialRevoked")` estrecha el tipo igual que una
+jerarquía de subclases, sin la ceremonia de una clase por caso.
+**Regla derivada:** las superficies aún no implementadas **lanzan**
+`NotImplemented`; nunca devuelven `undefined`.
+
+### I-6 · `tsconfig.scripts.json` + `tsx --tsconfig` para `scripts/` · `Vigente`
+**Fecha:** 2026-09-01 (T2)
+`scripts/` está fuera del grafo de project references y resuelve `@agentpass/*`
+vía `paths`.
+**Motivo:** `pnpm run bootstrap` funciona en un repo recién clonado, sin build
+previo. Sin esto, `scripts/` además quedaba sin typecheckear.
+
+### I-7 · Parser `.env` propio en vez de una dependencia · `Vigente`
+**Fecha:** 2026-09-01 (T2)
+~40 líneas. Formato propio: `KEY="value"`, comentarios con `#`, sin interpolación.
+**Motivo:** el passphrase de Stellar contiene `;` y espacios; una librería de
+terceros podría discrepar en los bordes. Un test verifica que
+`parse(format(x)) === x` incluso con comillas y backslashes.
+
+### I-8 · Bootstrap declara qué claves posee; el resto se arrastra · `Vigente`
+**Fecha:** 2026-09-01 (T2)
+`MANAGED_KEYS` enumera las claves que `bootstrap` reescribe. Todo lo demás en
+`.env.local` sobrevive bajo un encabezado propio.
+**Motivo:** es la garantía de que un re-run de `bootstrap` no borra el contract
+id que escribe `deploy:registry`. Probado end-to-end y con test unitario.
+
+### I-9 · `@stellar/stellar-sdk/base` en `core`, no `@stellar/stellar-base` · `Vigente`
+**Fecha:** 2026-09-01 (T3)
+`@stellar/stellar-base` está **deprecado**: se absorbió dentro de
+`@stellar/stellar-sdk`, que en v17 ya no lo usa. Instalarlo habría metido una
+segunda implementación de StrKey/Keypair sin mantenimiento.
+El subpath `/base` expone `StrKey`, `Keypair` y `Networks` **sin** los clientes
+de Horizon ni RPC.
+**Motivo:** la restricción "core no hace I/O" queda impuesta por el import, no
+por disciplina. Una sola versión de stellar-sdk en el workspace.
+
+### I-10 · `StellarDid` es un tipo *branded* · `Vigente`
+**Fecha:** 2026-09-01 (T3)
+Solo `stellarAddressToDid`, `parseStellarDid` y `stellarDidSchema` pueden
+producir un `StellarDid`.
+**Motivo:** un string arbitrario no puede llegar a una función que espera un DID
+ya validado. El compilador lo impide.
+
+### I-11 · El parseo de DIDs no es lenient · `Vigente`
+**Fecha:** 2026-09-01 (T3)
+Sin `trim`, sin normalización de mayúsculas. `" did:stellar:..."` se rechaza.
+**Motivo:** un DID que difiere en un byte identifica a **otro sujeto**.
+Normalizar silenciosamente es exactamente la clase de fallo que este proyecto
+existe para evitar.
+
+### I-12 · Documentación del proyecto en español, código en inglés · `Vigente`
+**Fecha:** 2026-09-01
+`CONTEXTO`, `BITACORA` y `DECISIONES` en español porque los lee Vicente. Código,
+comentarios, mensajes de commit y `README.md` técnico en inglés.
+**Motivo:** el repo puede ir a SCF o a colaboradores externos.
+**Decidido por Vicente el 2026-09-01.**
+
+### I-13 · Repo privado en GitHub · `Vigente`
+**Fecha:** 2026-09-01
+`vicentewolde/agentpass`, privado. Hacerlo público después es un clic.
+**Motivo:** respaldo inmediato. Nada secreto está commiteado: `.env.local` está
+ignorado y el historial completo se auditó antes del primer push.
+**Decidido por Vicente el 2026-09-01.**
+
+---
+
+## Pendientes de decidir
+
+### P-1 · Formato del `kid` en el header del JWS · `Pendiente`
+**Aparece en:** T4
+Opciones: `kid = <did>` a secas (un `did:stellar` tiene exactamente una llave,
+así que es inambiguo) o `kid = <did>#<fragmento>`.
+
+### P-2 · ¿Documento DID completo con `publicKeyMultibase`? · `Pendiente`
+**Aparece en:** T4
+[A-2](#a-2--método-did-derivable-sin-red--vigente) menciona
+`Ed25519VerificationKey2020`, cuyo `publicKeyMultibase` requiere base58 —
+una dependencia que hoy no está. En T3 no se implementó porque nada lo consume.
