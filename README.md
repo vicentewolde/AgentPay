@@ -90,9 +90,10 @@ cd contracts && cargo test
 
 ## Status
 
-T1 (scaffold), T2 (network bootstrap), T3 (`did:stellar` derivation) and T4
-(VC-JWT sign and verify) are complete. The registry contract (T5), deploy (T6),
-the SDK (T7) and the CLI (T8) follow in order.
+T1 (scaffold), T2 (network bootstrap), T3 (`did:stellar` derivation), T4
+(VC-JWT sign and verify) and T5 (the `agent_registry` contract) are complete.
+Deploy (T6), the SDK (T7) and the CLI (T8) follow in order. The contract is
+tested and builds to wasm, but is **not yet deployed** — that is T6.
 
 Checks 1 and 2 of verification are implemented and offline. Check 3 — the
 registry lookup — arrives with the SDK in T7. Command surfaces that are declared but unwired raise

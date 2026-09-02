@@ -223,6 +223,57 @@ regex. **Motivo:** ningún float redondea un límite en el camino.
 vencida se reportaría como "vencida", ocultando la falsificación. Cubierto por
 un test y por un mutation test (invertir el orden pone 5 tests en rojo).
 
+### I-20 · `__constructor` en vez de un `initialize()` separado · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+El admin se fija en el constructor, que corre atómicamente con el despliegue.
+**Motivo:** un `initialize()` aparte deja una ventana entre desplegar e
+inicializar en la que cualquiera puede reclamar el admin.
+
+### I-21 · Eventos tipados con `#[contractevent]` · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+`env.events().publish()` está deprecado en SDK 27.
+**Motivo:** además de quitar el warning, los eventos tipados entran en la
+**interfaz del contrato**, así que las herramientas externas los descubren
+solas. Topics verificados en test: `("agentpass","anchored", issuer, subject)` y
+`("agentpass","revoked", issuer)`, exactamente como pedía [A-4](#a-4--superficie-del-contrato-agent_registry--vigente).
+
+### I-22 · Lectores puros añadidos a la superficie · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+`get_admin`, `get_issuer`, `get_credential`.
+**Motivo:** [A-5](#a-5--verificar-son-exactamente-3-chequeos--vigente) exige que
+el tercer chequeo sea `status == Active` **y el emisor activo**, pero `CredStatus`
+no tiene variante para "emisor desactivado" y la superficie listada no incluía
+forma de leerlo. Sin estos lectores A-5 no se puede implementar. No cambian
+ninguna decisión: la completan.
+
+### I-23 · Re-anclar un hash existente se rechaza · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+**Motivo:** si `anchor` sobrescribiera, un emisor podría **resetear a activa una
+credencial ya revocada** volviéndola a anclar. Cubierto por test y mutation test.
+
+### I-24 · Un emisor desactivado sí puede revocar · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+**Motivo:** revocar es una operación de seguridad. Quitarle esa capacidad a un
+emisor desactivado sería fallar en la dirección equivocada — dejaría credenciales
+vivas sin nadie que pueda cortarlas.
+
+### I-25 · Revocado gana sobre expirado; el borde es inclusivo · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+Una credencial revocada **y** vencida lee `Revoked`, por ser la afirmación más
+fuerte. En el instante exacto de `expires_at` sigue `Active`, igual que el
+`validUntil` off-chain de [T4](credential-schema.md). **Motivo:** que los dos
+lados de la verificación no discrepen en el borde.
+
+### I-26 · TTL: umbral 30 días, extender a 90, en cada escritura · `Vigente`
+**Fecha:** 2026-09-01 (T5)
+**Motivo:** [A-4](#a-4--superficie-del-contrato-agent_registry--vigente) advierte
+que sin extender el TTL el estado se archiva y la demo se cae en semanas.
+**Limitación conocida:** el entorno de tests de Soroban **no simula archivado** —
+se comprobó desactivando la extensión por completo y un test de "sigue viva a los
+60 días" seguía pasando. Ese test se eliminó por dar confianza falsa. La garantía
+real es la aserción directa sobre `get_ttl`, más la verificación contra la red
+en T6.
+
 ---
 
 ## Pendientes de decidir

@@ -8,22 +8,19 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-01 · **Último hito cerrado:** T4 · **Siguiente:** T5
+**Fecha:** 2026-09-01 · **Último hito cerrado:** T5 · **Siguiente:** T6
 
-**Ya se pueden emitir y verificar credenciales.** El sistema firma un documento
-que dice qué puede hacer un agente, y cualquiera puede comprobar que esa firma
-es auténtica y que el documento sigue vigente — todo sin conexión a internet.
-
-Lo que falta es el tercer chequeo: poder **cortar** una credencial desde afuera.
-Eso necesita el contrato en la blockchain, que es T5 y T6.
+**El contrato que permite cortar una credencial ya está escrito y probado.**
+Guarda la huella de cada credencial y su estado, y solo el emisor que la creó
+puede revocarla. Todavía **no está publicado en la red** — eso es T6.
 
 | | |
 |---|---|
 | Tests TypeScript | **73** en verde (core 55 · sdk 2 · cli 3 · scripts 13) |
-| Tests Rust | **1** en verde |
+| Tests Rust | **22** en verde |
 | Red | testnet, protocolo **28** |
 | Contrato desplegado | todavía no (T6) |
-| Commits | 5 |
+| Commits | 6 |
 
 ### Progreso
 
@@ -33,10 +30,50 @@ Eso necesita el contrato en la blockchain, que es T5 y T6.
 | T2 | Cuentas de prueba en la red | ✅ cerrado |
 | T3 | Identidad derivable sin red | ✅ cerrado |
 | T4 | Firmar y verificar credenciales | ✅ cerrado |
-| T5 | El contrato en la blockchain | ⬜ siguiente |
-| T6 | Publicar el contrato en testnet | ⬜ |
+| T5 | El contrato en la blockchain | ✅ cerrado |
+| T6 | Publicar el contrato en testnet | ⬜ siguiente |
 | T7 | La librería que junta todo | ⬜ |
 | T8 | La herramienta de línea de comandos | ⬜ |
+
+---
+
+## T5 · El contrato en la blockchain — cerrado 2026-09-01
+
+**Qué significa.** Este es el que hace real la promesa del producto: **poder
+cortar la autorización de un agente desde afuera**. El contrato guarda, por cada
+credencial, solo su huella digital y su estado. El principal llama a `revoke`, y
+desde ese momento toda verificación falla. El agente no puede impedirlo, no lo
+ve en su propio estado, y ningún prompt lo revierte.
+
+**Qué se construyó.** El registro completo: alta y baja de emisores autorizados
+(solo el administrador), anclaje de credenciales (solo un emisor activo),
+revocación (solo el emisor que la creó) y consulta de estado.
+
+**Las decisiones que evitan agujeros.** Tres que vale la pena entender:
+
+- **Una credencial revocada no se puede "resucitar".** Si volver a anclar el
+  mismo documento lo reactivara, cualquier emisor podría deshacer su propia
+  revocación. Se rechaza.
+- **Un emisor al que le quitaron el permiso igual puede revocar.** Suena
+  contradictorio, pero es lo correcto: si le quitaras esa capacidad, sus
+  credenciales quedarían vivas sin nadie que pueda cortarlas.
+- **El administrador se fija en el mismo momento del despliegue**, no en un paso
+  aparte. Un paso aparte dejaría una ventana en la que cualquiera podría
+  reclamar el control del contrato.
+
+**Cómo se comprobó.** 22 tests, incluidos los seis que pediste. Y cinco
+mutaciones deliberadas —quitar la verificación de firma del emisor, ignorar si
+el emisor está desactivado, no extender el vencimiento del almacenamiento,
+permitir re-anclar, dejar que cualquiera revoque— y **las cinco ponen tests en
+rojo**.
+
+**Un test mío que borré.** Tenía uno que decía comprobar que una credencial
+sigue viva 60 días después. Al desactivar por completo el mecanismo que debía
+probar, **el test seguía pasando**: el entorno de pruebas de Soroban no simula
+el archivado. Daba confianza falsa, así que lo eliminé y dejé escrito el porqué.
+Lo real se verifica contra la red en T6.
+
+📎 [evidencia/T5.md](evidencia/T5.md) · [contracts/README.md](../contracts/README.md)
 
 ---
 
