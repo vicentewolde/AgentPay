@@ -63,7 +63,15 @@ export type AgentPassErrorCode =
   /** The spending limit is denominated in a different asset than the price. */
   | "ScopeCurrencyMismatch"
   /** The total would exceed `scope.limits.perTx`. */
-  | "ScopeAmountExceeded";
+  | "ScopeAmountExceeded"
+  /** A purchase intent's payload does not match the intent schema. */
+  | "InvalidIntent"
+  /** `now` is past the intent's `expiresAt`. */
+  | "IntentExpired"
+  /** `now` is before the intent's `issuedAt`. */
+  | "IntentNotYetValid"
+  /** The signing key is not the one the document's subject identifies. */
+  | "SignerMismatch";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

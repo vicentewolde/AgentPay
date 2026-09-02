@@ -96,3 +96,27 @@ export {
   type ScopeRejectionCode,
   type ScopeRequest,
 } from "./scope/scope.js";
+
+export {
+  AGENTPAY_INTENT_FAMILY,
+  AGENTPAY_INTENT_TYPE,
+  DEFAULT_INTENT_TTL_SECONDS,
+  intentAuthorisationSchema,
+  intentCredentialRefSchema,
+  intentPurchaseSchema,
+  purchaseIntentSchema,
+  type IntentAuthorisation,
+  type IntentCredentialRef,
+  type IntentPurchase,
+  type PurchaseIntent,
+} from "./intent/intent.js";
+
+export {
+  AGENTPAY_INTENT_TYP,
+  intentHash,
+  signIntent,
+  verifyIntent,
+  type SignedIntent,
+  type VerifiedIntent,
+  type VerifyIntentOptions,
+} from "./intent/sign.js";

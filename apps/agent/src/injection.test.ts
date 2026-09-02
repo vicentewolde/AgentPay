@@ -56,13 +56,29 @@ async function agentOver(products: readonly Product[]): Promise<Agent> {
     credential: credential.jws,
     catalog: createMockCatalog({ products }),
     verifier: createStubVerifier(),
+    signer: credential.subjectKeypair,
   });
 }
 
 /** The tool's outcome, flattened so two runs can be compared exactly. */
 async function attempt(agent: Agent, product_id: string, quantity: number) {
   try {
-    return { outcome: "ok" as const, value: await agent.tools.invoke("create_purchase_intent", { product_id, quantity }) };
+    const value = (await agent.tools.invoke("create_purchase_intent", {
+      product_id,
+      quantity,
+    })) as Record<string, unknown>;
+    // Every signed intent has a fresh id, timestamps and signature, so two runs
+    // are never byte-identical. Compare what the *decision* produced.
+    return {
+      outcome: "ok" as const,
+      value: {
+        product_id: value.product_id,
+        quantity: value.quantity,
+        total_amount: value.total_amount,
+        asset: value.asset,
+        venue_id: value.venue_id,
+      },
+    };
   } catch (error) {
     const typed = error as { code: string; details: Record<string, unknown> };
     return { outcome: "error" as const, code: typed.code, details: typed.details };
@@ -101,9 +117,9 @@ describe("the seeded catalogue, exactly as the demo will walk it", () => {
     // The injection is not why it was refused, so removing the excess allows it.
     const result = await attempt(plainAgent, "polera-stellar-santiago", 2);
 
-    expect(result.outcome).toBe("error");
-    if (result.outcome !== "error") expect.unreachable("expected the T13 gap");
-    expect(result.code).toBe("NotImplemented");
+    expect(result.outcome).toBe("ok");
+    if (result.outcome !== "ok") expect.unreachable("expected the purchase to be authorised");
+    expect(result.value).toMatchObject({ quantity: 2, total_amount: "44.0000000" });
   });
 });
 
@@ -200,6 +216,7 @@ describe("the text reaches the agent — it is refused, not filtered", () => {
         products: [withDescription(productById("mate-calabaza"), PAYLOADS[0]?.[1] ?? "")],
       }),
       verifier: createStubVerifier({ status: "Revoked" }),
+      signer: credential.subjectKeypair,
     });
 
     await expect(

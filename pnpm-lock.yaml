@@ -38,6 +38,9 @@ importers:
       '@stellar/stellar-sdk':
         specifier: ^17.0.1
         version: 17.0.1(debug@4.4.3)
+      jose:
+        specifier: ^6.2.10
+        version: 6.2.10
       zod:
         specifier: ^4.5.4
         version: 4.5.4

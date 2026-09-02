@@ -387,3 +387,102 @@ prefiere otra cosa.
 enforcement con estado, que es de PolicyRail (Fase 3), y que `CLAUDE.md` excluye
 explícitamente del alcance de esta fase. El test que lo fija existe para que
 media implementación de `perDay` no entre sin que nadie avise.
+
+### B-17 · La credencial se reverifica contra el registro justo antes de firmar · `Vigente`
+**Fecha:** 2026-09-02 (T13) · **Cierra el hueco que T11 dejó anotado**
+
+`create_purchase_intent` vuelve a correr los tres chequeos de AgentPass
+inmediatamente antes de firmar. Si la credencial ya no verifica, no se firma
+nada y sale el error tipado correspondiente (`CredentialRevoked`,
+`NetworkError`, etc.).
+
+**Motivo.** T11 dejó la verificación solo en el arranque, y anotó el hueco: un
+agente de larga vida conservaba su herramienta de compra aunque lo revocaran a
+mitad de ejecución. La tesis del proyecto es que la autorización se puede cortar
+**desde fuera del agente**; si el corte solo surte efecto en el próximo
+reinicio, la afirmación es falsa para todo agente que no se reinicie. Y lo que
+se está por producir no es una lectura: es una firma que en las Fases 3–4 será
+la base de un pago real. Firmar contra una credencial vista hace horas es
+exactamente el agujero.
+
+Quedan **dos capas, ambas estructurales**:
+
+| capa | qué decide | cuándo |
+|---|---|---|
+| lista de herramientas (`B-6`, T11) | qué capacidades existen | al arrancar |
+| reverificación (esta) | si la autoridad sigue viva | al instante de firmar |
+
+**No contradice `B-6`.** Ese principio dice que un permiso denegado *dentro del
+contexto del modelo* es discutible. Acá el rechazo no es una política que el
+agente evalúe: el registro respondió `Revoked` y la firma no ocurre. El modelo
+no tiene más margen para negociar con eso que con una herramienta ausente.
+
+**Orden:** el chequeo de alcance corre primero, así que una compra que el alcance
+rechaza no gasta una llamada de red. Solo lo que va a firmarse paga el costo.
+Hay un test que cuenta las llamadas.
+
+**Alternativas descartadas:** (a) reverificar con una ventana de frescura de N
+segundos — ahorra llamadas a cambio de una ventana explícita en la que una
+credencial revocada sigue firmando, y las intenciones no son una ruta caliente
+que justifique ese canje; (b) hacer dinámica la lista de herramientas, que
+obligaría a que `list()` fuera asíncrona y contagiaría esa complejidad a todo
+lo que la consume, para cerrar el mismo hueco que esta línea cierra.
+
+### B-18 · El intent lo firma el agente, con la llave que su credencial nombra como sujeto · `Vigente`
+**Fecha:** 2026-09-02 (T13)
+
+Una credencial la firma su **emisor**; una intención la firma el **agente**. El
+`createAgent` recibe esa llave y comprueba al arrancar que corresponda al sujeto
+de su propia credencial; si no, falla con `SignerMismatch`, ruidosamente. Si no
+hay llave, `create_purchase_intent` no se incluye en la lista.
+
+**Motivo.** Es lo que ata "la cosa que pidió comprar" a "la cosa que el principal
+autorizó". Sin esa igualdad, un intent podría nombrar a un agente y estar firmado
+por otro, y la trazabilidad se rompe en silencio. El fallo es ruidoso porque una
+llave equivocada es una **mala configuración**, no un estado de política: no hay
+nada que el operador pueda querer de un agente que firma documentos que nunca van
+a verificar. En cambio la ausencia de llave sí es un estado legítimo —un agente de
+solo lectura— y por eso ahí la herramienta se retira en silencio en vez de
+fallar: una capacidad que no se puede ejercer no debe anunciarse.
+
+**Alternativa descartada:** que el emisor firme también las intenciones. Ahorra
+una llave, y destruye la propiedad: ya no se distinguiría lo que el agente pidió
+de lo que el principal autorizó, que es justamente la separación que la Fase 3
+necesita para que exista un Mandato.
+
+### B-19 · El intent no lleva el nombre ni la descripción del producto · `Vigente`
+**Fecha:** 2026-09-02 (T13)
+
+El bloque `purchase` tiene exactamente `productId`, `quantity`, `unitAmount`,
+`totalAmount` y `asset`. El esquema es estricto, así que colar una `description`
+hace fallar la firma.
+
+**Motivo.** Continuación directa de `B-5` y `B-13`: el texto del comercio es dato
+no confiable, y un documento firmado no debe poner la firma del agente sobre la
+prosa de un tercero. Además de la cuestión de confianza hay una práctica: la
+descripción puede cambiar en el catálogo después de firmado, y un documento que
+la incluyera quedaría en desacuerdo con el comercio sin que nadie mintiera. El
+`productId` es sobre lo que el comercio **sí** es autoritativo, y basta para
+dejar establecido qué se pidió.
+
+**Alternativa descartada:** incluir el nombre "para que el documento sea legible
+por una persona". La legibilidad se resuelve al mostrarlo —quien lo lea puede
+pedirle el producto al catálogo— sin meter texto ajeno bajo la firma.
+
+### B-20 · Un intent expira; por defecto en quince minutos · `Vigente`
+**Fecha:** 2026-09-02 (T13)
+
+`issuedAt` y `expiresAt` son obligatorios, `verifyIntent` los aplica, y el borde
+de expiración es **inclusivo** — igual que `validUntil` en la credencial y que
+`expires_at` en el contrato de la Fase 1.
+
+**Motivo.** Sin expiración, una intención firmada es una autorización al portador
+válida para siempre: alguien podría guardarla y presentarla meses después. Quince
+minutos es el orden de magnitud de un checkout, y es configurable por el operador.
+El borde inclusivo replica la invariante 4 del contrato de la Fase 1 a propósito:
+las tres capas del sistema no deben discrepar sobre qué significa "justo en el
+límite".
+
+**Alternativa descartada:** sin expiración, delegando la frescura en la
+revocación de la credencial. Es insuficiente — la credencial dura meses, y un
+intent no debería sobrevivir a la conversación que lo originó.

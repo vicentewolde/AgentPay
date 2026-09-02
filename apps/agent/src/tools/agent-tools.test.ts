@@ -1,4 +1,5 @@
 import { AgentPassError, hasErrorCode } from "@agentpass/core";
+import type { Keypair } from "@stellar/stellar-sdk/base";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createMockCatalog, MOCK_VENUE_ID } from "../catalog/mock.js";
@@ -12,14 +13,21 @@ import {
 } from "./agent-tools.js";
 
 let activeState: CredentialState;
+let signer: Keypair;
 
 beforeAll(async () => {
   const credential = await makeTestCredential();
+  signer = credential.subjectKeypair;
   activeState = await checkOwnCredential(createStubVerifier(), credential.jws);
 });
 
 function tools(credential: CredentialState = activeState) {
-  return createAgentTools({ catalog: createMockCatalog(), credential });
+  return createAgentTools({
+    catalog: createMockCatalog(),
+    credential,
+    signer,
+    verifier: createStubVerifier(),
+  });
 }
 
 describe("the agent has exactly four tools", () => {
@@ -158,21 +166,19 @@ describe("check_my_credential, on a credential that verified", () => {
   });
 });
 
-describe("create_purchase_intent, with only the signing still pending", () => {
-  it("passes the scope check, then stops at NotImplemented naming T13", async () => {
-    try {
-      await tools().invoke("create_purchase_intent", {
-        product_id: "polera-stellar-santiago",
-        quantity: 1,
-      });
-      expect.unreachable("signing has not landed yet");
-    } catch (error) {
-      expect(hasErrorCode(error, "NotImplemented")).toBe(true);
-      expect(String((error as AgentPassError).details.milestone)).toBe("T13 (signing)");
-    }
+describe("create_purchase_intent", () => {
+  it("returns a signed intent for a purchase the credential authorises", async () => {
+    const result = (await tools().invoke("create_purchase_intent", {
+      product_id: "polera-stellar-santiago",
+      quantity: 1,
+    })) as { jws: string; total_amount: string; intent_hash: string };
+
+    expect(result.jws.split(".")).toHaveLength(3);
+    expect(result.total_amount).toBe("22.0000000");
+    expect(result.intent_hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("checks the scope before it reaches the gap: 10 units is refused, not deferred", async () => {
+  it("refuses the purchase when the scope says no: 10 units is over the limit", async () => {
     await expect(
       tools().invoke("create_purchase_intent", {
         product_id: "polera-stellar-santiago",

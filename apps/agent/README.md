@@ -5,8 +5,9 @@ rather than extending it: identity, signing and revocation stay in
 `@agentpass/core` and `@agentpass/sdk`.
 
 What is built so far: **T9**, the catalogue boundary; **T10**, the tool surface;
-**T11**, the startup credential check that decides what is in it; and **T12**,
-the scope check that decides what it may buy.
+**T11**, the startup credential check that decides what is in it; **T12**, the
+scope check that decides what it may buy; and **T13**, the signed purchase
+intent it produces.
 
 ## The catalogue
 
@@ -60,7 +61,7 @@ rows sit on the path the demo actually walks.
 | `list_products` | none | works |
 | `get_product` | `product_id` | works |
 | `check_my_credential` | none | works |
-| `create_purchase_intent` | `product_id`, `quantity` | present only when the credential verified; checks scope, then `NotImplemented` until T13 |
+| `create_purchase_intent` | `product_id`, `quantity` | present only when the credential verified and a signing key is configured; checks scope, re-checks the credential, then signs |
 
 `TOOL_NAMES` is a literal union and `Tool.name` has that type, so a fifth tool
 cannot be *named* without editing `tools/tool.ts` — "four tools, no more" is a
@@ -142,6 +143,60 @@ inclusive, matching how the phase-1 contract treats expiry.
 memory of past spending, which is PolicyRail's job in phase 3. A test pins that
 boundary so half of it cannot arrive unnoticed.
 
+## The signed purchase intent
+
+A successful `create_purchase_intent` returns a compact JWS signed with the
+**agent's own** key — a credential is signed by its issuer, an intent by the
+agent its credential names as the subject. It moves no money and completes no
+purchase; it is a statement that verifies offline, against the key the agent's
+DID already contains.
+
+```json
+{
+  "type": ["AgentPayIntent", "PurchaseIntent"],
+  "intentId": "<uuid>",
+  "issuedAt": "...", "expiresAt": "...",
+  "agent": "did:stellar:testnet:G...",
+  "principal": "did:stellar:testnet:G...",
+  "credential": { "hash": "<sha256 of the credential's JWS>", "registry": "C..." },
+  "venue": "mock-bazaar:C...",
+  "purchase": { "productId", "quantity", "unitAmount", "totalAmount", "asset" },
+  "authorisation": { "perTx": "50.00", "currency": "USDC" }
+}
+```
+
+`credential.hash` is what makes this revocable rather than a bearer token:
+whoever holds the intent can ask the registry whether that credential is still
+active. A month-old intent is still an authentic signature — and the registry
+will say the authority behind it is gone.
+
+The shape is meant to survive into phase 3. Checking an intent against a Mandato
+needs who, for whom, where, what, how much, in what asset, under what limit and
+until when; all eight are here, and nothing is specific to the mock catalogue.
+
+It deliberately carries **no** product name or description: that is the venue's
+text (B-5, B-19), a signed document should not put the agent's signature on a
+third party's prose, and the description can change in the catalogue afterwards.
+The schema is strict, so smuggling one in fails the signature.
+
+`verifyIntent(jws)` checks the signature and the window, offline. It does *not*
+ask the registry about the credential — which registry to trust is the caller's
+decision, the same rule phase 1 settled with `RegistryMismatch`.
+
+## Two layers of authorisation
+
+| layer | decides | when |
+|---|---|---|
+| the tool list | which capabilities exist | at startup |
+| re-verification | whether the authority is still live | at the instant of signing |
+
+Startup verification decides whether `create_purchase_intent` exists at all
+(T11). Immediately before signing, the credential is checked against the
+registry again (T13) — because the phase's claim is that authorisation can be
+cut from outside, and that is not true for a long-running agent if the cut only
+takes effect at the next restart. The scope check runs first, so a purchase the
+scope refuses costs no network call.
+
 ## Least privilege, by type
 
 The agent takes a `CredentialVerifier` — one method — not the SDK:
@@ -175,7 +230,8 @@ Every failure is an `AgentPassError` with a `code`, from the same union in
 `InvalidVenueId`, `InvalidAssetId`, `InvalidProduct`, `ProductNotFound`,
 `UnknownTool`, `InvalidToolInput`, `InvalidAmount`, `ScopeActionNotAllowed`,
 `ScopeVenueNotAllowed`, `ScopeAssetNotAllowed`, `ScopeCurrencyMismatch` and
-`ScopeAmountExceeded`.
+`ScopeAmountExceeded`, `InvalidIntent`, `IntentExpired`, `IntentNotYetValid`
+and `SignerMismatch`.
 
 ## Documentation
 

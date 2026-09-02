@@ -26,6 +26,7 @@ async function startAgent(
     credential: options.jws ?? credential.jws,
     catalog: createMockCatalog(),
     verifier: createStubVerifier({ status: options.status, failWith: options.failWith }),
+    signer: credential.subjectKeypair,
     now: options.now,
   });
 
@@ -126,6 +127,7 @@ describe("a credential that does not verify", () => {
       credential: tampered,
       catalog: createMockCatalog(),
       verifier: createStubVerifier(),
+      signer: forged.subjectKeypair,
     });
 
     expect(agent.credential.usable).toBe(false);

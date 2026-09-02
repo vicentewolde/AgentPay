@@ -13,15 +13,16 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T12 · **Siguiente:** T13
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T13 · **Siguiente:** T14
 
-El agente ya decide, antes de comprar, si su credencial lo autoriza — comercio,
-activo y monto. Lo único que falta para cerrar el circuito es firmar la
-intención (T13) y armar la demo de un comando (T14).
+El circuito está completo: el agente lee el catálogo, verifica quién es,
+comprueba si su credencial lo autoriza y produce una intención de compra
+firmada y trazable. Falta empaquetarlo como demo de un comando (T14) y
+enchufar el bazaar real (T15, bloqueado por el embajador).
 
 | | |
 |---|---|
-| Tests TypeScript | **323** rápidos (core 60 · sdk 11 · **agent 198** · cli 29 · scripts 25) |
+| Tests TypeScript | **357** rápidos (core 60 · sdk 11 · **agent 232** · cli 29 · scripts 25) |
 | Tests de integración | 3 contra testnet real (sin cambios desde la Fase 1) |
 | Tests Rust | 22 en verde (sin cambios) |
 | Adaptador de catálogo | `MockCatalogAdapter`, 12 productos |
@@ -35,9 +36,71 @@ intención (T13) y armar la demo de un comando (T14).
 | T10 | Las cuatro herramientas del agente | ✅ cerrado |
 | T11 | El agente verifica su propia credencial al arrancar | ✅ cerrado |
 | T12 | Chequeo de alcance antes de emitir una intención | ✅ cerrado |
-| T13 | La intención de compra firmada | ⏳ siguiente |
-| T14 | Demo completa en un comando | ⏳ |
+| T13 | La intención de compra firmada | ✅ cerrado |
+| T14 | Demo completa en un comando | ⏳ siguiente |
 | T15 | El catálogo real del bazaar | 🚧 bloqueado por el embajador |
+
+---
+
+## T13 · La intención de compra firmada — cerrado 2026-09-02
+
+**Qué quedó funcionando.** El agente ya produce el documento que era el objetivo
+de toda la fase: una **intención de compra firmada con su propia llave**. Dice
+quién es el agente, para quién trabaja, en qué comercio, qué producto, cuánta
+cantidad, por qué monto exacto, en qué activo, bajo qué límite y hasta cuándo
+vale. No mueve dinero y no completa ninguna compra — es una declaración firmada,
+que es exactamente lo que la fase prometía.
+
+**Cualquiera puede verificarla, sin pedirle permiso a nadie y sin red.** La firma
+se comprueba contra la llave que el identificador del agente ya contiene, igual
+que las credenciales de la Fase 1. No hay servidor que consultar para saber si el
+documento es auténtico.
+
+**Y es trazable a la credencial que la autorizó.** El intent lleva el hash de esa
+credencial. Eso es lo que lo separa de un vale al portador: quien reciba el
+documento puede preguntarle al registro en la cadena si la autoridad detrás sigue
+en pie. Un intent firmado hace un mes, con la credencial revocada la semana
+pasada, sigue siendo una firma auténtica — y el registro dirá que ya no vale.
+
+**Lo que T11 había dejado abierto, resuelto.** La verificación era solo al
+arrancar, así que un agente que llevara horas corriendo conservaba su herramienta
+de compra aunque lo hubieran revocado. Ahora la credencial **se vuelve a
+comprobar contra el registro justo antes de firmar**. Son dos capas: la lista de
+herramientas decide qué capacidades existen, y la reverificación decide si la
+autoridad sigue viva en el instante exacto de poner la firma. Sin la segunda, la
+promesa de la fase —que la autorización se puede cortar desde afuera— sería falsa
+para cualquier agente que no se reinicie.
+
+Está probado con el agente corriendo: se revoca desde fuera a mitad de ejecución,
+la herramienta todavía figura en su lista porque el arranque la vio activa, y el
+intento siguiente falla igual. **El orden también importa y está probado:** el
+chequeo de alcance corre primero, así que una compra que el alcance rechaza no
+gasta una llamada de red; solo lo que va a firmarse paga ese costo.
+
+**La forma del documento está pensada para no cambiar en la Fase 3.** El Mandato
+—el consentimiento firmado del principal— se comparará contra una intención
+preguntando quién, para quién, dónde, qué, cuánto, en qué activo, bajo qué límite
+y hasta cuándo. Los ocho datos están. Y no hay nada específico del catálogo
+simulado.
+
+**Lo que a propósito no lleva: el nombre ni la descripción del producto.** Es
+texto del comercio, y un documento firmado no debe poner la firma del agente
+sobre la prosa de un tercero. El identificador del producto es lo que el comercio
+puede respaldar, y alcanza para dejar establecido qué se pidió. Hay un test que
+comprueba que colar una descripción ahí adentro hace fallar la firma.
+
+**Mutation testing, y el tercer hallazgo de la fase.** Cinco protecciones rotas;
+cuatro cayeron. La quinta —hacer que la verificación elija la llave según lo que
+el propio documento declara— **no rompió nada**, y otra vez la mutación era
+inalcanzable: el chequeo que la haría peligrosa corre antes y ya lanzaba. Pero al
+analizarla apareció que los tests probaban esa protección de forma indirecta:
+todos reutilizaban la firma de la víctima, y ninguno construía el ataque real, un
+atacante que escribe un documento nombrando a la víctima y lo firma con su propia
+llave. Se agregó ese test, con una firma genuina del atacante, y con él la
+regresión realista cae de inmediato. Tercera vez en la fase que una mutación mal
+escrita enseña más que una bien escrita.
+
+📎 [evidencia/T13.md](evidencia/T13.md) · [apps/agent/README.md](../../apps/agent/README.md) · [DECISIONES.md](DECISIONES.md) (B-17 … B-20)
 
 ---
 

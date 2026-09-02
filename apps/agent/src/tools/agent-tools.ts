@@ -14,10 +14,24 @@
  */
 import type { AgentPassErrorCode } from "@agentpass/core";
 import { AgentPassError } from "@agentpass/core";
+import type { Keypair } from "@stellar/stellar-sdk/base";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { productIdSchema, type CatalogAdapter, type Product } from "../catalog/catalog.js";
-import type { CredentialState, UsableCredential } from "../credential/verifier.js";
+import type {
+  CredentialState,
+  CredentialVerifier,
+  UsableCredential,
+} from "../credential/verifier.js";
+import { checkOwnCredential } from "../credential/verifier.js";
+import {
+  AGENTPAY_INTENT_FAMILY,
+  AGENTPAY_INTENT_TYPE,
+  DEFAULT_INTENT_TTL_SECONDS,
+  type PurchaseIntent,
+} from "../intent/intent.js";
+import { signIntent } from "../intent/sign.js";
 import { checkScope, scopeError } from "../scope/scope.js";
 import { createToolSet, defineTool, type ErasedTool, type ToolSet } from "./tool.js";
 
@@ -90,11 +104,20 @@ export interface UnusableCredentialReport {
 
 export type CheckCredentialResult = ActiveCredentialReport | UnusableCredentialReport;
 
-/** Shape of `create_purchase_intent`'s answer. Filled in by T13. */
 export interface CreatePurchaseIntentResult {
   readonly intent_id: string;
-  /** The signed intent, as a compact JWS. */
+  /** The signed intent, as a compact JWS. This is the document as it travels. */
   readonly jws: string;
+  /** `sha256(jws)`, hex — the stable handle for this intent. */
+  readonly intent_hash: string;
+  readonly expires_at: string;
+  readonly venue_id: string;
+  readonly product_id: string;
+  readonly quantity: number;
+  readonly total_amount: string;
+  readonly asset: string;
+  /** The credential this intent is traceable to. */
+  readonly credential_hash: string;
 }
 
 function toWire(product: Product): WireProduct {
@@ -213,11 +236,11 @@ function checkMyCredentialTool(state: CredentialState): ErasedTool {
  * cannot be built without proof of authorisation, and that is a compile error
  * rather than a check someone has to remember.
  */
-function createPurchaseIntentTool(
-  catalog: CatalogAdapter,
-  credential: UsableCredential,
-): ErasedTool {
-  const { scope } = credential.verified.credential.credentialSubject;
+function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
+  const { catalog, credential, signer, verifier } = deps;
+  const ttlSeconds = deps.intentTtlSeconds ?? DEFAULT_INTENT_TTL_SECONDS;
+  const { scope, principal, id: subject } = credential.verified.credential.credentialSubject;
+  const { registry } = credential.verified.credential.credentialStatus;
 
   return defineTool({
     name: "create_purchase_intent",
@@ -225,7 +248,8 @@ function createPurchaseIntentTool(
       "Create a signed intention to buy a quantity of one product. It does " +
       "not move money and does not complete a purchase. The request is " +
       "refused unless the venue, the asset and the total amount all fall " +
-      "within what this agent's credential authorises.",
+      "within what this agent's credential authorises, and unless that " +
+      "credential is still active at this moment.",
     input: z.strictObject({
       product_id: productIdSchema,
       quantity: z.int().min(1).max(10_000),
@@ -244,15 +268,74 @@ function createPurchaseIntentTool(
 
       if (!decision.allowed) throw scopeError(decision);
 
-      throw notImplemented("create_purchase_intent", "T13 (signing)");
+      // The startup check decided this tool exists at all; this one decides
+      // whether the authority is still live at the instant of signing (B-17).
+      // Signing against a credential last seen hours ago would put the agent's
+      // signature on authority it may no longer hold.
+      const fresh = await checkOwnCredential(verifier, credential.verified.jws);
+      if (!fresh.usable) throw fresh.problem;
+
+      const now = deps.now ?? new Date();
+      const intent: PurchaseIntent = {
+        type: [AGENTPAY_INTENT_FAMILY, AGENTPAY_INTENT_TYPE],
+        intentId: randomUUID(),
+        issuedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
+        agent: subject,
+        principal,
+        credential: { hash: fresh.hash, registry },
+        venue: catalog.venueId,
+        purchase: {
+          productId: product.id,
+          quantity,
+          unitAmount: decision.unitAmount,
+          totalAmount: decision.total,
+          asset: product.price.asset,
+        },
+        authorisation: { perTx: scope.limits.perTx, currency: scope.limits.currency },
+      };
+
+      const signed = await signIntent(intent, signer);
+
+      return {
+        intent_id: signed.intent.intentId,
+        jws: signed.jws,
+        intent_hash: signed.hash,
+        expires_at: signed.intent.expiresAt,
+        venue_id: signed.intent.venue,
+        product_id: signed.intent.purchase.productId,
+        quantity: signed.intent.purchase.quantity,
+        total_amount: signed.intent.purchase.totalAmount,
+        asset: signed.intent.purchase.asset,
+        credential_hash: signed.intent.credential.hash,
+      };
     },
   });
+}
+
+interface PurchaseIntentDeps {
+  readonly catalog: CatalogAdapter;
+  readonly credential: UsableCredential;
+  readonly signer: Keypair;
+  readonly verifier: CredentialVerifier;
+  readonly intentTtlSeconds?: number;
+  readonly now?: Date;
 }
 
 export interface AgentToolsDeps {
   readonly catalog: CatalogAdapter;
   /** What startup verification concluded. Decides the shape of the tool set. */
   readonly credential: CredentialState;
+  /**
+   * The agent's own key. Without it nothing can be signed, so
+   * `create_purchase_intent` is withheld — a capability that cannot be
+   * exercised should not be advertised.
+   */
+  readonly signer?: Keypair;
+  /** Used to re-check the credential immediately before signing (B-17). */
+  readonly verifier: CredentialVerifier;
+  readonly intentTtlSeconds?: number;
+  readonly now?: Date;
 }
 
 /**
@@ -274,7 +357,18 @@ export function createAgentTools(deps: AgentToolsDeps): ToolSet {
     checkMyCredentialTool(deps.credential),
   ];
 
-  if (deps.credential.usable) tools.push(createPurchaseIntentTool(deps.catalog, deps.credential));
+  if (deps.credential.usable && deps.signer !== undefined) {
+    tools.push(
+      createPurchaseIntentTool({
+        catalog: deps.catalog,
+        credential: deps.credential,
+        signer: deps.signer,
+        verifier: deps.verifier,
+        intentTtlSeconds: deps.intentTtlSeconds,
+        now: deps.now,
+      }),
+    );
+  }
 
   return createToolSet(tools);
 }

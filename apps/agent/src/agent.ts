@@ -6,7 +6,8 @@
  * separate "am I allowed?" check inside the tools to forget, get wrong, or
  * talk out of — the capability either exists or it does not.
  */
-import { AgentPassError } from "@agentpass/core";
+import { AgentPassError, didToStellarAddress } from "@agentpass/core";
+import type { Keypair } from "@stellar/stellar-sdk/base";
 
 import type { CatalogAdapter } from "./catalog/catalog.js";
 import type { CredentialState, CredentialVerifier } from "./credential/verifier.js";
@@ -24,6 +25,14 @@ export interface AgentConfig {
    * from being able to issue or revoke anything.
    */
   readonly verifier: CredentialVerifier;
+  /**
+   * The agent's own Stellar key — the one its credential names as the subject.
+   * Without it nothing can be signed, so `create_purchase_intent` is withheld
+   * rather than advertised and then failing.
+   */
+  readonly signer?: Keypair;
+  /** How long a signed intent stays valid. Defaults to 15 minutes. */
+  readonly intentTtlSeconds?: number;
   /** Injectable clock, for the validity window. */
   readonly now?: Date;
 }
@@ -67,8 +76,29 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
     now: config.now,
   });
 
+  // A key that is not the credential's subject would sign intents that can
+  // never verify against it. That is a misconfiguration, not a policy state, so
+  // it is loud and immediate rather than a quietly withheld capability.
+  if (config.signer !== undefined && credential.usable) {
+    const subject = credential.verified.credential.credentialSubject.id;
+    if (didToStellarAddress(subject) !== config.signer.publicKey()) {
+      throw new AgentPassError(
+        "SignerMismatch",
+        "the signing key is not the subject of the agent's own credential",
+        { details: { subject, signer: config.signer.publicKey() } },
+      );
+    }
+  }
+
   return {
     credential,
-    tools: createAgentTools({ catalog: config.catalog, credential }),
+    tools: createAgentTools({
+      catalog: config.catalog,
+      credential,
+      signer: config.signer,
+      verifier: config.verifier,
+      intentTtlSeconds: config.intentTtlSeconds,
+      now: config.now,
+    }),
   };
 }
