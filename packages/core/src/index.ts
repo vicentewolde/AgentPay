@@ -23,3 +23,42 @@ export {
   type StellarDid,
   type StellarNetwork,
 } from "./did.js";
+
+export {
+  AGENTPASS_JWS_ALG,
+  didToPublicJWK,
+  publicKeyToJWK,
+  stellarKeypairToJWK,
+  type Ed25519PrivateJWK,
+  type Ed25519PublicJWK,
+} from "./jwk.js";
+
+export {
+  AGENTPASS_CREDENTIAL_TYPE,
+  AGENTPASS_STATUS_TYPE,
+  VC_CONTEXT_V2,
+  agentDescriptorSchema,
+  agentPassCredentialSchema,
+  credentialStatusSchema,
+  credentialSubjectSchema,
+  decimalAmountSchema,
+  scopeLimitsSchema,
+  scopeSchema,
+  stellarContractIdSchema,
+  type AgentDescriptor,
+  type AgentPassCredential,
+  type CredentialStatus,
+  type CredentialSubject,
+  type Scope,
+  type ScopeLimits,
+} from "./credential.js";
+
+export {
+  AGENTPASS_JWS_TYP,
+  credentialHash,
+  signCredential,
+  verifyCredential,
+  type SignedCredential,
+  type VerifiedCredential,
+  type VerifyOptions,
+} from "./vc-jwt.js";

@@ -15,7 +15,17 @@ export type AgentPassErrorCode =
   /** A string is not a well-formed `did:stellar:<network>:<address>`. */
   | "InvalidDid"
   /** A string is not a valid Stellar Ed25519 account address (`G...`). */
-  | "InvalidStellarAddress";
+  | "InvalidStellarAddress"
+  /** A compact JWS is malformed, or its header is not the AgentPass profile. */
+  | "InvalidJws"
+  /** A credential payload does not match the AgentPass schema. */
+  | "InvalidCredential"
+  /** The signature does not verify against the issuer's key. */
+  | "InvalidSignature"
+  /** `now` is past `validUntil`. */
+  | "CredentialExpired"
+  /** `now` is before `validFrom`. */
+  | "CredentialNotYetValid";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

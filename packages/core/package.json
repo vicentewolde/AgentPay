@@ -16,6 +16,10 @@
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^17.0.1",
+    "jose": "^6.2.10",
     "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@noble/curves": "^2.4.0"
   }
 }

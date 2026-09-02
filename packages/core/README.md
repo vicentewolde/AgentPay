@@ -46,3 +46,36 @@ Callers branch on `code`, never on message text:
 ```ts
 if (hasErrorCode(error, "InvalidStellarAddress")) { /* narrowed */ }
 ```
+
+## Credentials
+
+A W3C VC 2.0 credential, validated with zod and signed as a compact JWS
+(EdDSA). Full schema and rationale: [docs/credential-schema.md](../../docs/credential-schema.md).
+
+```ts
+const { jws, hash } = await signCredential(credential, issuerKeypair);
+const verified = await verifyCredential(jws);   // signature + validity window
+```
+
+`verifyCredential` covers checks 1 and 2 of the three. Check 3 —
+`status(hash) == Active` and the issuer still active — needs the registry and
+lives in `@agentpass/sdk`.
+
+Two invariants worth knowing before changing anything here:
+
+- **The verification key comes from the payload's `issuer`, never from `kid`.**
+  `kid` is attacker-controlled; trusting it would let a forged credential
+  nominate the key that verifies it. `kid` is only cross-checked for agreement.
+- **The signature is verified before the clock.** Otherwise a forged *and*
+  expired credential reports as merely expired, hiding the forgery.
+
+### `stellarKeypairToJWK`
+
+A Stellar secret is a 32-byte Ed25519 **seed**. The JWK carries that seed in `d`
+and the public key in `x`, both base64url. Swapping them, or emitting plain
+base64, yields keys that sign happily and verify against nothing. The tests are
+anchored to RFC 8032 §7.1 TEST 1 and cross-checked against `@noble/curves`.
+
+The base64url-alphabet assertion in `jwk.test.ts` is load-bearing: Node and
+`jose` both decode base64 leniently, so it is the only test that catches a
+base64/base64url mix-up. Don't delete it.

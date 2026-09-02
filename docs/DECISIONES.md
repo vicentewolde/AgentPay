@@ -167,17 +167,68 @@ comentarios, mensajes de commit y `README.md` técnico en inglés.
 ignorado y el historial completo se auditó antes del primer push.
 **Decidido por Vicente el 2026-09-01.**
 
+### I-14 · `kid` es el DID a secas, sin fragmento · `Vigente`
+**Fecha:** 2026-09-01 (T4)
+El header del JWS lleva `kid: "did:stellar:testnet:G..."`.
+**Motivo:** un `did:stellar` tiene exactamente una llave, así que el DID ya la
+identifica sin ambigüedad. Un fragmento no agregaría información.
+**Descartado:** `<did>#<fragmento>`. Resuelve [P-1](#p-1--formato-del-kid-en-el-header-del-jws--resuelta-en-i-14).
+**Regla de seguridad derivada:** el `kid` **no** se usa para elegir la llave de
+verificación — lo controla quien construye el JWS. La llave sale del `issuer`
+del payload; el `kid` solo se contrasta y si discrepa se rechaza.
+
+### I-15 · Sin documento DID completo ni `publicKeyMultibase` · `Vigente`
+**Fecha:** 2026-09-01 (T4)
+Nada lo consume: la verificación solo necesita la llave pública cruda, que
+`didToPublicKey` ya entrega.
+**Motivo:** `publicKeyMultibase` arrastraría una dependencia de base58 para
+producir un documento que nadie lee. Se agrega cuando algo lo pida.
+Resuelve [P-2](#p-2--documento-did-completo-con-publickeymultibase--resuelta-en-i-15).
+
+### I-16 · `credentialStatus` no lleva el hash de la credencial · `Vigente — pendiente de confirmación de Vicente`
+**Fecha:** 2026-09-01 (T4)
+El brief especificaba `credentialStatus.id = "<sha256 del JWS compacto, hex>"`.
+**Ese campo no se implementó, porque no se puede.**
+
+**1. Es circular.** El valor anclado es `sha256(JWS)`, y el JWS se produce
+firmando el payload. Si el payload contiene el hash del JWS, firmar cambia el
+JWS, lo que cambia su hash, lo que cambia el payload. No converge; no hay orden
+de operaciones que lo resuelva.
+
+**2. Aunque se pudiera, no habría que confiar en él.** Un hash autodeclarado lo
+elige quien construye la credencial. Un atacante con una credencial revocada
+apuntaría ese campo al hash de otra credencial que siga activa, y el verificador
+consultaría el registro por el hash equivocado y obtendría `Active`.
+
+**Implementado:** `credentialStatus` conserva `type` y `registry` — que sí
+aportan, porque dicen en qué contrato consultar y van firmados. El verificador
+hashea el JWS que efectivamente recibió.
+**Costo de revertir:** bajo, es un campo. Si prefieres otra resolución, dilo.
+
+### I-17 · Todos los objetos del esquema son estrictos · `Vigente`
+**Fecha:** 2026-09-01 (T4)
+Un campo desconocido hace fallar la validación (`z.strictObject`).
+**Motivo:** con una sola implementación en ambos extremos, caza typos de
+inmediato. **Contrapartida asumida:** si entran verificadores de terceros que
+deban tolerar campos nuevos, hay que relajarlo deliberadamente.
+
+### I-18 · Los montos viajan como string · `Vigente`
+**Fecha:** 2026-09-01 (T4)
+`perTx` y `perDay` son strings decimales con máximo 7 decimales, validados por
+regex. **Motivo:** ningún float redondea un límite en el camino.
+
+### I-19 · La firma se verifica antes que la ventana temporal · `Vigente`
+**Fecha:** 2026-09-01 (T4)
+**Motivo:** si el reloj se chequeara primero, una credencial falsificada **y**
+vencida se reportaría como "vencida", ocultando la falsificación. Cubierto por
+un test y por un mutation test (invertir el orden pone 5 tests en rojo).
+
 ---
 
 ## Pendientes de decidir
 
-### P-1 · Formato del `kid` en el header del JWS · `Pendiente`
-**Aparece en:** T4
-Opciones: `kid = <did>` a secas (un `did:stellar` tiene exactamente una llave,
-así que es inambiguo) o `kid = <did>#<fragmento>`.
+_(ninguno abierto)_
 
-### P-2 · ¿Documento DID completo con `publicKeyMultibase`? · `Pendiente`
-**Aparece en:** T4
-[A-2](#a-2--método-did-derivable-sin-red--vigente) menciona
-`Ed25519VerificationKey2020`, cuyo `publicKeyMultibase` requiere base58 —
-una dependencia que hoy no está. En T3 no se implementó porque nada lo consume.
+### P-1 · Formato del `kid` en el header del JWS · `Resuelta en I-14`
+
+### P-2 · ¿Documento DID completo con `publicKeyMultibase`? · `Resuelta en I-15`

@@ -8,21 +8,22 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-01 · **Último hito cerrado:** T3 · **Siguiente:** T4
+**Fecha:** 2026-09-01 · **Último hito cerrado:** T4 · **Siguiente:** T5
 
-Hay una base de proyecto que compila, se testea y corre contra Stellar testnet
-real. Existen tres cuentas financiadas en testnet y el sistema ya sabe sacar la
-llave pública de un agente a partir de su dirección, sin preguntarle a nadie.
+**Ya se pueden emitir y verificar credenciales.** El sistema firma un documento
+que dice qué puede hacer un agente, y cualquiera puede comprobar que esa firma
+es auténtica y que el documento sigue vigente — todo sin conexión a internet.
 
-**Todavía no existe ninguna credencial.** Eso empieza en T4.
+Lo que falta es el tercer chequeo: poder **cortar** una credencial desde afuera.
+Eso necesita el contrato en la blockchain, que es T5 y T6.
 
 | | |
 |---|---|
-| Tests TypeScript | **41** en verde (core 23 · sdk 2 · cli 3 · scripts 13) |
+| Tests TypeScript | **73** en verde (core 55 · sdk 2 · cli 3 · scripts 13) |
 | Tests Rust | **1** en verde |
 | Red | testnet, protocolo **28** |
 | Contrato desplegado | todavía no (T6) |
-| Commits | 3 |
+| Commits | 5 |
 
 ### Progreso
 
@@ -31,11 +32,57 @@ llave pública de un agente a partir de su dirección, sin preguntarle a nadie.
 | T1 | Esqueleto del proyecto | ✅ cerrado |
 | T2 | Cuentas de prueba en la red | ✅ cerrado |
 | T3 | Identidad derivable sin red | ✅ cerrado |
-| T4 | Firmar y verificar credenciales | ⬜ siguiente |
-| T5 | El contrato en la blockchain | ⬜ |
+| T4 | Firmar y verificar credenciales | ✅ cerrado |
+| T5 | El contrato en la blockchain | ⬜ siguiente |
 | T6 | Publicar el contrato en testnet | ⬜ |
 | T7 | La librería que junta todo | ⬜ |
 | T8 | La herramienta de línea de comandos | ⬜ |
+
+---
+
+## T4 · Firmar y verificar credenciales — cerrado 2026-09-01
+
+**Qué significa.** Este es el corazón del producto. Ahora un principal puede
+**firmar un documento** que dice "este agente es mío, puede leer catálogo y crear
+intenciones de compra, con un tope de 50 USDC por transacción". Y cualquier
+tercero puede **comprobar que esa firma es auténtica** y que el documento no
+está vencido, sin llamar a nadie.
+
+Lo importante es qué pasa cuando alguien intenta hacer trampa. Si un atacante
+toma una credencial legítima y le sube el tope de 50 a 5.000, la verificación
+falla. Si le agrega un permiso que no tenía, falla. Si la firma con su propia
+llave y luego reescribe todos los campos para hacerse pasar por el emisor real,
+también falla — lo único que no puede falsificar es la firma. Cada uno de esos
+ataques tiene su test.
+
+Y un detalle que suena menor pero no lo es: **la firma se comprueba antes que la
+fecha.** Si fuera al revés, una credencial falsificada y además vencida se
+reportaría como "vencida", y nadie se enteraría de la falsificación.
+
+**Qué se construyó.** La conversión de una llave de Stellar al formato que usa
+la firma, el esquema completo de la credencial validado campo por campo, y las
+funciones de firmar y verificar. Todo en `packages/core`, sin red.
+
+**Cómo se comprobó.** El brief advertía que la conversión de llaves era el punto
+más probable de fallo silencioso del proyecto: si se hace mal, todo *parece*
+funcionar pero las firmas no valen nada. Así que ese test se escribió **antes**
+que la implementación, y está anclado a un vector de prueba de un estándar
+internacional (RFC 8032) y contrastado contra una librería criptográfica
+independiente. Tres derivaciones distintas dan el mismo resultado byte a byte.
+
+Además se rompió la implementación a propósito tres veces para verificar que los
+tests sirvieran. Intercambiar las dos mitades de la llave pone **19 tests en
+rojo**.
+
+**Un problema del brief que hubo que resolver.** El esquema original pedía que
+la credencial llevara dentro el hash de sí misma. Eso es imposible —firmarla
+cambia el hash, lo que cambiaría lo que hay que firmar— y además sería inseguro,
+porque un atacante podría apuntar ese campo al hash de otra credencial que siga
+activa. El verificador ahora calcula el hash del documento que recibió. Está
+explicado en detalle en [DECISIONES.md](DECISIONES.md) como `I-16`, y revertirlo
+es barato si prefieres otra salida.
+
+📎 [evidencia/T4.md](evidencia/T4.md) · [credential-schema.md](credential-schema.md)
 
 ---
 

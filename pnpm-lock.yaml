@@ -41,9 +41,16 @@ importers:
       '@stellar/stellar-sdk':
         specifier: ^17.0.1
         version: 17.0.1(debug@4.4.3)
+      jose:
+        specifier: ^6.2.10
+        version: 6.2.10
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+    devDependencies:
+      '@noble/curves':
+        specifier: ^2.4.0
+        version: 2.4.0
 
   packages/sdk:
     dependencies:
@@ -227,6 +234,10 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@noble/curves@2.4.0':
+    resolution: {integrity: sha512-P4/62zrgfH33CneE3Dn4WhJVA22YUU0eR51wKIan4NVRvwsA0YnPTwWGpNbpuacSujmSFLvyzpyuR30+fbq2Ew==}
+    engines: {node: '>= 20.19.0'}
 
   '@noble/ed25519@3.2.0':
     resolution: {integrity: sha512-criDgRlnUA09hchYrTy/JUWPIEap5rZxQe6wDWzRx51oWWpDRcUpuNzlgPxDJaOK6AsW9c0wKcj3rKRv6t+bPQ==}
@@ -592,6 +603,9 @@ packages:
     resolution: {integrity: sha512-9xH0xvoggby+u0uGF7cZXdrutWiBiaFG8ZT4YFPXL8NzkyAwX3AKGLeFQLvzDpM430+nDFBZ1LHkie/8ocL06A==}
     engines: {node: '>=12'}
 
+  jose@6.2.10:
+    resolution: {integrity: sha512-iiW7J9qRFlGxvCOIBDBDxFePQSn7ZMAnrYGhrrOo6siO/MIqwfyilLR27pkfDgUk+raLuzADS8A3S/KLBisc0g==}
+
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
 
@@ -876,6 +890,10 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@noble/curves@2.4.0':
+    dependencies:
+      '@noble/hashes': 2.4.0
 
   '@noble/ed25519@3.2.0': {}
 
@@ -1213,6 +1231,8 @@ snapshots:
       - supports-color
 
   is-retry-allowed@3.0.0: {}
+
+  jose@6.2.10: {}
 
   js-tokens@9.0.1: {}
 
