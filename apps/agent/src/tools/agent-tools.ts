@@ -1,11 +1,13 @@
 /**
  * The four tools, and nothing else.
  *
- * Three of them work as of T11. `create_purchase_intent` still has no
- * behaviour — T12 adds the scope check, T13 the signing — but from T11 it is
- * only *present* at all when the agent's credential verified at startup. An
- * agent whose credential was revoked does not get told no; it has nothing to
- * call.
+ * As of T12, `create_purchase_intent` checks the signed scope before doing
+ * anything else, and refuses with a typed scope error when the venue, the asset
+ * or the total falls outside it. Only the signing itself is still T13's.
+ *
+ * It is also only *present* at all when the agent's credential verified at
+ * startup (T11). An agent whose credential was revoked does not get told no; it
+ * has nothing to call.
  *
  * The wire shapes — what a model sends and receives — are snake_case, matching
  * the tool names. TypeScript inside the package stays camelCase.
@@ -15,7 +17,8 @@ import { AgentPassError } from "@agentpass/core";
 import { z } from "zod";
 
 import { productIdSchema, type CatalogAdapter, type Product } from "../catalog/catalog.js";
-import type { CredentialState } from "../credential/verifier.js";
+import type { CredentialState, UsableCredential } from "../credential/verifier.js";
+import { checkScope, scopeError } from "../scope/scope.js";
 import { createToolSet, defineTool, type ErasedTool, type ToolSet } from "./tool.js";
 
 /** A product as the agent sees it. Same data as {@link Product}, wire-named. */
@@ -204,7 +207,18 @@ function checkMyCredentialTool(state: CredentialState): ErasedTool {
   });
 }
 
-function createPurchaseIntentTool(): ErasedTool {
+/**
+ * Only constructible from a credential that verified: the parameter type is
+ * `UsableCredential`, not `CredentialState`. The tool that can spend money
+ * cannot be built without proof of authorisation, and that is a compile error
+ * rather than a check someone has to remember.
+ */
+function createPurchaseIntentTool(
+  catalog: CatalogAdapter,
+  credential: UsableCredential,
+): ErasedTool {
+  const { scope } = credential.verified.credential.credentialSubject;
+
   return defineTool({
     name: "create_purchase_intent",
     description:
@@ -216,8 +230,21 @@ function createPurchaseIntentTool(): ErasedTool {
       product_id: productIdSchema,
       quantity: z.int().min(1).max(10_000),
     }),
-    run(): Promise<CreatePurchaseIntentResult> {
-      throw notImplemented("create_purchase_intent", "T12 (scope check) and T13 (signing)");
+    async run({ product_id, quantity }): Promise<CreatePurchaseIntentResult> {
+      const product = await catalog.getProduct(product_id);
+
+      // Four structured facts. `checkScope` is never handed the product, so
+      // the sentence in its description has nothing to act on.
+      const decision = checkScope(scope, {
+        venue: catalog.venueId,
+        asset: product.price.asset,
+        unitAmount: product.price.amount,
+        quantity,
+      });
+
+      if (!decision.allowed) throw scopeError(decision);
+
+      throw notImplemented("create_purchase_intent", "T13 (signing)");
     },
   });
 }
@@ -247,7 +274,7 @@ export function createAgentTools(deps: AgentToolsDeps): ToolSet {
     checkMyCredentialTool(deps.credential),
   ];
 
-  if (deps.credential.usable) tools.push(createPurchaseIntentTool());
+  if (deps.credential.usable) tools.push(createPurchaseIntentTool(deps.catalog, deps.credential));
 
   return createToolSet(tools);
 }

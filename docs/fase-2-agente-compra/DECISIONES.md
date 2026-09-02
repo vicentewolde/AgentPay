@@ -296,3 +296,94 @@ revocación tanto para el operador como para un test.
 **Alternativa descartada:** reintentar, o seguir con el último estado bueno
 conocido. Ambas mejoran la disponibilidad de la demo a cambio de que una caída
 de red se vuelva una ventana en la que una credencial revocada sigue comprando.
+
+### B-13 · La defensa contra prompt injection es la firma de la función, no una instrucción · `Vigente`
+**Fecha:** 2026-09-02 (T12)
+
+`checkScope(scope, request)` recibe un `ScopeRequest` de cuatro escalares
+—`venue`, `asset`, `unitAmount`, `quantity`— y **nunca un `Product`**. No existe
+un campo por el que el `name` o la `description` de un comercio puedan llegar a
+la decisión.
+
+**Motivo.** El riesgo que la fase declara (ROADMAP §4.2) es que un rechazo
+dependa de que el agente *decida* obedecer o no una instrucción incrustada en
+datos. Cualquier defensa que consista en pedirle al modelo que ignore el texto,
+o en filtrar el texto antes, sigue siendo una defensa sobre texto: mejora las
+probabilidades, no cierra la puerta. Que la función no tenga el dato la cierra.
+Se probó en las dos direcciones —agregar una inyección no vuelve rechazado lo
+permitido, y quitarla no vuelve permitido lo rechazado— porque solo la segunda
+descarta que el rechazo viniera de detectar texto hostil.
+
+**Alternativa descartada:** pasar el `Product` completo y documentar que solo se
+leen los campos estructurados. Es más cómodo —evita desarmar el producto en el
+llamador— a cambio de que la propiedad de seguridad pase a depender de que nadie
+agregue nunca una lectura de `description`. Es el mismo criterio de `B-6` y
+`B-9`: quitar la superficie en vez de confiar en que no se use.
+
+### B-14 · Aritmética de montos en enteros escalados a 7 decimales, nunca en punto flotante · `Vigente`
+**Fecha:** 2026-09-02 (T12)
+
+`toScaledAmount` / `multiplyAmount` convierten los montos decimales a `BigInt`
+escalado por 10⁷ —la precisión de Stellar y el máximo que acepta el esquema de
+credencial— y toda comparación con `perTx` ocurre ahí. El borde es **inclusivo**:
+un total exactamente igual al límite está autorizado.
+
+**Motivo.** Los montos viajan como string desde la Fase 1 precisamente para que
+ningún float redondee un límite, y este es el primer código que además calcula
+con ellos. En punto flotante `0.1 * 3` es `0.30000000000000004`: una compra de
+exactamente el límite se rechazaría por un error de representación. `BigInt`
+además no desborda, así que una cantidad grande no pierde precisión en silencio.
+El borde inclusivo replica cómo la Fase 1 trata el borde de expiración on-chain
+(invariante 4 del contrato) — los dos lados del sistema no deben discrepar sobre
+qué significa "justo en el límite".
+
+**Alternativa descartada:** una librería de decimales. Sería razonable, pero
+agrega una dependencia para 60 líneas de aritmética con una escala fija y
+conocida, y esconde en código de terceros exactamente la parte donde un bug
+sutil cuesta más caro.
+
+**Nota para la Fase 3:** cuando PolicyRail necesite esta misma aritmética,
+probablemente convenga moverla a `@agentpass/core`, junto a
+`decimalAmountSchema`. Hoy el agente es el único consumidor y no justifica tocar
+un paquete de una fase cerrada.
+
+### B-15 · Un límite denominado en otra moneda no es un límite satisfecho · `Vigente`
+**Fecha:** 2026-09-02 (T12)
+
+Si el código del activo del precio no coincide con `scope.limits.currency`, el
+chequeo rechaza con `ScopeCurrencyMismatch` en vez de comparar los números.
+
+**Motivo.** Un límite de "50.00 USDC" no dice nada sobre un precio en EURC.
+Compararlos daría un resultado que parece una autorización sin serlo. Fail-closed,
+igual que `B-1`: lo que no se puede comprobar no se da por bueno.
+
+**No estaba en la lista literal de la tarea** —"venue permitido, asset permitido,
+monto bajo `perTx`"— y se agregó igual, porque es lo que hace *sólido* el tercer
+chequeo. En la práctica casi nunca dispara: el chequeo de activo ya rechaza el
+caso normal. Cierra el hueco de una credencial que lista un activo en
+`scope.assets` pero deja `limits.currency` en otro.
+
+**Alternativa descartada:** aplicar `perTx` a cualquier activo ignorando
+`currency`. Es conservador en el caso barato y absurdo en el caro — trataría
+"50.00" como si fueran 50 unidades de lo que sea.
+
+### B-16 · `scope.actions` se verifica; `scope.limits.perDay` no · `Vigente`
+**Fecha:** 2026-09-02 (T12)
+
+`create_purchase_intent` exige que `intent:create` esté en `scope.actions`, y
+rechaza con `ScopeActionNotAllowed` si no. En cambio `perDay` **no se aplica**, y
+hay un test que lo fija: una compra dentro de `perTx` pasa aunque supere
+ampliamente `perDay`.
+
+**Motivo del primero.** Es el mismo hueco silencioso que `B-1`: una credencial
+con `actions: ["catalog:read"]` podría crear intenciones si nadie mira el campo.
+El esquema de la Fase 1 obliga a que `actions` tenga al menos un elemento, así
+que no hay ambigüedad de "vacío" que resolver — solo hay que leerlo. Se extendió
+el precedente de `B-1` en vez de consultar, porque la dirección ya estaba fijada
+por una decisión tomada; queda registrado acá para poder revertirlo si se
+prefiere otra cosa.
+
+**Motivo del segundo.** Un total diario exige recordar gastos previos: eso es
+enforcement con estado, que es de PolicyRail (Fase 3), y que `CLAUDE.md` excluye
+explícitamente del alcance de esta fase. El test que lo fija existe para que
+media implementación de `perDay` no entre sin que nadie avise.

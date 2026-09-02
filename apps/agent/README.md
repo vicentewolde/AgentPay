@@ -5,7 +5,8 @@ rather than extending it: identity, signing and revocation stay in
 `@agentpass/core` and `@agentpass/sdk`.
 
 What is built so far: **T9**, the catalogue boundary; **T10**, the tool surface;
-and **T11**, the startup credential check that decides what is in it.
+**T11**, the startup credential check that decides what is in it; and **T12**,
+the scope check that decides what it may buy.
 
 ## The catalogue
 
@@ -59,7 +60,7 @@ rows sit on the path the demo actually walks.
 | `list_products` | none | works |
 | `get_product` | `product_id` | works |
 | `check_my_credential` | none | works |
-| `create_purchase_intent` | `product_id`, `quantity` | present only when the credential verified; `NotImplemented` until T12/T13 |
+| `create_purchase_intent` | `product_id`, `quantity` | present only when the credential verified; checks scope, then `NotImplemented` until T13 |
 
 `TOOL_NAMES` is a literal union and `Tool.name` has that type, so a fifth tool
 cannot be *named* without editing `tools/tool.ts` — "four tools, no more" is a
@@ -105,6 +106,42 @@ payload was chosen by whoever built it, and repeating it back would present a
 forgery as fact. The hash survives because it is computed from the bytes
 received rather than read out of them.
 
+## The scope check, and why an injected instruction cannot move it
+
+Before any intent, `checkScope` compares the signed scope against the purchase:
+`intent:create` must be in `scope.actions`, the venue in `scope.venues`, the
+asset in `scope.assets`, the limit must be denominated in the price's currency,
+and `unitAmount x quantity` must not exceed `perTx`. Empty lists permit nothing
+(B-1) and matching is byte-for-byte (B-3), so every ambiguity resolves to a
+refusal. Failures are typed: `ScopeVenueNotAllowed`, `ScopeAssetNotAllowed`,
+`ScopeAmountExceeded` and so on, each carrying what was asked for and what the
+credential permits.
+
+```ts
+interface ScopeRequest {
+  venue: string;
+  asset: string;
+  unitAmount: string;
+  quantity: number;
+}
+```
+
+**That signature is the defence.** `checkScope` is never handed a product, so a
+product's name and description are not inputs to the decision — not filtered,
+not weighed, not present. A sentence in a description has nothing to act on.
+`src/injection.test.ts` proves it in both directions across nine attack styles:
+adding an injection to an allowed product does not make it refused, and removing
+one from a refused product does not make it allowed.
+
+Amounts are compared as integers scaled to seven decimals, never as floats: in
+floating point `0.1 * 3` is `0.30000000000000004`, so a purchase of exactly the
+limit would be refused by a representation error. The limit boundary is
+inclusive, matching how the phase-1 contract treats expiry.
+
+`scope.limits.perDay` is deliberately **not** enforced — a daily total needs
+memory of past spending, which is PolicyRail's job in phase 3. A test pins that
+boundary so half of it cannot arrive unnoticed.
+
 ## Least privilege, by type
 
 The agent takes a `CredentialVerifier` — one method — not the SDK:
@@ -136,7 +173,9 @@ Neither touches the network.
 Every failure is an `AgentPassError` with a `code`, from the same union in
 `packages/core/src/errors.ts` — no parallel hierarchy. This package added
 `InvalidVenueId`, `InvalidAssetId`, `InvalidProduct`, `ProductNotFound`,
-`UnknownTool` and `InvalidToolInput`.
+`UnknownTool`, `InvalidToolInput`, `InvalidAmount`, `ScopeActionNotAllowed`,
+`ScopeVenueNotAllowed`, `ScopeAssetNotAllowed`, `ScopeCurrencyMismatch` and
+`ScopeAmountExceeded`.
 
 ## Documentation
 

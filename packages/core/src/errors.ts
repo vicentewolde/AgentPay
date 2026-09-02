@@ -51,7 +51,19 @@ export type AgentPassErrorCode =
   /** No tool by that name is in the agent's tool set — including because it was withheld. */
   | "UnknownTool"
   /** A tool call's arguments do not match that tool's input schema. */
-  | "InvalidToolInput";
+  | "InvalidToolInput"
+  /** A value that should have been a non-negative decimal amount is not one. */
+  | "InvalidAmount"
+  /** `scope.actions` does not permit the action being attempted. */
+  | "ScopeActionNotAllowed"
+  /** `scope.venues` does not list the venue the purchase would happen at. */
+  | "ScopeVenueNotAllowed"
+  /** `scope.assets` does not list the asset the purchase would be paid in. */
+  | "ScopeAssetNotAllowed"
+  /** The spending limit is denominated in a different asset than the price. */
+  | "ScopeCurrencyMismatch"
+  /** The total would exceed `scope.limits.perTx`. */
+  | "ScopeAmountExceeded";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

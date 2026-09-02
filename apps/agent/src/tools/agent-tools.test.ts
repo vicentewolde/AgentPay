@@ -158,32 +158,33 @@ describe("check_my_credential, on a credential that verified", () => {
   });
 });
 
-describe("create_purchase_intent, while its behaviour is still pending", () => {
-  it("fails with NotImplemented, naming T12 and T13", async () => {
+describe("create_purchase_intent, with only the signing still pending", () => {
+  it("passes the scope check, then stops at NotImplemented naming T13", async () => {
     try {
       await tools().invoke("create_purchase_intent", {
         product_id: "polera-stellar-santiago",
         quantity: 1,
       });
-      expect.unreachable("create_purchase_intent has no behaviour yet");
+      expect.unreachable("signing has not landed yet");
     } catch (error) {
       expect(hasErrorCode(error, "NotImplemented")).toBe(true);
-      expect(String((error as AgentPassError).details.milestone)).toContain("T12");
+      expect(String((error as AgentPassError).details.milestone)).toBe("T13 (signing)");
     }
   });
 
-  /**
-   * The quantity the seeded injection asks for is structurally valid input —
-   * it has to be, or T12's amount check would never be the thing that refuses
-   * it. 10 x 22.00 = 220.00, well over the pilot's 50.00 per-transaction limit.
-   */
-  it("accepts the quantity the seeded injection asks for as well-formed input", async () => {
+  it("checks the scope before it reaches the gap: 10 units is refused, not deferred", async () => {
     await expect(
       tools().invoke("create_purchase_intent", {
         product_id: "polera-stellar-santiago",
         quantity: 10,
       }),
-    ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "NotImplemented"));
+    ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "ScopeAmountExceeded"));
+  });
+
+  it("surfaces ProductNotFound before any scope decision is attempted", async () => {
+    await expect(
+      tools().invoke("create_purchase_intent", { product_id: "no-existe", quantity: 1 }),
+    ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "ProductNotFound"));
   });
 
   it("still validates its arguments", async () => {

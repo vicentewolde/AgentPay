@@ -13,16 +13,15 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T11 · **Siguiente:** T12
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T12 · **Siguiente:** T13
 
-El agente verifica su propia credencial al arrancar, y si esa credencial fue
-revocada o venció, la herramienta de compra **no existe** para él. Falta que
-esa herramienta haga algo: el chequeo de alcance (T12) y la intención firmada
-(T13).
+El agente ya decide, antes de comprar, si su credencial lo autoriza — comercio,
+activo y monto. Lo único que falta para cerrar el circuito es firmar la
+intención (T13) y armar la demo de un comando (T14).
 
 | | |
 |---|---|
-| Tests TypeScript | **244** rápidos (core 60 · sdk 11 · **agent 119** · cli 29 · scripts 25) |
+| Tests TypeScript | **323** rápidos (core 60 · sdk 11 · **agent 198** · cli 29 · scripts 25) |
 | Tests de integración | 3 contra testnet real (sin cambios desde la Fase 1) |
 | Tests Rust | 22 en verde (sin cambios) |
 | Adaptador de catálogo | `MockCatalogAdapter`, 12 productos |
@@ -35,10 +34,69 @@ esa herramienta haga algo: el chequeo de alcance (T12) y la intención firmada
 | T9 | De dónde el agente lee qué hay a la venta | ✅ cerrado |
 | T10 | Las cuatro herramientas del agente | ✅ cerrado |
 | T11 | El agente verifica su propia credencial al arrancar | ✅ cerrado |
-| T12 | Chequeo de alcance antes de emitir una intención | ⏳ siguiente |
-| T13 | La intención de compra firmada | ⏳ |
+| T12 | Chequeo de alcance antes de emitir una intención | ✅ cerrado |
+| T13 | La intención de compra firmada | ⏳ siguiente |
 | T14 | Demo completa en un comando | ⏳ |
 | T15 | El catálogo real del bazaar | 🚧 bloqueado por el embajador |
+
+---
+
+## T12 · Chequeo de alcance antes de emitir una intención — cerrado 2026-09-02
+
+**Qué quedó funcionando.** Antes de crear cualquier intención de compra, el
+agente comprueba contra su credencial firmada tres cosas: que el comercio esté
+entre los permitidos, que el activo con que se pagaría esté entre los
+permitidos, y que el total —precio por cantidad— no supere el límite por
+transacción. Si algo falla, el rechazo es estructurado: trae el código exacto de
+la causa, el monto que se pedía, el límite contra el que se comparó y la moneda.
+No es un intento silencioso ni un mensaje genérico.
+
+**El riesgo central de la fase, resuelto por construcción y no por vigilancia.**
+Dos de los doce productos del catálogo llevan instrucciones dirigidas al agente
+en su descripción: uno afirma estar exento del límite, otro le ordena comprar
+diez unidades. Los dos son rechazados. Pero lo importante no es que sean
+rechazados — es **por qué** no podían no serlo: la función que decide *nunca
+recibe el producto*. Recibe cuatro datos —comercio, activo, precio unitario,
+cantidad— y ninguno de ellos es texto del comercio. No hay un campo por el que
+la prosa pueda llegar hasta la decisión. No es que el agente tenga instrucciones
+de ignorarla, ni que el texto se limpie antes: el texto no es una entrada.
+
+**Se probó en las dos direcciones, que es lo que hace válida la prueba.**
+Agregar una inyección a un producto que estaba permitido no lo vuelve
+rechazado; y —esto es lo que más importa— **quitarle la inyección a un producto
+rechazado no lo vuelve permitido**. Si el rechazo viniera de que el agente
+detectó texto hostil, sacar el texto dejaría pasar la compra. No pasa: sigue
+rechazado, con el mismo código y el mismo total al último decimal. Se probaron
+nueve estilos de ataque distintos, incluyendo uno que se hace pasar por
+instrucción del sistema y otro que simula el resultado de una herramienta.
+
+**La aritmética no usa números con coma flotante, y eso no es purismo.** Los
+montos viajan como texto desde la Fase 1 justamente para que ningún redondeo
+mueva un límite, y este es el primer código que además tiene que *calcular* con
+ellos. Se hace con enteros escalados a siete decimales. En coma flotante,
+`0.1 x 3` da `0.30000000000000004` — es decir, una compra de exactamente el
+límite se rechazaría por un error de representación. Hay tests que fijan
+exactamente esos casos.
+
+**Lo que deliberadamente no se construyó.** El límite diario (`perDay`) no se
+aplica: hacerlo exige recordar cuánto se gastó antes, y eso ya es enforcement,
+que es de PolicyRail en la Fase 3. Hay un test que fija esa frontera a
+propósito, para que media implementación de `perDay` no entre sin que nadie
+avise.
+
+**Mutation testing, y el hallazgo de esta vez.** Cinco protecciones rotas a
+propósito; cuatro cayeron limpiamente, incluida la que hace que la descripción
+del producto influya en la decisión —cae con ocho tests—. La quinta, cambiar la
+aritmética a coma flotante, **no rompió nada**. La causa no era una protección
+faltante sino una mutación mal escrita: el redondeo que usé borraba el error del
+float para todos los valores probados, así que la mutación no cambiaba nada.
+Pero al analizarla apareció un hueco real: los tests del chequeo de alcance no
+verificaban la aritmética en el borde, solo confiaban en los tests del módulo de
+montos. Se agregaron cinco casos al nivel de la decisión, y con eso las dos
+formas realistas de la mutación caen — incluida la que antes sobrevivía. Segunda
+vez en la fase que una mutación mal escrita enseña más que una bien escrita.
+
+📎 [evidencia/T12.md](evidencia/T12.md) · [apps/agent/README.md](../../apps/agent/README.md) · [DECISIONES.md](DECISIONES.md) (B-13 … B-16)
 
 ---
 

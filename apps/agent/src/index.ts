@@ -78,3 +78,21 @@ export {
 } from "./tools/agent-tools.js";
 
 export { createAgent, type Agent, type AgentConfig } from "./agent.js";
+
+export {
+  AMOUNT_DECIMALS,
+  fromScaledAmount,
+  multiplyAmount,
+  toScaledAmount,
+} from "./scope/amount.js";
+
+export {
+  INTENT_CREATE_ACTION,
+  checkScope,
+  scopeError,
+  type ScopeAllowed,
+  type ScopeDecision,
+  type ScopeDenied,
+  type ScopeRejectionCode,
+  type ScopeRequest,
+} from "./scope/scope.js";
