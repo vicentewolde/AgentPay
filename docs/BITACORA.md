@@ -8,19 +8,21 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T6 · **Siguiente:** T7
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T7 · **Siguiente:** T8
 
-**El contrato está vivo en Stellar testnet** y el ciclo completo —registrar
-emisor, anclar, consultar, revocar— se ejecutó contra la red real. Las tres
-piezas existen; falta la librería que las une en una sola llamada, que es T7.
+**El producto funciona de punta a punta.** Emitir una credencial, verificarla,
+revocarla desde fuera del agente y comprobar que ya no verifica — todo probado
+contra Stellar testnet real, sin simulacros. Falta la herramienta de línea de
+comandos que lo ponga en manos de alguien que no escriba código, que es T8.
 
 | | |
 |---|---|
-| Tests TypeScript | **85** en verde (core 55 · sdk 2 · cli 3 · scripts 25) |
+| Tests TypeScript | **94** rápidos (core 55 · sdk 11 · cli 3 · scripts 25) |
+| Tests de integración | **3** contra testnet real |
 | Tests Rust | **22** en verde |
 | Red | testnet, protocolo **28** |
 | Contrato desplegado | `CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT` |
-| Commits | 7 |
+| Commits | 8 |
 
 ### Progreso
 
@@ -32,8 +34,39 @@ piezas existen; falta la librería que las une en una sola llamada, que es T7.
 | T4 | Firmar y verificar credenciales | ✅ cerrado |
 | T5 | El contrato en la blockchain | ✅ cerrado |
 | T6 | Publicar el contrato en testnet | ✅ cerrado |
-| T7 | La librería que junta todo | ⬜ siguiente |
-| T8 | La herramienta de línea de comandos | ⬜ |
+| T7 | La librería que junta todo | ✅ cerrado |
+| T8 | La herramienta de línea de comandos | ⬜ siguiente |
+
+---
+
+## T7 · La librería que junta todo — cerrado 2026-09-02
+
+**Qué significa.** Hasta ahora las piezas existían por separado: firmar,
+comprobar la firma, y consultar el estado en la cadena. Ahora son tres llamadas:
+`issue()`, `verify()` y `revoke()`.
+
+**Y por primera vez el producto se probó completo, contra la red real.** La
+secuencia que importa, sin nada simulado: se emite una credencial, se verifica y
+pasa, el principal la revoca desde fuera del agente, y **el mismo documento —
+byte por byte, con la misma firma válida— deja de verificar**. Ese es el
+producto entero en un test.
+
+**La decisión de seguridad de este hito.** Una credencial dice en qué registro
+consultar su estado. Podría parecer natural que el verificador vaya a ese
+registro. **No lo hace.** El verificador consulta únicamente el registro en el
+que él confía, y rechaza cualquier credencial que apunte a otro. Si no fuera
+así, un emisor podría levantar su propio registro y responder por el estado de
+sus propias credenciales — es decir, revocar sería opcional para él.
+
+**Dos suposiciones mías que la red desmintió.** Asumí que el contrato devolvería
+el estado como texto simple, porque así lo imprime la herramienta de Stellar;
+devuelve un objeto con etiqueta. Y asumí que se podía escribir en la cadena sin
+declarar desde qué cuenta; no se puede. Las dos fallaron ruidosamente en vez de
+en silencio, porque todo lo que llega de la cadena se valida antes de usarse. Es
+la segunda vez que suponer la forma de ese borde cuesta un fallo — la primera
+fue en T6.
+
+📎 [evidencia/T7.md](evidencia/T7.md) · [packages/sdk/README.md](../packages/sdk/README.md)
 
 ---
 

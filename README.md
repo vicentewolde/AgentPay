@@ -99,16 +99,23 @@ pnpm test
 ```
 
 ```bash
+pnpm run test:integration
+```
+
+```bash
 cd contracts && cargo test
 ```
 
+`pnpm test` is the fast suite and needs no keys. `test:integration` runs the
+full cycle against live testnet with nothing mocked — issue, verify, revoke,
+then confirm the same JWS no longer verifies — so it needs `.env.local` and a
+deployed registry.
+
 ## Status
 
-T1 through T6 are complete: the scaffold, the network bootstrap,
-`did:stellar` derivation, VC-JWT sign and verify, the `agent_registry` contract,
-and its deployment to testnet. The SDK (T7) and the CLI (T8) follow.
-
-All three verification checks now exist as parts; T7 joins them into one call.
+T1 through T7 are complete. The full cycle — issue, verify, revoke, and
+confirm the revoked credential no longer verifies — runs against live testnet.
+The CLI (T8) is what remains.
 
 Checks 1 and 2 of verification are implemented and offline. Check 3 — the
 registry lookup — arrives with the SDK in T7. Command surfaces that are declared but unwired raise

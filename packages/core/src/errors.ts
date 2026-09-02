@@ -27,7 +27,17 @@ export type AgentPassErrorCode =
   /** `now` is before `validFrom`. */
   | "CredentialNotYetValid"
   /** An external command exited non-zero or produced unusable output. */
-  | "CommandFailed";
+  | "CommandFailed"
+  /** The registry reports this credential as revoked. */
+  | "CredentialRevoked"
+  /** The registry has never seen this credential hash. */
+  | "CredentialUnknown"
+  /** The credential's issuer exists in the registry but is deactivated. */
+  | "IssuerInactive"
+  /** The credential's issuer is not registered at all. */
+  | "IssuerNotRegistered"
+  /** The credential names a different registry than the verifier trusts. */
+  | "RegistryMismatch";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

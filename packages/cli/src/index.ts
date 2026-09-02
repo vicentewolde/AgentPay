@@ -1,4 +1,4 @@
-import { notImplemented } from "@agentpass/sdk";
+import { AgentPassError } from "@agentpass/core";
 
 export const COMMANDS = ["issue", "verify", "revoke", "status"] as const;
 
@@ -20,10 +20,14 @@ export function usage(): string {
   ].join("\n");
 }
 
-/**
- * Dispatches a parsed argv. Command bodies land in T8; today every command
- * defers to the sdk, which raises `AgentPassError` with code `NotImplemented`.
- */
+/** Command bodies land in T8. */
+function notImplemented(surface: string): never {
+  throw new AgentPassError("NotImplemented", `${surface} is not implemented yet`, {
+    details: { surface },
+  });
+}
+
+/** Dispatches a parsed argv. */
 export async function run(argv: readonly string[]): Promise<string> {
   const [command] = argv;
 

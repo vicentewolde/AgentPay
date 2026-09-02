@@ -315,6 +315,50 @@ leía como string. Sin esta verificación el error habría pasado desapercibido 
 que dos scripts re-rendericen el mismo archivo con criterios distintos garantiza
 que uno pise al otro tarde o temprano.
 
+### I-32 · El verificador elige el registro en el que confía · `Vigente`
+**Fecha:** 2026-09-02 (T7)
+Una credencial nombra el registro que guarda su estado, pero `verify` **rechaza**
+con `RegistryMismatch` cualquier credencial que nombre uno distinto al
+configurado, en vez de seguirla.
+**Motivo:** si el verificador siguiera el registro que indica la credencial, un
+emisor podría levantar un registro propio y responder por el estado de sus
+propias credenciales. Es una propiedad de seguridad, no una comodidad.
+
+### I-33 · Los chequeos offline corren antes que la red · `Vigente`
+**Fecha:** 2026-09-02 (T7)
+Firma y ventana de vigencia primero; el registro después.
+**Motivo:** una credencial falsificada o vencida se rechaza sin tocar la cadena.
+**Consecuencia conocida:** una credencial vencida **y** revocada reporta
+`CredentialExpired`, mientras que el contrato daría prioridad a `Revoked`
+([I-25](#i-25--revocado-gana-sobre-expirado-el-borde-es-inclusivo--vigente)).
+Ambos son fallos terminales; quien necesite distinguirlos llama a `status()`.
+
+### I-34 · El borde sin tipos vive en un solo módulo · `Vigente`
+**Fecha:** 2026-09-02 (T7)
+`Client.from` construye sus métodos desde la spec que baja de la cadena, así que
+TypeScript no puede conocerlos. Ese borde está confinado a `registry.ts` y todo
+lo que lo cruza pasa por zod antes de que el resto del SDK lo vea.
+**Motivo:** la alternativa —convertir ScVal a mano— es reimplementar el mapeo
+que la propia spec del contrato ya describe, y es peor lugar para equivocarse.
+**Suponer formas ya costó dos veces:** `get_admin` devuelve un `Result` de Rust
+envuelto en `Ok` (T6), y `status` devuelve un objeto etiquetado `{ tag: "Active" }`,
+**no** el string que imprime el CLI (T7). En ambos casos la validación con zod
+convirtió un error silencioso en uno ruidoso.
+
+### I-35 · `registerIssuer` / `deactivateIssuer` en el SDK · `Vigente`
+**Fecha:** 2026-09-02 (T7)
+Operaciones de admin, fuera de la superficie `issue`/`verify`/`revoke`.
+**Motivo:** T8 exige que alguien que nunca vio el repo pueda clonarlo y ejecutar
+el ciclo completo siguiendo solo el README. Sin una forma soportada de registrar
+un emisor eso es imposible. Viven aquí porque `registry.ts` es el único módulo
+que habla con el contrato.
+
+### I-36 · Los tests de integración van en su propio comando · `Vigente`
+**Fecha:** 2026-09-02 (T7)
+`pnpm run test:integration`, separado de `pnpm test`.
+**Motivo:** son lentos (~15s), con estado, y necesitan `.env.local` con cuentas
+financiadas. Meterlos en la suite rápida la haría inejecutable sin llaves.
+
 ---
 
 ## Pendientes de decidir
