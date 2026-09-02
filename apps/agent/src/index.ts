@@ -55,9 +55,26 @@ export {
 export {
   createAgentTools,
   type AgentToolsDeps,
-  type CheckCredentialResult,
   type CreatePurchaseIntentResult,
   type GetProductResult,
   type ListProductsResult,
   type WireProduct,
 } from "./tools/agent-tools.js";
+
+export {
+  checkOwnCredential,
+  type CredentialState,
+  type CredentialVerifier,
+  type UnusableCredential,
+  type UsableCredential,
+  type VerifiedOwnCredential,
+} from "./credential/verifier.js";
+
+export {
+  toCredentialReport,
+  type ActiveCredentialReport,
+  type CheckCredentialResult,
+  type UnusableCredentialReport,
+} from "./tools/agent-tools.js";
+
+export { createAgent, type Agent, type AgentConfig } from "./agent.js";

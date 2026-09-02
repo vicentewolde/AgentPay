@@ -1,11 +1,25 @@
 import { AgentPassError, hasErrorCode } from "@agentpass/core";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 import { createMockCatalog, MOCK_VENUE_ID } from "../catalog/mock.js";
-import { createAgentTools, type GetProductResult, type ListProductsResult } from "./agent-tools.js";
+import { checkOwnCredential, type CredentialState } from "../credential/verifier.js";
+import { createStubVerifier, makeTestCredential } from "../testing/credentials.js";
+import {
+  createAgentTools,
+  type ActiveCredentialReport,
+  type GetProductResult,
+  type ListProductsResult,
+} from "./agent-tools.js";
 
-function tools() {
-  return createAgentTools({ catalog: createMockCatalog() });
+let activeState: CredentialState;
+
+beforeAll(async () => {
+  const credential = await makeTestCredential();
+  activeState = await checkOwnCredential(createStubVerifier(), credential.jws);
+});
+
+function tools(credential: CredentialState = activeState) {
+  return createAgentTools({ catalog: createMockCatalog(), credential });
 }
 
 describe("the agent has exactly four tools", () => {
@@ -108,18 +122,44 @@ describe("get_product", () => {
   });
 });
 
-describe("the two tools whose behaviour lands later", () => {
-  it("check_my_credential fails with NotImplemented, naming T11", async () => {
-    try {
-      await tools().invoke("check_my_credential", {});
-      expect.unreachable("check_my_credential has no behaviour yet");
-    } catch (error) {
-      expect(hasErrorCode(error, "NotImplemented")).toBe(true);
-      expect((error as AgentPassError).details).toMatchObject({ milestone: "T11" });
-    }
+describe("check_my_credential, on a credential that verified", () => {
+  it("reports the identity, the window and the signed scope", async () => {
+    const report = (await tools().invoke("check_my_credential", {})) as ActiveCredentialReport;
+
+    expect(report.status).toBe("active");
+    expect(report.can_create_purchase_intent).toBe(true);
+    expect(report.credential_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(report.agent).toEqual({
+      name: "compras-demo",
+      model: "claude-opus-5",
+      operator: "agentpay-pilot",
+    });
+    expect(report.scope.venues).toEqual([MOCK_VENUE_ID]);
+    expect(report.scope.limits).toEqual({
+      per_tx: "50.00",
+      per_day: "200.00",
+      currency: "USDC",
+    });
+    expect(report.subject).toMatch(/^did:stellar:testnet:G/);
   });
 
-  it("create_purchase_intent fails with NotImplemented, naming T12 and T13", async () => {
+  it("reports the hash the registry answers about, not one the document declares", async () => {
+    const credential = await makeTestCredential();
+    const state = await checkOwnCredential(createStubVerifier(), credential.jws);
+    const report = (await tools(state).invoke("check_my_credential", {})) as ActiveCredentialReport;
+
+    expect(report.credential_hash).toBe(credential.hash);
+  });
+
+  it("takes no arguments", async () => {
+    await expect(tools().invoke("check_my_credential", { verbose: true })).rejects.toSatisfy(
+      (error: unknown) => hasErrorCode(error, "InvalidToolInput"),
+    );
+  });
+});
+
+describe("create_purchase_intent, while its behaviour is still pending", () => {
+  it("fails with NotImplemented, naming T12 and T13", async () => {
     try {
       await tools().invoke("create_purchase_intent", {
         product_id: "polera-stellar-santiago",

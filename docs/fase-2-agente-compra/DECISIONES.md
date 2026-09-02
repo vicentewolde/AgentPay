@@ -212,3 +212,87 @@ que la autorización exista.
 las implemente. Deja el conjunto incompleto durante dos hitos y esconde la
 propiedad que T10 tenía que demostrar — que la superficie son exactamente
 cuatro, y que la lista es el límite.
+
+### B-9 · El agente recibe un puerto de un solo método, no el SDK completo · `Vigente`
+**Fecha:** 2026-09-02 (T11)
+
+`createAgent` toma un `CredentialVerifier` con exactamente un método, `verify`.
+`AgentPass` de `@agentpass/sdk` lo satisface estructuralmente, sin adaptador, y
+eso se comprueba en tiempo de compilación con una función de conformidad en el
+test.
+
+**Motivo.** Menor privilegio impuesto por el tipo, no por disciplina. Con el SDK
+completo, el agente tendría a mano `issue()`, `revoke()`, `registerIssuer()` y
+`deactivateIssuer()` — es decir, la capacidad de emitirse una credencial nueva a
+sí mismo. Que hoy no las llame no es una garantía; que no existan sí lo es. Es
+el mismo criterio que `B-6`: quitar la superficie en vez de confiar en que nadie
+la use.
+
+**Alternativa descartada:** pasar el `AgentPass` completo y documentar que solo
+se usa `verify`. Un comentario no es una restricción, y la primera vez que
+alguien necesite "solo firmar una cosita" la restricción deja de existir sin que
+nada falle.
+
+### B-10 · Un fallo de verificación no impide arrancar; retira la capacidad · `Vigente`
+**Fecha:** 2026-09-02 (T11)
+
+`createAgent` con una credencial revocada, vencida o no anclada **devuelve un
+agente**. Ese agente lee el catálogo con normalidad y no tiene
+`create_purchase_intent` en su lista.
+
+**Motivo.** Es lo que la demo de T14 necesita: revocar a mitad de operación y
+mostrar al agente todavía corriendo y visiblemente incapaz de comprar. Un
+proceso que muere con un stack trace demuestra menos —no distingue "se le quitó
+la autorización" de "se rompió"— y no deja al agente en condiciones de explicar
+qué le pasó.
+
+**Alternativa descartada:** lanzar en el arranque. Más simple, y defendible si
+el agente no tuviera ninguna capacidad legítima sin credencial. Acá sí la tiene:
+leer un catálogo público no requiere autorización de compra.
+
+### B-11 · Un reporte de credencial inválida no repite nada de su contenido · `Vigente`
+**Fecha:** 2026-09-02 (T11)
+
+Cuando la credencial no verifica, `check_my_credential` devuelve el código del
+fallo, el mensaje, el hash y `can_create_purchase_intent: false` — y **ningún**
+campo tomado del documento: ni el nombre del agente, ni el operador, ni el
+alcance, ni la ventana de vigencia. El estado inusable ni siquiera *carga* el
+contenido, así que la fuga no es algo que haya que recordar evitar.
+
+**Motivo.** Si la firma no verifica, cada campo de ese payload lo eligió quien
+construyó el documento. Devolverlos con una etiqueta de "inválida" igual los
+pone en el contexto del agente y en los logs del operador como si fueran datos
+sobre el agente. El hash es la única excepción, y precisamente porque **no** sale
+de adentro: se calcula sobre los bytes recibidos, es lo que el registro responde,
+y es lo que un operador necesita para investigar.
+
+**Alternativa descartada:** devolver el contenido marcado como no verificado, para
+dar mejor diagnóstico. Se descartó porque el diagnóstico se consigue igual desde
+fuera del agente —el documento está en un archivo, se puede inspeccionar— y
+porque una marca dentro de una estructura JSON es exactamente la clase de matiz
+que se pierde al pasar por un resumen, un log o un prompt.
+
+**Refina la forma declarada en T10.** `CheckCredentialResult` se había declarado
+con `status: "Active"` y el comentario "cualquier otro estado ya lanzó". Al
+implementarlo quedó claro que el agente **sí** tiene que poder reportar su
+estado cuando es inválido —es la vía de diagnóstico que `B-6` prometía al
+retirar la herramienta— así que pasó a ser una unión discriminada de `"active"`
+y `"unusable"`. Se registra el cambio en vez de editar la forma en silencio.
+
+### B-12 · No poder confirmar la autorización cuenta como no tenerla · `Vigente`
+**Fecha:** 2026-09-02 (T11)
+
+Si la consulta al registro falla —timeout, RPC caído, cualquier error que no sea
+una respuesta— el estado queda `usable: false` y la herramienta de compra se
+retira. El error se envuelve en `AgentPassError` con código `NetworkError`, nunca
+se propaga sin tipar.
+
+**Motivo.** La misma dirección de `B-1`: una duda resuelve a menos autorización,
+nunca a más. Un agente que no logró confirmar que su credencial sigue activa no
+está en posición de actuar como si lo estuviera. La causa se conserva en
+`problem.code`, así que un corte de red sigue siendo distinguible de una
+revocación tanto para el operador como para un test.
+
+**Alternativa descartada:** reintentar, o seguir con el último estado bueno
+conocido. Ambas mejoran la disponibilidad de la demo a cambio de que una caída
+de red se vuelva una ventana en la que una credencial revocada sigue comprando.

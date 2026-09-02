@@ -13,15 +13,16 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T10 · **Siguiente:** T11
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T11 · **Siguiente:** T12
 
-El agente ya tiene de dónde leer un catálogo y ya tiene sus cuatro herramientas.
-Dos funcionan; las otras dos existen con su forma definitiva y todavía no hacen
-nada. Falta que verifique su propia credencial y que pueda emitir una intención.
+El agente verifica su propia credencial al arrancar, y si esa credencial fue
+revocada o venció, la herramienta de compra **no existe** para él. Falta que
+esa herramienta haga algo: el chequeo de alcance (T12) y la intención firmada
+(T13).
 
 | | |
 |---|---|
-| Tests TypeScript | **219** rápidos (core 60 · sdk 11 · **agent 94** · cli 29 · scripts 25) |
+| Tests TypeScript | **244** rápidos (core 60 · sdk 11 · **agent 119** · cli 29 · scripts 25) |
 | Tests de integración | 3 contra testnet real (sin cambios desde la Fase 1) |
 | Tests Rust | 22 en verde (sin cambios) |
 | Adaptador de catálogo | `MockCatalogAdapter`, 12 productos |
@@ -33,11 +34,73 @@ nada. Falta que verifique su propia credencial y que pueda emitir una intención
 |---|---|---|
 | T9 | De dónde el agente lee qué hay a la venta | ✅ cerrado |
 | T10 | Las cuatro herramientas del agente | ✅ cerrado |
-| T11 | El agente verifica su propia credencial al arrancar | ⏳ siguiente |
-| T12 | Chequeo de alcance antes de emitir una intención | ⏳ |
+| T11 | El agente verifica su propia credencial al arrancar | ✅ cerrado |
+| T12 | Chequeo de alcance antes de emitir una intención | ⏳ siguiente |
 | T13 | La intención de compra firmada | ⏳ |
 | T14 | Demo completa en un comando | ⏳ |
 | T15 | El catálogo real del bazaar | 🚧 bloqueado por el embajador |
+
+---
+
+## T11 · El agente verifica su propia credencial al arrancar — cerrado 2026-09-02
+
+**Qué quedó funcionando.** Al arrancar, el agente comprueba su propia
+credencial: que la firma sea auténtica, que esté dentro de su ventana de
+vigencia, y que el registro en la cadena la siga dando por activa con su emisor
+todavía habilitado. El resultado de esa comprobación decide qué puede hacer. Si
+la credencial está bien, tiene sus cuatro herramientas. Si fue revocada, si
+venció, si nunca se ancló o si su emisor fue dado de baja, **la herramienta de
+compra sencillamente no está en su lista**.
+
+**Y ahí está el punto de toda la fase.** Al agente no se le dice que no puede
+comprar. No hay un permiso denegado, ni un mensaje, ni una regla en el prompt
+que alguien pueda intentar reinterpretar. La herramienta no existe: pedirla
+devuelve "no hay ninguna herramienta con ese nombre". La autorización se cortó
+desde afuera —desde la cadena, por el emisor— y lo que el agente percibe es la
+ausencia de una capacidad, no una negativa que se pueda discutir.
+
+**El agente no se cae: se queda sin poder de compra.** Con la credencial
+revocada sigue leyendo el catálogo perfectamente. Lo que se le quitó es la
+autorización para comprar, no el programa entero. Eso es lo que hace posible la
+demo de T14: revocar a mitad de operación y que el agente siga corriendo,
+visiblemente incapaz de completar la compra.
+
+**Puede explicar por qué, y ahí hay una decisión de seguridad fina.**
+`check_my_credential` reporta el estado. Cuando la credencial está activa,
+informa todo: quién la emitió, a qué agente identifica, hasta cuándo vale, y qué
+alcance firmado tiene. Cuando **no** verifica, informa el código del fallo y el
+hash del documento, y **nada de lo que el documento dice por dentro**. La razón:
+si la firma no es auténtica, cada campo de ese documento lo eligió quien lo
+falsificó, y repetir su contenido sería presentar una falsificación como si
+fuera un dato. El hash es la excepción, porque no se lee de adentro del
+documento — se calcula sobre los bytes que efectivamente llegaron.
+
+**No poder confirmar cuenta como no estar autorizado.** Si la consulta al
+registro falla por una caída de red, el agente no asume que todo está bien: se
+queda sin la herramienta de compra igual. Es la misma dirección de `B-1`. La
+causa igual queda registrada, así que un corte de red se sigue distinguiendo de
+una revocación.
+
+**El agente no puede emitir ni revocar credenciales, y eso lo garantiza el
+tipo.** Recibe un verificador con un solo método, no el SDK completo. No es una
+convención que haya que respetar: no existe la función que le permitiría emitir
+una credencial para sí mismo. Que el SDK real encaje en ese puerto sin adaptador
+se comprueba al compilar.
+
+**Cómo se prueba sin red.** El doble de test corre de verdad la criptografía
+—firma Ed25519 real, ventana de vigencia real— y simula únicamente la consulta
+al registro, que es lo único que necesita red. Un doble que también falsificara
+la firma no probaría nada; con este, el test de la credencial con firma
+adulterada tiene valor real.
+
+**Mutation testing.** Cuatro protecciones rotas a propósito. Las cuatro
+cayeron. Una de ellas —hacer que el estado inválido filtre el contenido del
+documento— necesitó dos intentos: la primera versión estaba mal escrita y no
+filtraba nada, así que no probaba nada. Reescrita como la regresión que de
+verdad ocurriría (alguien agrega el contenido "para dar mejor diagnóstico"),
+cayó sola. Una mutación que no cambia el comportamiento no es evidencia.
+
+📎 [evidencia/T11.md](evidencia/T11.md) · [apps/agent/README.md](../../apps/agent/README.md) · [DECISIONES.md](DECISIONES.md) (B-9 … B-12)
 
 ---
 

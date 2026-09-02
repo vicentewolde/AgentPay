@@ -1,21 +1,21 @@
 /**
  * The four tools, and nothing else.
  *
- * Two of them work as of T9's catalogue. The other two exist here with their
- * real names, real input schemas and real result shapes, and fail with
- * `NotImplemented` until the milestones that own their behaviour land:
- * `check_my_credential` in T11, `create_purchase_intent` in T12 (the scope
- * check) and T13 (the signed intent). A placeholder that throws a typed error
- * is the pattern phase 1 already used; returning `undefined` or a plausible
- * fake would be worse than the gap it hides.
+ * Three of them work as of T11. `create_purchase_intent` still has no
+ * behaviour — T12 adds the scope check, T13 the signing — but from T11 it is
+ * only *present* at all when the agent's credential verified at startup. An
+ * agent whose credential was revoked does not get told no; it has nothing to
+ * call.
  *
  * The wire shapes — what a model sends and receives — are snake_case, matching
  * the tool names. TypeScript inside the package stays camelCase.
  */
+import type { AgentPassErrorCode } from "@agentpass/core";
 import { AgentPassError } from "@agentpass/core";
 import { z } from "zod";
 
 import { productIdSchema, type CatalogAdapter, type Product } from "../catalog/catalog.js";
+import type { CredentialState } from "../credential/verifier.js";
 import { createToolSet, defineTool, type ErasedTool, type ToolSet } from "./tool.js";
 
 /** A product as the agent sees it. Same data as {@link Product}, wire-named. */
@@ -40,11 +40,16 @@ export interface GetProductResult {
   readonly product: WireProduct;
 }
 
-/** Shape of `check_my_credential`'s answer. Filled in by T11. */
-export interface CheckCredentialResult {
-  /** Always `"Active"` — any other state has already thrown. */
-  readonly status: "Active";
+/** Reported when all three AgentPass checks passed at startup. */
+export interface ActiveCredentialReport {
+  readonly status: "active";
+  /** `sha256(jws)`, hex. Computed from the document held, never self-declared. */
+  readonly credential_hash: string;
+  /** When startup checked. This is a snapshot, not a live reading. */
+  readonly checked_at: string;
+  readonly issuer: string;
   readonly subject: string;
+  readonly principal: string;
   readonly agent: { readonly name: string; readonly model: string; readonly operator: string };
   readonly valid_from: string;
   readonly valid_until: string;
@@ -58,10 +63,29 @@ export interface CheckCredentialResult {
       readonly currency: string;
     };
   };
-  /** `sha256(jws)`, hex — the key the registry answers about. */
-  readonly credential_hash: string;
   readonly registry: string;
+  readonly can_create_purchase_intent: true;
 }
+
+/**
+ * Reported when a check failed — and deliberately carrying nothing from inside
+ * the document.
+ *
+ * If the signature did not verify, every field in that payload is attacker-
+ * chosen, so repeating its scope or its agent name back would be presenting a
+ * forgery as fact. The hash is the exception because it is computed here from
+ * the bytes received rather than read out of them, and it is what the registry
+ * answers about — which makes it the one field an operator actually needs.
+ */
+export interface UnusableCredentialReport {
+  readonly status: "unusable";
+  readonly credential_hash: string;
+  readonly checked_at: string;
+  readonly problem: { readonly code: AgentPassErrorCode; readonly message: string };
+  readonly can_create_purchase_intent: false;
+}
+
+export type CheckCredentialResult = ActiveCredentialReport | UnusableCredentialReport;
 
 /** Shape of `create_purchase_intent`'s answer. Filled in by T13. */
 export interface CreatePurchaseIntentResult {
@@ -77,6 +101,48 @@ function toWire(product: Product): WireProduct {
     description: product.description,
     price: { amount: product.price.amount, asset: product.price.asset },
     available: product.available,
+  };
+}
+
+/** Turns the startup verification's outcome into the tool's answer. */
+export function toCredentialReport(state: CredentialState): CheckCredentialResult {
+  const checked_at = state.checkedAt.toISOString();
+
+  if (!state.usable) {
+    return {
+      status: "unusable",
+      credential_hash: state.hash,
+      checked_at,
+      problem: { code: state.problem.code, message: state.problem.message },
+      can_create_purchase_intent: false,
+    };
+  }
+
+  const { credential } = state.verified;
+  const { agent, scope, principal, id } = credential.credentialSubject;
+
+  return {
+    status: "active",
+    credential_hash: state.hash,
+    checked_at,
+    issuer: credential.issuer,
+    subject: id,
+    principal,
+    agent: { name: agent.name, model: agent.model, operator: agent.operator },
+    valid_from: credential.validFrom,
+    valid_until: credential.validUntil,
+    scope: {
+      actions: scope.actions,
+      venues: scope.venues,
+      assets: scope.assets,
+      limits: {
+        per_tx: scope.limits.perTx,
+        per_day: scope.limits.perDay,
+        currency: scope.limits.currency,
+      },
+    },
+    registry: credential.credentialStatus.registry,
+    can_create_purchase_intent: true,
   };
 }
 
@@ -123,15 +189,17 @@ function getProductTool(catalog: CatalogAdapter): ErasedTool {
   });
 }
 
-function checkMyCredentialTool(): ErasedTool {
+function checkMyCredentialTool(state: CredentialState): ErasedTool {
   return defineTool({
     name: "check_my_credential",
     description:
       "Report who this agent is, who operates it, and what its AgentPass " +
-      "credential authorises it to do. Takes no arguments.",
+      "credential authorises it to do, as checked when this agent started. " +
+      "Takes no arguments. If the credential did not verify, this reports the " +
+      "reason and nothing from inside the document.",
     input: z.strictObject({}),
-    run(): Promise<CheckCredentialResult> {
-      throw notImplemented("check_my_credential", "T11");
+    async run(): Promise<CheckCredentialResult> {
+      return toCredentialReport(state);
     },
   });
 }
@@ -156,20 +224,30 @@ function createPurchaseIntentTool(): ErasedTool {
 
 export interface AgentToolsDeps {
   readonly catalog: CatalogAdapter;
+  /** What startup verification concluded. Decides the shape of the tool set. */
+  readonly credential: CredentialState;
 }
 
 /**
- * The agent's full tool set: all four, in declaration order.
+ * The agent's tool set — four tools when the credential verified, three when it
+ * did not.
  *
- * T11 changes this function and nothing else — when the credential no longer
- * verifies, `create_purchase_intent` is simply left out of the array, and
- * invoking it fails with `UnknownTool`.
+ * `create_purchase_intent` is left out rather than made to refuse. The agent is
+ * not told it lacks permission; there is no tool by that name. `UnknownTool` is
+ * what a caller gets, and no sentence in a product description can turn that
+ * into a purchase.
+ *
+ * `check_my_credential` stays in both cases: it is the diagnostic path, and
+ * withholding it would hide the reason without removing any capability.
  */
 export function createAgentTools(deps: AgentToolsDeps): ToolSet {
-  return createToolSet([
+  const tools: ErasedTool[] = [
     listProductsTool(deps.catalog),
     getProductTool(deps.catalog),
-    checkMyCredentialTool(),
-    createPurchaseIntentTool(),
-  ]);
+    checkMyCredentialTool(deps.credential),
+  ];
+
+  if (deps.credential.usable) tools.push(createPurchaseIntentTool());
+
+  return createToolSet(tools);
 }

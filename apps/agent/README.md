@@ -4,7 +4,8 @@ The minimal purchasing agent — **phase 2** of AgentPay. It consumes AgentPass
 rather than extending it: identity, signing and revocation stay in
 `@agentpass/core` and `@agentpass/sdk`.
 
-What is built so far: **T9**, the catalogue boundary, and **T10**, the tool surface.
+What is built so far: **T9**, the catalogue boundary; **T10**, the tool surface;
+and **T11**, the startup credential check that decides what is in it.
 
 ## The catalogue
 
@@ -57,8 +58,8 @@ rows sit on the path the demo actually walks.
 |---|---|---|
 | `list_products` | none | works |
 | `get_product` | `product_id` | works |
-| `check_my_credential` | none | `NotImplemented` until T11 |
-| `create_purchase_intent` | `product_id`, `quantity` | `NotImplemented` until T12/T13 |
+| `check_my_credential` | none | works |
+| `create_purchase_intent` | `product_id`, `quantity` | present only when the credential verified; `NotImplemented` until T12/T13 |
 
 `TOOL_NAMES` is a literal union and `Tool.name` has that type, so a fifth tool
 cannot be *named* without editing `tools/tool.ts` — "four tools, no more" is a
@@ -75,6 +76,48 @@ Every handler runs on parsed input. `invoke` validates `rawInput` through the
 tool's own zod schema first and fails with `InvalidToolInput` otherwise, and
 that same schema is what becomes the JSON Schema handed to a model — there is
 no second copy of the contract to drift.
+
+## Starting the agent
+
+```ts
+const agent = await createAgent({ credential: jws, catalog, verifier });
+```
+
+`createAgent` runs the three AgentPass checks — signature, validity window,
+on-chain status and issuer — once, and the outcome decides the tool set. A
+credential that was revoked, expired, never anchored, or whose issuer was
+deactivated leaves the agent with three tools; `create_purchase_intent` is not
+one of them, and calling it yields `UnknownTool`. The agent is not told it
+lacks permission. There is nothing by that name to call.
+
+A failed check does not stop the agent from starting. It reads the catalogue as
+before and can say why it cannot buy — which is what a revocation demo needs,
+and more useful than a process that dies.
+
+**Not knowing counts as unusable.** An RPC failure leaves the on-chain status
+unknown, so the tool is withheld all the same; `problem.code` still tells an
+outage (`NetworkError`) apart from a revocation (`CredentialRevoked`).
+
+`check_my_credential` reports everything when the credential is active. When it
+is not, it reports the failure code, the message and the hash — and nothing
+from inside the document. If the signature did not verify, every field in that
+payload was chosen by whoever built it, and repeating it back would present a
+forgery as fact. The hash survives because it is computed from the bytes
+received rather than read out of them.
+
+## Least privilege, by type
+
+The agent takes a `CredentialVerifier` — one method — not the SDK:
+
+```ts
+interface CredentialVerifier {
+  verify(jws: string, options?: { now?: Date }): Promise<VerifiedOwnCredential>;
+}
+```
+
+So it cannot issue a credential, cannot revoke one, and cannot register an
+issuer: those functions are not reachable, rather than merely not called.
+`AgentPass` satisfies the port structurally, checked at compile time.
 
 ## Commands
 
