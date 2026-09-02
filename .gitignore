@@ -1,0 +1,19 @@
+# node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# rust
+target/
+
+# stellar cli local settings
+.soroban/
+.stellar/
+
+# secrets — .env.example is the versioned template, .env.local never is
+.env
+.env.local
+.env.*.local
+
+# os
+.DS_Store

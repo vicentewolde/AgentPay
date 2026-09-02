@@ -1,0 +1,26 @@
+# Cargo workspace for the on-chain side. Deliberately rooted here, not at the
+# repo root: `contracts/` holds no package.json and is invisible to pnpm.
+[workspace]
+resolver = "2"
+members = ["agent-registry"]
+
+[workspace.dependencies]
+# Resolved, not assumed. Testnet runs protocol 28 (getVersionInfo, 2026-09-01)
+# and stellar-cli is 28.0.0, but 27.0.6 is the newest *stable* soroban-sdk —
+# 28.0.0 exists only as an rc. `stellar contract init` from CLI 28.0.0 likewise
+# pins 27. A 27 contract executes fine on a protocol-28 network.
+soroban-sdk = "27.0.6"
+
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+debug-assertions = false
+panic = "abort"
+codegen-units = 1
+lto = true
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true

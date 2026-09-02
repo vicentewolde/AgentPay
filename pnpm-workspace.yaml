@@ -1,0 +1,9 @@
+# The pnpm workspace covers the TypeScript side only.
+# `contracts/` is a separate Cargo workspace and deliberately contains no package.json.
+packages:
+  - "packages/*"
+  - "apps/*"
+
+# vitest pulls esbuild, whose postinstall resolves the prebuilt platform binary.
+allowBuilds:
+  esbuild: true
