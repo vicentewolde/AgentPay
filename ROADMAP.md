@@ -152,7 +152,7 @@ necesita saber sin ir a leer esos tres archivos:
 | SDK disponible | `issue()`, `verify()`, `revoke()`, `status()`, `registerIssuer()`, `deactivateIssuer()` en `@agentpass/sdk` |
 | CLI disponible | `agentpass issue \| verify \| revoke \| status` |
 | Errores | una clase `AgentPassError` con `code` de unión literal — ver la lista completa en `docs/fase-1-agentpass/ARQUITECTURA.md §9` |
-| Repo | `github.com/vicentewolde/agentpass`, **privado** — ver §7, es una decisión pendiente de revertir |
+| Repo | `github.com/vicentewolde/AgentPay`, **público** desde el 2026-09-02 (`P-1`) |
 
 **Lo único que quedó abierto de esta fase** (no bloquea, pero conviene cerrarlo
 antes de que la Fase 2 empiece a consumir `scope.venues` y `scope.assets`):
@@ -402,7 +402,7 @@ arriba — para no tener que reconstruirlo leyendo las siete otra vez.
 | **Mecánica de consentimiento de los alumnos** | Fase 5 | Sin resolver todavía — falta decidir cómo un alumno real autoriza a "su" agente sin fricción que mate la demo |
 | **Disciplina regulatoria** | Todo el piloto, constante | Testnet en todo momento; la ventana de 12–18 meses (§1) no es un colchón infinito |
 | **AgentGuard sin alcance** | Fase 6 | Deliberadamente no se define hasta tener evidencia real de las Fases 2–5 (§4.6) |
-| **Repo privado** | Visibilidad ante SCF, ahora mismo | Decisión estructural pendiente de revertir — ver §7 |
+| **Repo privado** | *(resuelto 2026-09-02, `P-1`)* | Monorepo público único; ver `docs/DECISIONES.md` |
 | **Ritmo real vs. planificación por semanas** | Todas las fases siguientes | Ver §7 — no volver a fijar fechas duras hasta tener datos de la Fase 2 |
 
 ---
