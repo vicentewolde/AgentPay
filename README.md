@@ -64,11 +64,25 @@ pnpm install
 pnpm run bootstrap
 ```
 
+```bash
+pnpm run deploy:registry
+```
+
 `bootstrap` generates the admin / issuer / agent keypairs, funds them through
 Friendbot, writes `.env.local` (mode 600, gitignored, secrets never printed) and
 reports the network's live protocol version. It is idempotent: re-running reuses
 every existing keypair, skips accounts that are already funded, and preserves
 keys it does not own — including the contract id `deploy:registry` writes.
+
+`deploy:registry` builds, uploads and deploys `agent_registry`, then reads the
+contract back through the SDK to confirm what landed on chain is what was meant,
+and records it in `deployments/testnet.json` and `.env.local`. Re-running is a
+no-op when the deployed contract matches the built wasm. Any drift stops the
+script and asks for `--redeploy`, because a redeploy means a **new contract id**
+and every credential anchored against the old one would be orphaned.
+
+The live testnet deployment is
+`CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT`.
 
 ## Build and test
 
@@ -90,10 +104,11 @@ cd contracts && cargo test
 
 ## Status
 
-T1 (scaffold), T2 (network bootstrap), T3 (`did:stellar` derivation), T4
-(VC-JWT sign and verify) and T5 (the `agent_registry` contract) are complete.
-Deploy (T6), the SDK (T7) and the CLI (T8) follow in order. The contract is
-tested and builds to wasm, but is **not yet deployed** — that is T6.
+T1 through T6 are complete: the scaffold, the network bootstrap,
+`did:stellar` derivation, VC-JWT sign and verify, the `agent_registry` contract,
+and its deployment to testnet. The SDK (T7) and the CLI (T8) follow.
+
+All three verification checks now exist as parts; T7 joins them into one call.
 
 Checks 1 and 2 of verification are implemented and offline. Check 3 — the
 registry lookup — arrives with the SDK in T7. Command surfaces that are declared but unwired raise

@@ -73,3 +73,24 @@ export async function writeEnvFile(path: string, contents: string): Promise<void
 export function formatEnvLine(key: string, value: string): string {
   return `${key}="${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
+
+/**
+ * Sets one key in an `.env` file's text, leaving every other line — comments,
+ * blanks, ordering — exactly as it was. Appends the key if it is absent.
+ *
+ * Used by deploy:registry, which owns a single key and must not disturb the
+ * keypairs bootstrap wrote.
+ */
+export function upsertEnvValue(contents: string, key: string, value: string): string {
+  const line = formatEnvLine(key, value);
+  const lines = contents.split("\n");
+  const index = lines.findIndex((existing) => LINE.exec(existing)?.[1] === key);
+
+  if (index === -1) {
+    const separator = contents === "" || contents.endsWith("\n") ? "" : "\n";
+    return `${contents}${separator}${line}\n`;
+  }
+
+  lines[index] = line;
+  return lines.join("\n");
+}

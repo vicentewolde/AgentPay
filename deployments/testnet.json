@@ -2,6 +2,13 @@
   "network": "testnet",
   "networkPassphrase": "Test SDF Network ; September 2015",
   "rpcUrl": "https://soroban-testnet.stellar.org",
-  "protocolVersion": null,
-  "agentRegistry": null
+  "protocolVersion": 28,
+  "agentRegistry": {
+    "contractId": "CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT",
+    "wasmHash": "b2ff9231f27555c1cfd94e6d480529a5cf316736c969410aad3c57a8953cf151",
+    "admin": "GARBTKFQEX325HDOWL3KQT7PDCENLOYMXF7D6B6SB54LDKCHCRYFUY2K",
+    "schemaVersion": 1,
+    "deployedAt": "2026-09-02T03:15:48.276Z",
+    "protocolVersion": 28
+  }
 }

@@ -274,6 +274,47 @@ se comprobó desactivando la extensión por completo y un test de "sigue viva a 
 real es la aserción directa sobre `get_ttl`, más la verificación contra la red
 en T6.
 
+### I-27 · `deployments/testnet.json` se valida al leer **y al escribir** · `Vigente`
+**Fecha:** 2026-09-02 (T6)
+**Motivo:** es el único artefacto compartido entre las mitades TypeScript y Rust
+del repo ([I-2](#i-2--dos-workspaces-separados-un-solo-puente--vigente)). Una
+escritura malformada es cara: rompe todo lo que viene después y no se nota hasta
+mucho más tarde. El esquema es estricto, así que un typo en un nombre de campo
+tampoco sobrevive.
+
+### I-28 · El secreto del admin llega al CLI por entorno, nunca por argv · `Vigente`
+**Fecha:** 2026-09-02 (T6)
+`STELLAR_ACCOUNT` en el entorno del proceso hijo.
+**Motivo:** un secreto en la línea de comandos es visible en la lista de procesos
+para cualquier usuario de la máquina. El `details` de los errores tampoco
+incluye nunca el entorno.
+
+### I-29 · Cualquier deriva exige `--redeploy` explícito · `Vigente`
+**Fecha:** 2026-09-02 (T6)
+Si el wasm compilado difiere del desplegado, o si el contrato registrado no
+responde, el script **se detiene**.
+**Motivo:** un redespliegue crea un **contract id nuevo**, y toda credencial
+anclada contra el anterior seguiría apuntando allí. Convertir eso en un efecto
+silencioso de "volver a correr el script" sería un accidente esperando ocurrir.
+
+### I-30 · La verificación post-deploy usa el SDK, no la salida del CLI · `Vigente`
+**Fecha:** 2026-09-02 (T6)
+El script llama `get_admin` y `schema_version` contra el contrato desplegado y
+compara con lo que esperaba.
+**Motivo:** confirmación independiente de que lo que está en la cadena es lo que
+quisimos poner. **Se justificó de inmediato:** el primer despliegue reveló que
+`get_admin` devuelve `Result<Address, Error>` envuelto en un `Ok`, y mi código lo
+leía como string. Sin esta verificación el error habría pasado desapercibido y el
+`.env.local` habría quedado apuntando a algo sin validar.
+
+### I-31 · `upsertEnvValue` quirúrgico en vez de re-renderizar `.env.local` · `Vigente`
+**Fecha:** 2026-09-02 (T6)
+`deploy:registry` posee exactamente una clave y reemplaza solo esa línea.
+**Motivo:** `bootstrap` es dueño del formato del archivo
+([I-8](#i-8--bootstrap-declara-qué-claves-posee-el-resto-se-arrastra--vigente));
+que dos scripts re-rendericen el mismo archivo con criterios distintos garantiza
+que uno pise al otro tarde o temprano.
+
 ---
 
 ## Pendientes de decidir

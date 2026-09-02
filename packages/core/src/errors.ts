@@ -25,7 +25,9 @@ export type AgentPassErrorCode =
   /** `now` is past `validUntil`. */
   | "CredentialExpired"
   /** `now` is before `validFrom`. */
-  | "CredentialNotYetValid";
+  | "CredentialNotYetValid"
+  /** An external command exited non-zero or produced unusable output. */
+  | "CommandFailed";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

@@ -8,19 +8,19 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-01 · **Último hito cerrado:** T5 · **Siguiente:** T6
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T6 · **Siguiente:** T7
 
-**El contrato que permite cortar una credencial ya está escrito y probado.**
-Guarda la huella de cada credencial y su estado, y solo el emisor que la creó
-puede revocarla. Todavía **no está publicado en la red** — eso es T6.
+**El contrato está vivo en Stellar testnet** y el ciclo completo —registrar
+emisor, anclar, consultar, revocar— se ejecutó contra la red real. Las tres
+piezas existen; falta la librería que las une en una sola llamada, que es T7.
 
 | | |
 |---|---|
-| Tests TypeScript | **73** en verde (core 55 · sdk 2 · cli 3 · scripts 13) |
+| Tests TypeScript | **85** en verde (core 55 · sdk 2 · cli 3 · scripts 25) |
 | Tests Rust | **22** en verde |
 | Red | testnet, protocolo **28** |
-| Contrato desplegado | todavía no (T6) |
-| Commits | 6 |
+| Contrato desplegado | `CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT` |
+| Commits | 7 |
 
 ### Progreso
 
@@ -31,9 +31,46 @@ puede revocarla. Todavía **no está publicado en la red** — eso es T6.
 | T3 | Identidad derivable sin red | ✅ cerrado |
 | T4 | Firmar y verificar credenciales | ✅ cerrado |
 | T5 | El contrato en la blockchain | ✅ cerrado |
-| T6 | Publicar el contrato en testnet | ⬜ siguiente |
-| T7 | La librería que junta todo | ⬜ |
+| T6 | Publicar el contrato en testnet | ✅ cerrado |
+| T7 | La librería que junta todo | ⬜ siguiente |
 | T8 | La herramienta de línea de comandos | ⬜ |
+
+---
+
+## T6 · Publicar el contrato en testnet — cerrado 2026-09-02
+
+**Qué significa.** El contrato ya no vive solo en el repositorio: **está corriendo
+en Stellar testnet**, con tu cuenta como administrador, en la dirección
+`CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT`. Un comando lo
+compila, lo sube, lo despliega y **comprueba que lo que quedó en la red es lo que
+queríamos poner**.
+
+**Lo que se verificó contra la red real.** Esto importa porque en T5 tuve que
+borrar un test que decía probar algo que el entorno de pruebas no puede simular.
+Ahora sí se probó de verdad: consultar un documento inexistente devuelve
+"desconocido"; registrar un emisor funciona; anclar funciona; consultar devuelve
+"activo"; **intentar volver a anclar el mismo documento falla**; **intentar
+revocarlo desde una cuenta que no lo emitió falla**; revocarlo desde el emisor
+legítimo funciona; y consultar devuelve "revocado".
+
+Los dos rechazos son exactamente las dos protecciones que T5 había probado con
+mutaciones. Se comportan igual en producción que en los tests.
+
+**Se puede volver a correr sin romper nada.** Si el contrato ya está desplegado y
+coincide con lo que compila el código, el comando lo verifica y no hace nada. Si
+algo no cuadra —el código cambió, o el contrato no responde— **se detiene y pide
+confirmación explícita**, porque volver a desplegar crea una dirección nueva y
+todas las credenciales ancladas contra la anterior quedarían apuntando al lugar
+equivocado.
+
+**Un error mío, y por qué la verificación valió la pena.** El primer despliegue
+funcionó pero mi comprobación falló: leí mal el valor que devuelve el contrato.
+Si me hubiera fiado de lo que imprime la herramienta de Stellar en vez de
+verificar por mi cuenta, el error habría pasado desapercibido. Quedó un contrato
+huérfano de ese intento —inofensivo, en testnet, sin emisores— anotado en la
+evidencia en vez de barrido bajo la alfombra.
+
+📎 [evidencia/T6.md](evidencia/T6.md) · [deployments/testnet.json](../deployments/testnet.json)
 
 ---
 
