@@ -73,7 +73,7 @@ no envolvía un fallo de llave malformada en un error tipado, a diferencia de
 compartiendo una sola función entre ambos comandos, en vez de arreglarlo dos
 veces por separado.
 
-📎 [evidencia/T8.md](evidencia/T8.md) · [packages/cli/README.md](../packages/cli/README.md) · [README.md](../README.md#full-walkthrough-issue--verify--revoke--verify-fails)
+📎 [evidencia/T8.md](evidencia/T8.md) · [packages/cli/README.md](../../packages/cli/README.md) · [README.md](../../README.md#full-walkthrough-issue--verify--revoke--verify-fails)
 
 ---
 
@@ -104,7 +104,7 @@ en silencio, porque todo lo que llega de la cadena se valida antes de usarse. Es
 la segunda vez que suponer la forma de ese borde cuesta un fallo — la primera
 fue en T6.
 
-📎 [evidencia/T7.md](evidencia/T7.md) · [packages/sdk/README.md](../packages/sdk/README.md)
+📎 [evidencia/T7.md](evidencia/T7.md) · [packages/sdk/README.md](../../packages/sdk/README.md)
 
 ---
 
@@ -141,7 +141,7 @@ verificar por mi cuenta, el error habría pasado desapercibido. Quedó un contra
 huérfano de ese intento —inofensivo, en testnet, sin emisores— anotado en la
 evidencia en vez de barrido bajo la alfombra.
 
-📎 [evidencia/T6.md](evidencia/T6.md) · [deployments/testnet.json](../deployments/testnet.json)
+📎 [evidencia/T6.md](evidencia/T6.md) · [deployments/testnet.json](../../deployments/testnet.json)
 
 ---
 
@@ -181,7 +181,7 @@ probar, **el test seguía pasando**: el entorno de pruebas de Soroban no simula
 el archivado. Daba confianza falsa, así que lo eliminé y dejé escrito el porqué.
 Lo real se verifica contra la red en T6.
 
-📎 [evidencia/T5.md](evidencia/T5.md) · [contracts/README.md](../contracts/README.md)
+📎 [evidencia/T5.md](evidencia/T5.md) · [contracts/README.md](../../contracts/README.md)
 
 ---
 

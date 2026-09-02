@@ -50,7 +50,7 @@ if (hasErrorCode(error, "InvalidStellarAddress")) { /* narrowed */ }
 ## Credentials
 
 A W3C VC 2.0 credential, validated with zod and signed as a compact JWS
-(EdDSA). Full schema and rationale: [docs/credential-schema.md](../../docs/credential-schema.md).
+(EdDSA). Full schema and rationale: [docs/credential-schema.md](../../docs/fase-1-agentpass/credential-schema.md).
 
 ```ts
 const { jws, hash } = await signCredential(credential, issuerKeypair);

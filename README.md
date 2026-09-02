@@ -1,4 +1,17 @@
-# AgentPass
+# AgentPay
+
+An agentic payments stack on **Stellar testnet**, built in seven phases: from
+verifiable agent identity through spending policy, signed mandates, real
+commerce, and verifiable evidence. See **[ROADMAP.md](ROADMAP.md)** for the
+phases, what is done, and what comes next.
+
+Everything below describes **Phase 1 — AgentPass**, which is complete and runs
+end to end. Its code lives at the root of this repo (`packages/`, `contracts/`);
+later phases add siblings there rather than parallel trees.
+
+---
+
+# Phase 1 — AgentPass
 
 Identity credentials for AI agents, issued and verified against **Stellar
 testnet**. An agent proves cryptographically who operates it and what it is
@@ -37,10 +50,10 @@ comments and commit messages are in English.
 
 | | |
 |---|---|
-| [docs/CONTEXTO.md](docs/CONTEXTO.md) | What AgentPass is, the thesis, what it is **not** |
-| [docs/BITACORA.md](docs/BITACORA.md) | Running log: current state, what each milestone delivered |
-| [docs/DECISIONES.md](docs/DECISIONES.md) | Every significant decision, with its rationale and the rejected alternative |
-| [docs/evidencia/](docs/evidencia/) | Raw command output for each milestone |
+| [docs/fase-1-agentpass/CONTEXTO.md](docs/fase-1-agentpass/CONTEXTO.md) | What AgentPass is, the thesis, what it is **not** |
+| [docs/fase-1-agentpass/BITACORA.md](docs/fase-1-agentpass/BITACORA.md) | Running log: current state, what each milestone delivered |
+| [docs/fase-1-agentpass/DECISIONES.md](docs/fase-1-agentpass/DECISIONES.md) | Every significant decision, with its rationale and the rejected alternative |
+| [docs/fase-1-agentpass/evidencia/](docs/fase-1-agentpass/evidencia/) | Raw command output for each milestone |
 
 ## Requirements
 
@@ -188,4 +201,4 @@ against live Stellar testnet, following nothing but this README.
 Out of scope for this phase, deliberately: enforcing `scope.limits` (signed and
 transported, not yet enforced by anything), PolicyRail, Mandato, MandateGate,
 MandateVault, any web UI, mainnet, and fiat rails. See
-[docs/CONTEXTO.md](docs/CONTEXTO.md).
+[docs/fase-1-agentpass/CONTEXTO.md](docs/fase-1-agentpass/CONTEXTO.md).

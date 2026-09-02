@@ -1,7 +1,7 @@
 # Esquema de la credencial AgentPass
 
-Implementado en [`packages/core/src/credential.ts`](../packages/core/src/credential.ts),
-firmado y verificado en [`vc-jwt.ts`](../packages/core/src/vc-jwt.ts).
+Implementado en [`packages/core/src/credential.ts`](../../packages/core/src/credential.ts),
+firmado y verificado en [`vc-jwt.ts`](../../packages/core/src/vc-jwt.ts).
 
 Perfil **VC-JWT**: data model W3C VC 2.0 serializado como **JWS compacto firmado
 con EdDSA**. Sin JSON-LD processing, sin canonicalización, sin Data Integrity
@@ -28,7 +28,7 @@ proofs.
     "principal": "did:stellar:testnet:GCTTRJIY...",
     "scope": {
       "actions": ["catalog:read", "intent:create"],
-      "venues": ["cabs-bazaar:CD..."],
+      "venues": ["bazaar-aliado:CD..."],
       "assets": ["USDC:GB..."],
       "limits": { "perTx": "50.00", "perDay": "200.00", "currency": "USDC" }
     }

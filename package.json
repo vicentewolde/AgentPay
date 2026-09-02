@@ -1,5 +1,5 @@
 {
-  "name": "agentpass",
+  "name": "agentpay",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",

@@ -32,7 +32,7 @@ function credentialFor(
       principal: issuerDid,
       scope: {
         actions: ["catalog:read", "intent:create"],
-        venues: [`cabs-bazaar:${REGISTRY}`],
+        venues: [`bazaar-aliado:${REGISTRY}`],
         assets: ["USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"],
         limits: { perTx: "50.00", perDay: "200.00", currency: "USDC" },
       },
