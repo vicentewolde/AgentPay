@@ -42,14 +42,30 @@ Homebrew installs rustup keg-only, so add it to your shell:
 echo 'export PATH="/opt/homebrew/opt/rustup/bin:$PATH"' >> ~/.zshrc
 ```
 
-## Build and test
+## Getting a working testnet environment
 
 ```bash
 pnpm install
 ```
 
 ```bash
+pnpm run bootstrap
+```
+
+`bootstrap` generates the admin / issuer / agent keypairs, funds them through
+Friendbot, writes `.env.local` (mode 600, gitignored, secrets never printed) and
+reports the network's live protocol version. It is idempotent: re-running reuses
+every existing keypair, skips accounts that are already funded, and preserves
+keys it does not own — including the contract id `deploy:registry` writes.
+
+## Build and test
+
+```bash
 pnpm build
+```
+
+```bash
+pnpm typecheck
 ```
 
 ```bash
@@ -62,7 +78,7 @@ cd contracts && cargo test
 
 ## Status
 
-T1 (scaffold) is complete. Network bootstrap (T2), `did:stellar` (T3), VC-JWT
-(T4), the registry contract (T5), deploy (T6), the SDK (T7) and the CLI (T8)
-follow in order. Command surfaces that are declared but unwired raise
+T1 (scaffold) and T2 (network bootstrap) are complete. `did:stellar` (T3),
+VC-JWT (T4), the registry contract (T5), deploy (T6), the SDK (T7) and the CLI
+(T8) follow in order. Command surfaces that are declared but unwired raise
 `AgentPassError` with code `NotImplemented` rather than returning `undefined`.

@@ -7,7 +7,11 @@
  */
 export type AgentPassErrorCode =
   /** A placeholder surface exists but its behaviour has not landed yet. */
-  | "NotImplemented";
+  | "NotImplemented"
+  /** Local configuration is missing, malformed or internally inconsistent. */
+  | "ConfigError"
+  /** A remote call failed, timed out, or answered with something unparseable. */
+  | "NetworkError";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;
