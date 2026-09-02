@@ -9,6 +9,7 @@ puede cortar desde fuera del agente — imposible de saltar por prompt injection
 | | |
 |---|---|
 | [docs/CONTEXTO.md](docs/CONTEXTO.md) | Qué es el proyecto, la tesis, qué **no** es, fuera de alcance |
+| [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) | Mapa técnico denso y autocontenido — para dar contexto a un chat nuevo sin que lea el código |
 | [docs/BITACORA.md](docs/BITACORA.md) | Estado actual, qué hito sigue, qué se hizo en cada uno |
 | [docs/DECISIONES.md](docs/DECISIONES.md) | Toda decisión importante, con su motivo y lo que se descartó |
 | [README.md](README.md) | Cómo correr el proyecto |
