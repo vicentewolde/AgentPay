@@ -156,3 +156,21 @@ discrepa del `issuer`) e `InvalidCredential` (el payload no cumple el esquema).
 
 Se firma y se transporta. **Nada lo hace cumplir todavía.** El enforcement es un
 hito posterior; no lo agregues aquí.
+
+---
+
+## Nota posterior · qué significa un `venues` o `assets` vacío
+
+Este documento se cerró con la Fase 1 y no se reescribe. Se agrega solo este
+puntero, porque la pregunta la resolvió la fase siguiente:
+
+`scope.venues` y `scope.assets` aceptan arrays **vacíos**, y durante toda la
+Fase 1 ningún código los interpretó. La Fase 2 decidió, antes de escribir el
+primer código que los lee, que un array vacío significa **"nada permitido"**
+(fail-closed): la credencial sigue siendo válida como identidad y no autoriza
+ninguna compra.
+
+La decisión, con su motivo y las dos alternativas descartadas, está en
+[`docs/fase-2-agente-compra/DECISIONES.md` → B-1](../fase-2-agente-compra/DECISIONES.md).
+La forma canónica de los valores que van dentro de esas listas está en B-3 del
+mismo archivo.

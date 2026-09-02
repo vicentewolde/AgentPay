@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-02 · Fase actual: **Fase 1 completa (T1–T8) · Fase 2 sin empezar**
+Última revisión: 2026-09-02 · Fase actual: **Fase 2 en curso — T9 cerrado, T10 siguiente**
 
 ---
 
@@ -89,7 +89,7 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 |---|---|---|---|---|
 | 0 | Fundamentos | Que hay una tesis técnica y una ventana regulatoria reales, no solo entusiasmo | ✅ Completa (pre-código) | — |
 | 1 | **AgentPass** | Identidad verificable del agente, revocable desde afuera | ✅ Completa (T1–T8) | — |
-| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | ⏳ Sin empezar | Respuestas del embajador (preguntas ya redactadas, ver Fase 2) |
+| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 En curso — T9 cerrado | Respuestas del embajador, **solo para T15** (preguntas ya redactadas, ver Fase 2) |
 | 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | ⏳ Sin diseñar en detalle | Cierre de Fase 2 (define qué necesita autorizar el mandato en la práctica) |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ⏳ Sin diseñar | Timeline de integración del embajador; es el hito de mayor riesgo del proyecto |
 | 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | ⏳ Sin diseñar | Fases 2–4 cerradas |
@@ -154,14 +154,15 @@ necesita saber sin ir a leer esos tres archivos:
 | Errores | una clase `AgentPassError` con `code` de unión literal — ver la lista completa en `docs/fase-1-agentpass/ARQUITECTURA.md §9` |
 | Repo | `github.com/vicentewolde/AgentPay`, **público** desde el 2026-09-02 (`P-1`) |
 
-**Lo único que quedó abierto de esta fase** (no bloquea, pero conviene cerrarlo
-antes de que la Fase 2 empiece a consumir `scope.venues` y `scope.assets`):
-el schema actual acepta esos dos campos como arrays vacíos sin que ningún
-código los interprete todavía. Falta decidir explícitamente si un array vacío
-significa "nada permitido" (fail-closed) o "sin restricción" (fail-open), y
-dejarlo escrito en `docs/fase-1-agentpass/credential-schema.md`. Es una línea de código hoy; es
-un agujero de seguridad silencioso si se decide implícitamente cuando la Fase 2
-ya esté usando ese campo para autorizar compras reales.
+**Lo único que quedó abierto de esta fase — cerrado el 2026-09-02, en T9.**
+El schema acepta `scope.venues` y `scope.assets` como arrays vacíos, y durante
+toda la Fase 1 ningún código los interpretó. Se decidió, antes de escribir el
+primer código que los lee, que un array vacío significa **"nada permitido"**
+(fail-closed): la credencial sigue siendo válida como identidad y no autoriza
+ninguna compra. La decisión, con las dos alternativas descartadas, está en
+[`docs/fase-2-agente-compra/DECISIONES.md` → B-1](docs/fase-2-agente-compra/DECISIONES.md);
+`credential-schema.md` de la Fase 1 lleva un puntero, sin reescribir su
+contenido cerrado.
 
 ### 4.2 · Fase 2 — Agente mínimo de compra ⏳ próxima
 

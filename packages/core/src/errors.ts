@@ -39,7 +39,15 @@ export type AgentPassErrorCode =
   /** The credential names a different registry than the verifier trusts. */
   | "RegistryMismatch"
   /** A CLI command's arguments are missing, malformed, or mutually exclusive. */
-  | "InvalidArguments";
+  | "InvalidArguments"
+  /** A string is not a well-formed `<slug>:<contract id>` venue id. */
+  | "InvalidVenueId"
+  /** A string is not a well-formed `<CODE>:<issuer>` asset id. */
+  | "InvalidAssetId"
+  /** A catalogue entry does not match the product schema. */
+  | "InvalidProduct"
+  /** The catalogue has no product with the requested id. */
+  | "ProductNotFound";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

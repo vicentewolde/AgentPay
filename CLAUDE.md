@@ -15,6 +15,8 @@ imposible de saltar por prompt injection.
 | [docs/fase-1-agentpass/ARQUITECTURA.md](docs/fase-1-agentpass/ARQUITECTURA.md) | Mapa técnico denso y autocontenido — para dar contexto a un chat nuevo sin que lea el código |
 | [docs/fase-1-agentpass/BITACORA.md](docs/fase-1-agentpass/BITACORA.md) | Estado actual, qué hito sigue, qué se hizo en cada uno |
 | [docs/fase-1-agentpass/DECISIONES.md](docs/fase-1-agentpass/DECISIONES.md) | Toda decisión importante, con su motivo y lo que se descartó |
+| [docs/fase-2-agente-compra/BITACORA.md](docs/fase-2-agente-compra/BITACORA.md) | **Fase en curso.** Estado actual, qué hito sigue, qué se hizo en cada uno |
+| [docs/fase-2-agente-compra/DECISIONES.md](docs/fase-2-agente-compra/DECISIONES.md) | Decisiones de la Fase 2 (prefijo `B-`) |
 | [README.md](README.md) | Cómo correr el proyecto |
 
 `ROADMAP.md` dice en qué fase estamos; dentro de una fase cerrada, su
@@ -22,8 +24,9 @@ imposible de saltar por prompt injection.
 
 ## Reglas de trabajo
 
-1. **Para al cerrar cada hito (T1…T8) y muestra el resultado.** No encadenes
-   hitos sin revisión.
+1. **Para al cerrar cada hito y muestra el resultado.** No encadenes hitos sin
+   revisión. La numeración es continua entre fases: T1–T8 fue la Fase 1,
+   T9–T15 es la Fase 2.
 2. **No cambies unilateralmente una decisión de `DECISIONES.md`.** Si al
    implementarla parece equivocada: dilo, muestra la evidencia, propón la
    alternativa y **espera**.
@@ -39,9 +42,9 @@ imposible de saltar por prompt injection.
 
 ## Al cerrar cada hito
 
-1. Actualiza **Estado actual** y la tabla de progreso en `docs/fase-1-agentpass/BITACORA.md`, y
-   agrega el bloque del hito en lenguaje llano.
-2. Agrega las salidas crudas en `docs/fase-1-agentpass/evidencia/T<n>.md`.
+1. Actualiza **Estado actual** y la tabla de progreso en el `BITACORA.md` de la
+   fase en curso, y agrega el bloque del hito en lenguaje llano.
+2. Agrega las salidas crudas en `evidencia/T<n>.md` de esa misma fase.
 3. Agrega toda decisión nueva al `DECISIONES.md` de la fase en curso, con motivo
    y alternativa descartada. Si la decisión afecta a más de una fase o a la
    estructura del proyecto, va a `docs/DECISIONES.md` con prefijo `P-`.
