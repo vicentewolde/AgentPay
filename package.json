@@ -1,0 +1,27 @@
+{
+  "name": "agentpass",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
+    "deploy:registry": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-registry.ts",
+    "build": "tsc -b",
+    "test": "pnpm -r --stream test && vitest run",
+    "test:integration": "pnpm --filter @agentpass/sdk run test:integration",
+    "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
+    "check": "pnpm typecheck && pnpm test",
+    "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "^17.0.1",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0",
+    "zod": "^4.5.4"
+  }
+}

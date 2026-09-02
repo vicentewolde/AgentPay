@@ -1,0 +1,17 @@
+{
+  "agent": {
+    "name": "compras-demo",
+    "model": "claude-sonnet-4-6",
+    "operator": "agentpass-pilot"
+  },
+  "scope": {
+    "actions": ["catalog:read", "intent:create"],
+    "venues": [],
+    "assets": [],
+    "limits": {
+      "perTx": "50.00",
+      "perDay": "200.00",
+      "currency": "USDC"
+    }
+  }
+}
