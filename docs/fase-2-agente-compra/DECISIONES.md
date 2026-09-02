@@ -151,3 +151,64 @@ lo que impide que importe es que T12 autoriza comparando campos estructurados
 porque esconde el problema en vez de resolverlo —da la falsa señal de que la
 seguridad depende de filtrar texto— y porque altera datos de un tercero que el
 intent firmado podría necesitar citar sin modificar.
+
+### B-6 · La lista de herramientas es el límite de autorización, no un permiso que se deniega · `Vigente`
+**Fecha:** 2026-09-02 (T10)
+
+Invocar una herramienta se resuelve por nombre contra la lista que el agente ve
+(`ToolSet.list()`). Una herramienta ausente falla con **`UnknownTool`**, no con
+un código de permiso denegado. `createToolSet` recibe el arreglo de herramientas
+que corresponda; quién decide ese arreglo es el llamador.
+
+**Motivo.** Es la tesis de la fase, hecha mecanismo: *"si se le revoca la
+credencial a mitad de operación, deja de poder hacerlo — no porque se le pida
+amablemente en el prompt, sino porque la herramienta desaparece"* (ROADMAP
+§4.2). Un permiso denegado es un mensaje dentro del contexto del modelo, y un
+mensaje es exactamente la clase de cosa que una inyección puede intentar
+reinterpretar. Una herramienta que no está en la lista no tiene superficie con
+la que negociar. T11 no construye nada nuevo para esto: solo decide cuándo
+dejar `create_purchase_intent` fuera del arreglo.
+
+**Alternativa descartada:** mantener las cuatro herramientas siempre visibles y
+que `create_purchase_intent` devuelva un rechazo tipado cuando la credencial no
+verifica. Da mejores mensajes de diagnóstico —el agente sabe *por qué* no
+puede— a cambio de convertir la revocación en algo que vive dentro de la
+conversación. El diagnóstico se recupera igual desde fuera del agente, en el
+error de arranque de T11 y en `check_my_credential`; la propiedad de seguridad
+no se recupera si se cede.
+
+### B-7 · Los nombres de herramienta son una unión cerrada de literales · `Vigente`
+**Fecha:** 2026-09-02 (T10)
+
+`TOOL_NAMES` es un `as const` de cuatro strings y `Tool.name` es de ese tipo. Una
+quinta herramienta no se puede nombrar sin editar `tools/tool.ts`.
+
+**Motivo.** "Cuatro herramientas, ninguna más" es una restricción de alcance que
+la fase declara explícitamente, y una restricción que solo vive en un documento
+se erosiona en la primera semana en que haga falta "una cosita más". Como unión
+de literales, agregar una quinta deja de compilar: pasa de ser algo que hay que
+cazar en revisión a un error de tipos.
+
+**Alternativa descartada:** `name: string` y un test que compare la lista contra
+las cuatro esperadas. Cubre lo mismo, pero falla más tarde y más lejos del lugar
+donde se escribió la herramienta de más.
+
+### B-8 · Los dos hitos que faltan se declaran con `NotImplemented`, no se simulan · `Vigente`
+**Fecha:** 2026-09-02 (T10)
+
+`check_my_credential` y `create_purchase_intent` existen con su nombre, sus
+argumentos y la forma exacta de su respuesta, y lanzan `NotImplemented` nombrando
+el hito que trae su comportamiento (T11, y T12/T13 respectivamente).
+
+**Motivo.** El código `NotImplemented` existe en la unión desde la Fase 1 con
+esta descripción textual: *"A placeholder surface exists but its behaviour has
+not landed yet"*. Definir ahora la forma de la respuesta —y no el cuerpo— deja
+fijado el contrato que T11 y T13 tienen que cumplir, sin inventar el
+comportamiento antes de tiempo. Devolver un resultado plausible pero falso sería
+peor que el hueco que esconde: haría que la demo pareciera funcionar antes de
+que la autorización exista.
+
+**Alternativa descartada:** no declarar las dos herramientas hasta que su hito
+las implemente. Deja el conjunto incompleto durante dos hitos y esconde la
+propiedad que T10 tenía que demostrar — que la superficie son exactamente
+cuatro, y que la lista es el límite.

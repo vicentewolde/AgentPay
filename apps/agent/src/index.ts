@@ -39,3 +39,25 @@ export {
   createMockCatalog,
   type MockCatalogOptions,
 } from "./catalog/mock.js";
+
+export {
+  TOOL_NAMES,
+  createToolSet,
+  defineTool,
+  isToolName,
+  type ErasedTool,
+  type Tool,
+  type ToolDescriptor,
+  type ToolName,
+  type ToolSet,
+} from "./tools/tool.js";
+
+export {
+  createAgentTools,
+  type AgentToolsDeps,
+  type CheckCredentialResult,
+  type CreatePurchaseIntentResult,
+  type GetProductResult,
+  type ListProductsResult,
+  type WireProduct,
+} from "./tools/agent-tools.js";

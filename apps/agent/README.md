@@ -4,7 +4,7 @@ The minimal purchasing agent — **phase 2** of AgentPay. It consumes AgentPass
 rather than extending it: identity, signing and revocation stay in
 `@agentpass/core` and `@agentpass/sdk`.
 
-What is built so far: **T9**, the catalogue boundary.
+What is built so far: **T9**, the catalogue boundary, and **T10**, the tool surface.
 
 ## The catalogue
 
@@ -51,6 +51,31 @@ central risk is a refusal that depends on the agent *choosing* to disobey text
 embedded in data instead of coming out of a structural check, so the adversarial
 rows sit on the path the demo actually walks.
 
+## The four tools, and the boundary
+
+| tool | arguments | state |
+|---|---|---|
+| `list_products` | none | works |
+| `get_product` | `product_id` | works |
+| `check_my_credential` | none | `NotImplemented` until T11 |
+| `create_purchase_intent` | `product_id`, `quantity` | `NotImplemented` until T12/T13 |
+
+`TOOL_NAMES` is a literal union and `Tool.name` has that type, so a fifth tool
+cannot be *named* without editing `tools/tool.ts` — "four tools, no more" is a
+type error, not a review checklist item.
+
+**The list is the authorisation boundary.** `invoke` resolves a name against
+the tools the set actually holds, so a tool that was left out fails with
+`UnknownTool` — absent, not forbidden. A denied permission is a message, and a
+message is the kind of thing an injected instruction can try to argue with; a
+missing tool has no such surface. T11 uses exactly this: when the credential no
+longer verifies, `create_purchase_intent` is simply not in the array.
+
+Every handler runs on parsed input. `invoke` validates `rawInput` through the
+tool's own zod schema first and fails with `InvalidToolInput` otherwise, and
+that same schema is what becomes the JSON Schema handed to a model — there is
+no second copy of the contract to drift.
+
 ## Commands
 
 ```bash
@@ -67,7 +92,8 @@ Neither touches the network.
 
 Every failure is an `AgentPassError` with a `code`, from the same union in
 `packages/core/src/errors.ts` — no parallel hierarchy. This package added
-`InvalidVenueId`, `InvalidAssetId`, `InvalidProduct` and `ProductNotFound`.
+`InvalidVenueId`, `InvalidAssetId`, `InvalidProduct`, `ProductNotFound`,
+`UnknownTool` and `InvalidToolInput`.
 
 ## Documentation
 

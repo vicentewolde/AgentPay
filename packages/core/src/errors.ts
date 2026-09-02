@@ -47,7 +47,11 @@ export type AgentPassErrorCode =
   /** A catalogue entry does not match the product schema. */
   | "InvalidProduct"
   /** The catalogue has no product with the requested id. */
-  | "ProductNotFound";
+  | "ProductNotFound"
+  /** No tool by that name is in the agent's tool set — including because it was withheld. */
+  | "UnknownTool"
+  /** A tool call's arguments do not match that tool's input schema. */
+  | "InvalidToolInput";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;
