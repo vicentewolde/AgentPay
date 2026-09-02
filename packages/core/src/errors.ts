@@ -11,7 +11,11 @@ export type AgentPassErrorCode =
   /** Local configuration is missing, malformed or internally inconsistent. */
   | "ConfigError"
   /** A remote call failed, timed out, or answered with something unparseable. */
-  | "NetworkError";
+  | "NetworkError"
+  /** A string is not a well-formed `did:stellar:<network>:<address>`. */
+  | "InvalidDid"
+  /** A string is not a valid Stellar Ed25519 account address (`G...`). */
+  | "InvalidStellarAddress";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

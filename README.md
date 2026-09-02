@@ -78,7 +78,7 @@ cd contracts && cargo test
 
 ## Status
 
-T1 (scaffold) and T2 (network bootstrap) are complete. `did:stellar` (T3),
-VC-JWT (T4), the registry contract (T5), deploy (T6), the SDK (T7) and the CLI
-(T8) follow in order. Command surfaces that are declared but unwired raise
+T1 (scaffold), T2 (network bootstrap) and T3 (`did:stellar` derivation) are
+complete. VC-JWT (T4), the registry contract (T5), deploy (T6), the SDK (T7) and
+the CLI (T8) follow in order. Command surfaces that are declared but unwired raise
 `AgentPassError` with code `NotImplemented` rather than returning `undefined`.
