@@ -84,11 +84,79 @@ and every credential anchored against the old one would be orphaned.
 The live testnet deployment is
 `CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT`.
 
-## Build and test
+`deploy:registry` also registers the pilot's issuer in that contract if it
+is not already active, which is what lets the walkthrough below run with no
+manual setup beyond the three commands above.
+
+## Build the CLI
 
 ```bash
 pnpm build
 ```
+
+## Full walkthrough: issue → verify → revoke → verify fails
+
+Everything above — `pnpm install`, `bootstrap`, `deploy:registry`, `build` —
+must have already run. Every command below is run from the repo root.
+
+Pull the demo agent's address out of `.env.local` (written by `bootstrap`):
+
+```bash
+AGENT_PUBLIC_KEY=$(grep '^AGENT_PUBLIC_KEY=' .env.local | cut -d'"' -f2)
+```
+
+Issue it a credential. [examples/scope.json](examples/scope.json) is a ready-made
+scope file — what the agent may do, and its spending limits:
+
+```bash
+node packages/cli/dist/bin.js issue --subject "$AGENT_PUBLIC_KEY" --scope examples/scope.json --out credential.jws
+```
+
+This prints a summary including the credential's hash, and anchors that hash in
+the registry. Verify the credential — this runs all three checks: signature,
+validity window, and the registry:
+
+```bash
+node packages/cli/dist/bin.js verify credential.jws
+```
+
+`status` should be `Active`. Pull the hash out of that same output, so nothing
+needs to be copied by hand:
+
+```bash
+HASH=$(node packages/cli/dist/bin.js verify credential.jws | grep '^hash' | awk '{print $2}')
+```
+
+Confirm it directly against the registry:
+
+```bash
+node packages/cli/dist/bin.js status "$HASH"
+```
+
+Now revoke it — this is the principal cutting the agent's authorisation from
+**outside** the agent:
+
+```bash
+node packages/cli/dist/bin.js revoke "$HASH"
+```
+
+```bash
+node packages/cli/dist/bin.js status "$HASH"
+```
+
+That should now print `Revoked`. Verify the exact same file again — the same
+JWS, the same valid signature, nothing about the credential itself changed:
+
+```bash
+node packages/cli/dist/bin.js verify credential.jws
+```
+
+This must fail with `CredentialRevoked: the registry reports this credential as
+revoked`, exit code 1. That failure is the whole point of the project: an
+agent's authorisation was cut without touching the agent, the credential, or
+its signature — only the registry.
+
+## Test
 
 ```bash
 pnpm typecheck
@@ -113,10 +181,11 @@ deployed registry.
 
 ## Status
 
-T1 through T7 are complete. The full cycle — issue, verify, revoke, and
-confirm the revoked credential no longer verifies — runs against live testnet.
-The CLI (T8) is what remains.
+T1 through T8 are complete. The pilot's full loop — install, bootstrap, deploy,
+build, then issue / verify / revoke / status from the CLI — runs end to end
+against live Stellar testnet, following nothing but this README.
 
-Checks 1 and 2 of verification are implemented and offline. Check 3 — the
-registry lookup — arrives with the SDK in T7. Command surfaces that are declared but unwired raise
-`AgentPassError` with code `NotImplemented` rather than returning `undefined`.
+Out of scope for this phase, deliberately: enforcing `scope.limits` (signed and
+transported, not yet enforced by anything), PolicyRail, Mandato, MandateGate,
+MandateVault, any web UI, mainnet, and fiat rails. See
+[docs/CONTEXTO.md](docs/CONTEXTO.md).

@@ -359,6 +359,54 @@ que habla con el contrato.
 **Motivo:** son lentos (~15s), con estado, y necesitan `.env.local` con cuentas
 financiadas. Meterlos en la suite rápida la haría inejecutable sin llaves.
 
+### I-37 · `deploy:registry` también deja al emisor registrado · `Vigente`
+**Fecha:** 2026-09-02 (T8)
+Tras desplegar (o verificar el contrato ya desplegado), el script comprueba si
+`ISSUER_PUBLIC_KEY` está registrado y activo, y si no, lo registra.
+**Motivo:** `registerIssuer` es una operación de administrador, deliberadamente
+fuera de los cuatro comandos del CLI (`issue`/`verify`/`revoke`/`status`). Sin
+este paso, el criterio de aceptación de T8 —alguien que nunca vio el repo
+ejecuta el ciclo completo siguiendo solo el README— era imposible: `agentpass
+issue` habría fallado con `IssuerNotRegistered` en cualquier clon nuevo,
+después de haber podido clonar, instalar, desplegar y compilar sin ningún
+error. Verificado contra la red real en las dos ramas (emisor nuevo y emisor ya
+activo).
+
+### I-38 · Cada comando del CLI valida todo antes de tocar la red · `Vigente`
+**Fecha:** 2026-09-02 (T8)
+Argumentos, dirección del sujeto, archivo de scope contra su schema, y llaves
+secretas — en ese orden, siempre antes de cualquier llamada de red.
+**Motivo:** hace que casi toda la superficie del CLI sea testeable sin testnet.
+Los 29 tests de `packages/cli` corren offline y se detienen exactamente en el
+punto donde haría falta el registro, lo cual prueba por sí solo que todo lo
+anterior fue validado correctamente.
+
+### I-39 · `agentpass issue` sin `--out` imprime el JWS en stdout y el resumen en stderr · `Vigente`
+**Fecha:** 2026-09-02 (T8)
+Con `--out <archivo>`, el JWS va al archivo y el resumen (incluido el hash) va
+a stdout en su lugar.
+**Motivo:** permite `agentpass issue ... > credencial.jws` sin que el resumen
+contamine el archivo, y sin embargo el hash sigue siendo visible en la
+terminal cuando no se usa `--out`. Ambos caminos dejan el hash en algún lugar
+que el usuario puede ver y copiar.
+
+### I-40 · `agentpass status` nunca falla por el valor del estado en sí · `Vigente`
+**Fecha:** 2026-09-02 (T8)
+`Unknown`, `Active`, `Revoked` y `Expired` son todas respuestas válidas con
+código de salida 0. El comando solo falla (código 1) por un problema propio:
+argumento faltante, configuración inválida, o error de red.
+**Motivo:** es una consulta, no una aserción — mezclar "el comando funcionó"
+con "el resultado te gusta" habría hecho el código de salida ambiguo para
+cualquier script que lo use.
+
+### I-41 · `requireIssuerKeypair` compartido entre `issue` y `revoke` · `Vigente`
+**Fecha:** 2026-09-02 (T8)
+**Motivo:** `revoke.ts` inicialmente llamaba `Keypair.fromSecret` sin envolver
+el error — un test lo detectó de inmediato al esperar `ConfigError` y recibir
+el error crudo de la librería. En vez de arreglarlo ahí, se extrajo a
+`commands/shared.ts`, la única implementación de "cargar la llave del emisor
+desde `.env.local`" en todo el CLI.
+
 ---
 
 ## Pendientes de decidir

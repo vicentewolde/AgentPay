@@ -1,12 +1,7 @@
 #!/usr/bin/env node
-import { isAgentPassError } from "@agentpass/core";
-
+import { loadCliEnv } from "./env.js";
 import { run } from "./index.js";
+import { PROCESS_IO } from "./io.js";
 
-try {
-  process.stdout.write(`${await run(process.argv.slice(2))}\n`);
-} catch (error) {
-  const message = isAgentPassError(error) ? `${error.code}: ${error.message}` : String(error);
-  process.stderr.write(`${message}\n`);
-  process.exitCode = 1;
-}
+const env = await loadCliEnv(process.cwd());
+process.exitCode = await run(process.argv.slice(2), PROCESS_IO, env);

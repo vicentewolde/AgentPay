@@ -58,6 +58,17 @@ export const credentialSubjectSchema = z.strictObject({
 });
 
 /**
+ * What a caller supplies to issue a credential: everything about the agent
+ * except `id` (the subject, known only at issue time) and `principal` (always
+ * the issuer's own DID in this pilot — there is no separate principal role).
+ * This is the shape of the CLI's `--scope <file.json>`.
+ */
+export const credentialRequestSchema = z.strictObject({
+  agent: agentDescriptorSchema,
+  scope: scopeSchema,
+});
+
+/**
  * Points at the registry that holds this credential's status.
  *
  * It deliberately does **not** carry the credential's own hash. The anchored
@@ -87,3 +98,4 @@ export type Scope = z.infer<typeof scopeSchema>;
 export type ScopeLimits = z.infer<typeof scopeLimitsSchema>;
 export type AgentDescriptor = z.infer<typeof agentDescriptorSchema>;
 export type CredentialStatus = z.infer<typeof credentialStatusSchema>;
+export type CredentialRequest = z.infer<typeof credentialRequestSchema>;

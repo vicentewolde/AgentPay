@@ -37,7 +37,9 @@ export type AgentPassErrorCode =
   /** The credential's issuer is not registered at all. */
   | "IssuerNotRegistered"
   /** The credential names a different registry than the verifier trusts. */
-  | "RegistryMismatch";
+  | "RegistryMismatch"
+  /** A CLI command's arguments are missing, malformed, or mutually exclusive. */
+  | "InvalidArguments";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

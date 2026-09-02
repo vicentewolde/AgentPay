@@ -15,5 +15,8 @@ target/
 .env.local
 .env.*.local
 
+# demo artefact from the README walkthrough
+credential.jws
+
 # os
 .DS_Store

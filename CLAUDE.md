@@ -60,6 +60,14 @@ pnpm run bootstrap
 ```
 
 ```bash
+pnpm run deploy:registry
+```
+
+```bash
+pnpm build
+```
+
+```bash
 pnpm typecheck
 ```
 
@@ -68,8 +76,20 @@ pnpm test
 ```
 
 ```bash
+pnpm run test:integration
+```
+
+```bash
 cd contracts && cargo test
 ```
 
 `rustup` viene de Homebrew y es keg-only; hace falta
 `export PATH="/opt/homebrew/opt/rustup/bin:$PATH"` para que exista `cargo`.
+
+`pnpm test` no toca la red. `test:integration` sí — corre el ciclo completo
+contra testnet real y necesita `.env.local` con el contrato desplegado.
+
+El binario del CLI, tras `pnpm build`, se invoca como
+`node packages/cli/dist/bin.js <comando>`. El recorrido completo (emitir →
+verificar → revocar → verificar falla) está en el README raíz, sección
+"Full walkthrough".

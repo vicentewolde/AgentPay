@@ -8,21 +8,22 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T7 · **Siguiente:** T8
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T8 · **Siguiente:** ninguno — piloto completo
 
-**El producto funciona de punta a punta.** Emitir una credencial, verificarla,
-revocarla desde fuera del agente y comprobar que ya no verifica — todo probado
-contra Stellar testnet real, sin simulacros. Falta la herramienta de línea de
-comandos que lo ponga en manos de alguien que no escriba código, que es T8.
+**El piloto está terminado.** Cualquiera puede clonar el repositorio y, siguiendo
+únicamente el README, emitir una credencial, verificarla, revocarla desde fuera
+del agente, y comprobar que ese mismo documento —sin cambiar una sola letra—
+deja de verificar. Se probó exactamente así, comando por comando, contra
+Stellar testnet real.
 
 | | |
 |---|---|
-| Tests TypeScript | **94** rápidos (core 55 · sdk 11 · cli 3 · scripts 25) |
+| Tests TypeScript | **125** rápidos (core 60 · sdk 11 · cli 29 · scripts 25) |
 | Tests de integración | **3** contra testnet real |
 | Tests Rust | **22** en verde |
 | Red | testnet, protocolo **28** |
 | Contrato desplegado | `CARC2SIQ3GTL34LVHSTGFRKDNNBYUXCSMGAUGKWGMT6Z2SDY6FXPP2DT` |
-| Commits | 8 |
+| Commits | 9 |
 
 ### Progreso
 
@@ -35,7 +36,44 @@ comandos que lo ponga en manos de alguien que no escriba código, que es T8.
 | T5 | El contrato en la blockchain | ✅ cerrado |
 | T6 | Publicar el contrato en testnet | ✅ cerrado |
 | T7 | La librería que junta todo | ✅ cerrado |
-| T8 | La herramienta de línea de comandos | ⬜ siguiente |
+| T8 | La herramienta de línea de comandos | ✅ cerrado |
+
+---
+
+## T8 · La herramienta de línea de comandos — cerrado 2026-09-02
+
+**Qué significa.** Hasta T7, usar AgentPass exigía escribir código TypeScript.
+Ahora son cuatro comandos: `agentpass issue`, `verify`, `revoke` y `status`. El
+criterio de aceptación era el más exigente de todo el piloto: que alguien que
+**nunca vio el repositorio** pudiera clonarlo y ejecutar el ciclo completo
+siguiendo solo el README, sin preguntarme nada. Se probó exactamente así,
+comando por comando, contra la red real — no una simulación de la prueba, la
+prueba misma.
+
+**Lo que se descubrió al intentarlo de verdad.** Emitir una credencial requiere
+que su emisor esté registrado en el contrato — eso ya existía desde T5. Pero
+nadie había dejado un camino documentado para lograrlo: registrar un emisor es
+una operación exclusiva del administrador, y a propósito no es uno de los
+cuatro comandos del CLI. Si no se resolvía, cualquiera que clonara el repo
+habría llegado hasta el primer `agentpass issue` — después de instalar,
+desplegar y compilar sin ningún problema — y ahí se habría atascado sin
+ninguna instrucción que lo sacara. La solución no fue agregar un quinto
+comando al CLI, sino hacer que `pnpm run deploy:registry` (T6) deje el emisor
+listo, porque ese es el único momento en que la cuenta de administrador ya
+está en juego de forma natural.
+
+**Diseño pensado para probarse sin gastar en red.** Cada comando valida sus
+argumentos, el archivo de alcance del agente y las llaves secretas **antes**
+de tocar la cadena. Eso significa que 29 de los 29 tests del CLI corren sin
+testnet, y aun así prueban que todo el camino anterior a la red funciona.
+
+**Un error propio, cazado por un test antes que por mí.** El comando `revoke`
+no envolvía un fallo de llave malformada en un error tipado, a diferencia de
+`issue`. Un test lo notó de inmediato esperando el código correcto. Se corrigió
+compartiendo una sola función entre ambos comandos, en vez de arreglarlo dos
+veces por separado.
+
+📎 [evidencia/T8.md](evidencia/T8.md) · [packages/cli/README.md](../packages/cli/README.md) · [README.md](../README.md#full-walkthrough-issue--verify--revoke--verify-fails)
 
 ---
 

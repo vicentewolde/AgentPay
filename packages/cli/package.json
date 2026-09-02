@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@agentpass/core": "workspace:*",
-    "@agentpass/sdk": "workspace:*"
+    "@agentpass/sdk": "workspace:*",
+    "@stellar/stellar-sdk": "^17.0.1",
+    "zod": "^4.5.4"
   }
 }

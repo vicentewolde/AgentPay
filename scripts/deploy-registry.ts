@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 /**
- * `pnpm run deploy:registry` — build, upload, deploy and verify `agent_registry`.
+ * `pnpm run deploy:registry` — build, upload, deploy and verify `agent_registry`,
+ * then make sure the pilot's one issuer is registered and active.
  *
  * Re-runnable: when the recorded contract is live and its wasm matches what the
  * source builds to, this does nothing and says so. Any drift stops the script
  * and asks for `--redeploy`, because a redeploy means a **new contract id**, and
  * every credential anchored against the old one would be orphaned.
+ *
+ * Registering the issuer here, not as a separate manual step, is what lets
+ * someone who has never seen this repo clone it and run the full CLI cycle
+ * (T8) straight through: without it, `agentpass issue` would fail with
+ * `IssuerNotRegistered` on a fresh deployment.
  *
  * The admin secret reaches the Stellar CLI through the environment, never on the
  * command line, so it cannot be read out of the process list.
@@ -18,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { AgentPassError, isAgentPassError, isStellarAddress } from "@agentpass/core";
+import { createAgentPass } from "@agentpass/sdk";
 import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import { Client } from "@stellar/stellar-sdk/contract";
 
@@ -155,10 +162,42 @@ async function updateEnvLocal(contractId: string): Promise<void> {
   await writeEnvFile(ENV_PATH, upsertEnvValue(contents, "AGENT_REGISTRY_CONTRACT_ID", contractId));
 }
 
+/**
+ * The pilot has exactly one issuer role. `meta_hash` is an opaque 32-byte
+ * pointer the contract stores but never interprets — nothing consumes it yet,
+ * so this deterministically derives one from the issuer's own address rather
+ * than inventing a metadata format nobody asked for.
+ */
+async function ensureIssuerRegistered(
+  contractId: string,
+  admin: Keypair,
+  issuerPublicKey: string,
+): Promise<void> {
+  const agentpass = await createAgentPass({
+    contractId,
+    rpcUrl: TESTNET.rpcUrl,
+    networkPassphrase: TESTNET.passphrase,
+    network: TESTNET.network,
+  });
+
+  const current = await agentpass.issuerStatus(issuerPublicKey);
+  if (current.registered && current.active) {
+    process.stdout.write(`  issuer       ${issuerPublicKey} already registered and active\n\n`);
+    return;
+  }
+
+  const metaHash = createHash("sha256").update(issuerPublicKey).digest("hex");
+  await agentpass.registerIssuer({ admin, issuer: issuerPublicKey, metaHash });
+  process.stdout.write(
+    `  issuer       ${issuerPublicKey} ${current.registered ? "re-activated" : "registered"}\n\n`,
+  );
+}
+
 async function main(): Promise<void> {
   const env = await readEnvFile(ENV_PATH);
   const adminSecret = requireEnv(env, "ADMIN_SECRET_KEY");
   const admin = Keypair.fromSecret(adminSecret);
+  const issuerPublicKey = requireEnv(env, "ISSUER_PUBLIC_KEY");
 
   const [version, recorded] = await Promise.all([
     getLiveVersion(TESTNET.rpcUrl),
@@ -215,6 +254,7 @@ async function main(): Promise<void> {
       protocolVersion: version.protocolVersion,
       agentRegistry: previous,
     });
+    await ensureIssuerRegistered(previous.contractId, admin, issuerPublicKey);
     return;
   }
 
@@ -273,6 +313,8 @@ async function main(): Promise<void> {
   process.stdout.write(`\n  contract     ${contractId}\n`);
   process.stdout.write(`  verified     admin ${live.admin} · schema v${live.schemaVersion}\n\n`);
   process.stdout.write("  wrote deployments/testnet.json and .env.local\n\n");
+
+  await ensureIssuerRegistered(contractId, admin, issuerPublicKey);
 }
 
 try {
