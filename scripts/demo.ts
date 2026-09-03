@@ -148,6 +148,7 @@ async function main(): Promise<void> {
 
   const issued = await agentpass.issue({ credential, issuer });
   line("hash", issued.hash);
+  line("tx", issued.transactionHash);
   line("subject", agentKeypair.publicKey());
   line("venue", demoScope.scope.venues[0] ?? "(none)");
   line("perTx", `${demoScope.scope.limits.perTx} ${demoScope.scope.limits.currency}`);
