@@ -1,13 +1,16 @@
 /**
- * The four tools, and nothing else.
+ * The tools, and nothing else.
  *
- * As of T12, `create_purchase_intent` checks the signed scope before doing
- * anything else, and refuses with a typed scope error when the venue, the asset
- * or the total falls outside it. Only the signing itself is still T13's.
+ * As of T21, `create_purchase_intent` runs the purchase through `PolicyRail`
+ * (T19) rather than a standalone scope check: what the issuer signed, what the
+ * principal consented to, and today's running total, in one place that cannot
+ * be satisfied halfway. Only the signing itself, and the freshness re-checks
+ * that precede it, live here.
  *
- * It is also only *present* at all when the agent's credential verified at
- * startup (T11). An agent whose credential was revoked does not get told no; it
- * has nothing to call.
+ * `create_purchase_intent` is also only *present* at all when **both** the
+ * agent's credential and the principal's mandate verified at startup (T11,
+ * extended by T21). An agent missing either does not get told no; it has
+ * nothing to call.
  *
  * The wire shapes — what a model sends and receives — are snake_case, matching
  * the tool names. TypeScript inside the package stays camelCase.
@@ -32,6 +35,12 @@ import {
   type PurchaseIntent,
 } from "../intent/intent.js";
 import { signIntent } from "../intent/sign.js";
+import type { SpendLedger } from "../ledger/spend-ledger.js";
+import { checkMandate, mandateCheckError } from "../mandate/check-mandate.js";
+import type { MandateState, MandateVerifier, UsableMandate } from "../mandate/verifier.js";
+import { checkOwnMandate } from "../mandate/verifier.js";
+import { createLocalPolicyRail, policyRailError } from "../policy/policy-rail.js";
+import { fromScaledAmount, multiplyAmount } from "../scope/amount.js";
 import { checkScope, scopeError } from "../scope/scope.js";
 import { createToolSet, defineTool, type ErasedTool, type ToolSet } from "./tool.js";
 
@@ -81,7 +90,12 @@ export interface ActiveCredentialReport {
     };
   };
   readonly registry: string;
-  readonly can_create_purchase_intent: true;
+  /**
+   * Whether `create_purchase_intent` is actually in this agent's tool set.
+   * Not implied by `status: "active"` alone as of T21 — the credential can be
+   * perfectly fine while the tool is still absent, for want of a mandate.
+   */
+  readonly can_create_purchase_intent: boolean;
 }
 
 /**
@@ -99,7 +113,7 @@ export interface UnusableCredentialReport {
   readonly credential_hash: string;
   readonly checked_at: string;
   readonly problem: { readonly code: AgentPassErrorCode; readonly message: string };
-  readonly can_create_purchase_intent: false;
+  readonly can_create_purchase_intent: boolean;
 }
 
 export type CheckCredentialResult = ActiveCredentialReport | UnusableCredentialReport;
@@ -130,8 +144,20 @@ function toWire(product: Product): WireProduct {
   };
 }
 
-/** Turns the startup verification's outcome into the tool's answer. */
-export function toCredentialReport(state: CredentialState): CheckCredentialResult {
+/**
+ * Turns the startup verification's outcome into the tool's answer.
+ *
+ * `canCreatePurchaseIntent` is passed in rather than derived from `state`
+ * alone: since T21, the tool's actual presence depends on the mandate and the
+ * signer too, neither of which this function is handed. A single source of
+ * truth for "is the tool there" — `createAgentTools`, where it decides
+ * whether to build it — is safer than two places computing the same
+ * condition and risking disagreement.
+ */
+export function toCredentialReport(
+  state: CredentialState,
+  canCreatePurchaseIntent: boolean,
+): CheckCredentialResult {
   const checked_at = state.checkedAt.toISOString();
 
   if (!state.usable) {
@@ -140,7 +166,7 @@ export function toCredentialReport(state: CredentialState): CheckCredentialResul
       credential_hash: state.hash,
       checked_at,
       problem: { code: state.problem.code, message: state.problem.message },
-      can_create_purchase_intent: false,
+      can_create_purchase_intent: canCreatePurchaseIntent,
     };
   }
 
@@ -168,7 +194,7 @@ export function toCredentialReport(state: CredentialState): CheckCredentialResul
       },
     },
     registry: credential.credentialStatus.registry,
-    can_create_purchase_intent: true,
+    can_create_purchase_intent: canCreatePurchaseIntent,
   };
 }
 
@@ -215,7 +241,7 @@ function getProductTool(catalog: CatalogAdapter): ErasedTool {
   });
 }
 
-function checkMyCredentialTool(state: CredentialState): ErasedTool {
+function checkMyCredentialTool(state: CredentialState, canCreatePurchaseIntent: boolean): ErasedTool {
   return defineTool({
     name: "check_my_credential",
     description:
@@ -225,19 +251,20 @@ function checkMyCredentialTool(state: CredentialState): ErasedTool {
       "reason and nothing from inside the document.",
     input: z.strictObject({}),
     async run(): Promise<CheckCredentialResult> {
-      return toCredentialReport(state);
+      return toCredentialReport(state, canCreatePurchaseIntent);
     },
   });
 }
 
 /**
- * Only constructible from a credential that verified: the parameter type is
- * `UsableCredential`, not `CredentialState`. The tool that can spend money
- * cannot be built without proof of authorisation, and that is a compile error
- * rather than a check someone has to remember.
+ * Only constructible from a credential and a mandate that both verified: the
+ * parameter types are `UsableCredential` and `UsableMandate`, never the wider
+ * `*State` unions. The tool that can spend money cannot be built without proof
+ * of both authorities, and that is a compile error rather than a check
+ * someone has to remember.
  */
 function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
-  const { catalog, credential, signer, verifier } = deps;
+  const { catalog, credential, mandate, signer, verifier, mandateVerifier, policyRail } = deps;
   const ttlSeconds = deps.intentTtlSeconds ?? DEFAULT_INTENT_TTL_SECONDS;
   const { scope, principal, id: subject } = credential.verified.credential.credentialSubject;
   const { registry } = credential.verified.credential.credentialStatus;
@@ -248,34 +275,25 @@ function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
       "Create a signed intention to buy a quantity of one product. It does " +
       "not move money and does not complete a purchase. The request is " +
       "refused unless the venue, the asset and the total amount all fall " +
-      "within what this agent's credential authorises, and unless that " +
-      "credential is still active at this moment.",
+      "within what this agent's credential authorises AND within what the " +
+      "operating principal's mandate consents to, unless today's running " +
+      "total would exceed either one's daily limit, and unless both the " +
+      "credential and the mandate are still active at this moment.",
     input: z.strictObject({
       product_id: productIdSchema,
       quantity: z.int().min(1).max(10_000),
     }),
     async run({ product_id, quantity }): Promise<CreatePurchaseIntentResult> {
       const product = await catalog.getProduct(product_id);
-
-      // Four structured facts. `checkScope` is never handed the product, so
-      // the sentence in its description has nothing to act on.
-      const decision = checkScope(scope, {
-        venue: catalog.venueId,
-        asset: product.price.asset,
-        unitAmount: product.price.amount,
-        quantity,
-      });
-
-      if (!decision.allowed) throw scopeError(decision);
-
-      // The startup check decided this tool exists at all; this one decides
-      // whether the authority is still live at the instant of signing (B-17).
-      // Signing against a credential last seen hours ago would put the agent's
-      // signature on authority it may no longer hold.
-      const fresh = await checkOwnCredential(verifier, credential.verified.jws);
-      if (!fresh.usable) throw fresh.problem;
-
       const now = deps.now ?? new Date();
+      // Derived, not read from anywhere a caller could have shaped: the same
+      // arithmetic PolicyRail's own checks use (M-14's rule, applied here too).
+      const total = fromScaledAmount(multiplyAmount(product.price.amount, quantity));
+
+      // `credential.hash` — not a fresh re-verification's hash — because it is
+      // the same value either way: sha256 of the exact JWS being re-checked
+      // below, deterministic regardless of the registry's answer. Building the
+      // intent does not need to wait on a network call.
       const intent: PurchaseIntent = {
         type: [AGENTPAY_INTENT_FAMILY, AGENTPAY_INTENT_TYPE],
         intentId: randomUUID(),
@@ -283,17 +301,56 @@ function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
         expiresAt: new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
         agent: subject,
         principal,
-        credential: { hash: fresh.hash, registry },
+        credential: { hash: credential.hash, registry },
         venue: catalog.venueId,
         purchase: {
           productId: product.id,
           quantity,
-          unitAmount: decision.unitAmount,
-          totalAmount: decision.total,
+          unitAmount: product.price.amount,
+          totalAmount: total,
           asset: product.price.asset,
         },
         authorisation: { perTx: scope.limits.perTx, currency: scope.limits.currency },
       };
+
+      // Both authorities' structural rules, pure and free — the same check
+      // `PolicyRail.authorise()` runs below, run early on purpose. This is
+      // T12's own guarantee ("checks the scope first, so a refused purchase
+      // costs no network call"), extended to the mandate: a purchase this
+      // obviously wrong should not cost the two round trips below before
+      // saying so. Not the authoritative decision — a fast path to the exact
+      // same rejection PolicyRail would reach anyway.
+      const scopeCheck = checkScope(scope, {
+        venue: intent.venue,
+        asset: intent.purchase.asset,
+        unitAmount: intent.purchase.unitAmount,
+        quantity: intent.purchase.quantity,
+      });
+      if (!scopeCheck.allowed) throw scopeError(scopeCheck);
+
+      const mandateCheck = checkMandate(mandate.verified.mandate, intent);
+      if (!mandateCheck.allowed) throw mandateCheckError(mandateCheck);
+
+      // The startup check decided this tool exists at all; these decide
+      // whether each authority is still live at the instant of signing
+      // (B-17, extended to the mandate in T21). Signing against either one
+      // last confirmed minutes ago would put the agent's signature on
+      // authority — or consent — it may no longer hold.
+      const freshCredential = await checkOwnCredential(verifier, credential.verified.jws);
+      if (!freshCredential.usable) throw freshCredential.problem;
+
+      const freshMandate = await checkOwnMandate(mandateVerifier, mandate.verified.jws);
+      if (!freshMandate.usable) throw freshMandate.problem;
+
+      // One point, all four checks, no partial credit (T19). No payment
+      // terms yet: the mock catalogue has no 402 to reconcile against
+      // (M-14) — a real venue adapter (T15) is what would supply them.
+      const decision = await policyRail.authorise({
+        intent,
+        scope,
+        mandate: freshMandate.verified.mandate,
+      });
+      if (!decision.authorised) throw policyRailError(decision);
 
       const signed = await signIntent(intent, signer);
 
@@ -316,8 +373,11 @@ function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
 interface PurchaseIntentDeps {
   readonly catalog: CatalogAdapter;
   readonly credential: UsableCredential;
+  readonly mandate: UsableMandate;
   readonly signer: Keypair;
   readonly verifier: CredentialVerifier;
+  readonly mandateVerifier: MandateVerifier;
+  readonly policyRail: ReturnType<typeof createLocalPolicyRail>;
   readonly intentTtlSeconds?: number;
   readonly now?: Date;
 }
@@ -326,6 +386,14 @@ export interface AgentToolsDeps {
   readonly catalog: CatalogAdapter;
   /** What startup verification concluded. Decides the shape of the tool set. */
   readonly credential: CredentialState;
+  /**
+   * What startup verification concluded for the principal's mandate.
+   * `undefined` when no mandate was configured at all — same effect on the
+   * tool set as an unusable one: `create_purchase_intent` stays out.
+   */
+  readonly mandate: MandateState | undefined;
+  /** Re-checks the mandate immediately before signing. Required alongside a usable `mandate`. */
+  readonly mandateVerifier?: MandateVerifier;
   /**
    * The agent's own key. Without it nothing can be signed, so
    * `create_purchase_intent` is withheld — a capability that cannot be
@@ -336,38 +404,62 @@ export interface AgentToolsDeps {
   readonly verifier: CredentialVerifier;
   readonly intentTtlSeconds?: number;
   readonly now?: Date;
+  /** The agent's daily-spend memory, for `PolicyRail`'s `perDay` (T19). */
+  readonly ledger: SpendLedger;
 }
 
 /**
- * The agent's tool set — four tools when the credential verified, three when it
- * did not.
+ * Builds what `create_purchase_intent` needs, or says it cannot — one place,
+ * so `createAgentTools` and the diagnostic tools never disagree about whether
+ * the tool exists.
+ */
+function purchaseIntentDepsOf(deps: AgentToolsDeps): PurchaseIntentDeps | undefined {
+  if (
+    !deps.credential.usable ||
+    deps.mandate === undefined ||
+    !deps.mandate.usable ||
+    deps.signer === undefined ||
+    deps.mandateVerifier === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    catalog: deps.catalog,
+    credential: deps.credential,
+    mandate: deps.mandate,
+    signer: deps.signer,
+    verifier: deps.verifier,
+    mandateVerifier: deps.mandateVerifier,
+    policyRail: createLocalPolicyRail({ ledger: deps.ledger, now: () => deps.now ?? new Date() }),
+    intentTtlSeconds: deps.intentTtlSeconds,
+    now: deps.now,
+  };
+}
+
+/**
+ * The agent's tool set — four tools when both the credential and the mandate
+ * verified, three when either did not.
  *
  * `create_purchase_intent` is left out rather than made to refuse. The agent is
  * not told it lacks permission; there is no tool by that name. `UnknownTool` is
  * what a caller gets, and no sentence in a product description can turn that
  * into a purchase.
  *
- * `check_my_credential` stays in both cases: it is the diagnostic path, and
+ * `check_my_credential` stays in every case: it is the diagnostic path, and
  * withholding it would hide the reason without removing any capability.
  */
 export function createAgentTools(deps: AgentToolsDeps): ToolSet {
+  const purchaseIntentDeps = purchaseIntentDepsOf(deps);
+
   const tools: ErasedTool[] = [
     listProductsTool(deps.catalog),
     getProductTool(deps.catalog),
-    checkMyCredentialTool(deps.credential),
+    checkMyCredentialTool(deps.credential, purchaseIntentDeps !== undefined),
   ];
 
-  if (deps.credential.usable && deps.signer !== undefined) {
-    tools.push(
-      createPurchaseIntentTool({
-        catalog: deps.catalog,
-        credential: deps.credential,
-        signer: deps.signer,
-        verifier: deps.verifier,
-        intentTtlSeconds: deps.intentTtlSeconds,
-        now: deps.now,
-      }),
-    );
+  if (purchaseIntentDeps !== undefined) {
+    tools.push(createPurchaseIntentTool(purchaseIntentDeps));
   }
 
   return createToolSet(tools);

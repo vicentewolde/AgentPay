@@ -353,3 +353,49 @@ Pendiente: mergear `cc/t20-anchor-mandate` a `main` y **pushear (a confirmar
 con el usuario)**. Siguiente hito: T21, cablear todo esto —`checkScope`,
 `checkMandate`, `checkDailyLimit`, `PolicyRail`, y ahora el anclaje/revocación
 del mandato— dentro del agente real, con tests de inyección.
+
+## 2026-09-03 (9) — cc/t21-wire-agent
+
+Agente: Claude Code
+
+Qué: T21 de la Fase 3 — se cableó todo lo de T16–T20 dentro del agente real.
+`createAgent()` verifica ahora credencial *y* mandato al arrancar
+(`MandateVerifier`, `checkOwnMandate` en `apps/agent/src/mandate/verifier.ts`,
+mismo molde que T11 usa para la credencial); `create_purchase_intent` solo
+existe si ambas verificaciones dieron `usable` y hay `signer` +
+`mandateVerifier`. Dentro de la herramienta: chequeos estructurales rápidos
+(`checkScope` + `checkMandate`, sin red) → reverificación de frescura de los
+dos documentos al instante de firmar (B-17 extendida al mandato) →
+`PolicyRail.authorise()` (T19, ahora sí conectado) → firma. `scripts/demo.ts`
+ahora emite y ancla mandato además de credencial. 22 tests nuevos
+(`agent.test.ts`, `intent/create.test.ts`, `injection.test.ts` con dos grupos
+nuevos de inyección contra el límite del mandato, `agent-tools.test.ts`).
+
+Por qué: T16–T20 dejaron cada pieza probada por separado; sin este hito el
+agente seguía comprando bajo el `checkScope` solo de la Fase 2, sin que el
+mandato ni `PolicyRail` tuvieran ningún efecto real.
+
+**Un bug real, encontrado por el propio proceso de mutation testing, no por
+la mutación en sí.** Antes de aplicar la mutación planeada sobre
+`can_create_purchase_intent`, correr la suite completa mostró dos tests en
+rojo: `createAgentTools()` reportaba `checkMyCredentialTool(deps.credential, true)`
+— un valor fijo, sin relación con si `create_purchase_intent` realmente
+existía. Se corrigió con una línea (`purchaseIntentDeps !== undefined`, el
+mismo cálculo que ya decide si el tool se construye). De ocho mutaciones
+sobre `agent.ts`/`agent-tools.ts`/`mandate/verifier.ts`, siete cayeron
+después del arreglo; la que sobrevivió (comparar el mandato "de arranque"
+contra el "recién reverificado" en `PolicyRail.authorise()`) es equivalente
+mientras el agente sostenga un único JWS de mandato — los dos decodifican
+los mismos bytes.
+
+Decisiones: `M-19` (el bug, y la lección de correr tests antes de escribir
+una mutación) y `M-20` (por qué esa mutación es equivalente, y hasta cuándo).
+Documentación tocada: `ROADMAP.md`, `BITACORA.md` y `DECISIONES.md` de la
+Fase 3, `ARQUITECTURA.md` (nueva §10, renumeradas §11–§13), más
+`evidencia/T21.md`.
+
+Pendiente: mergear `cc/t21-wire-agent` a `main` y pushear. Siguiente hito:
+T22 (contrato `policy_rail` como smart account) sigue condicionado a un
+spike de lectura de `@x402/stellar` y el facilitator (`M-12`) — no a nada
+del embajador. Antes de T22 probablemente convenga T23 (demo de la fase
+completa), que no depende de ese spike.

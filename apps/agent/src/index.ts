@@ -71,6 +71,16 @@ export {
 } from "./credential/verifier.js";
 
 export {
+  checkOwnMandate,
+  createOnChainMandateVerifier,
+  type MandateState,
+  type MandateVerifier,
+  type UnusableMandate,
+  type UsableMandate,
+  type VerifiedOwnMandate,
+} from "./mandate/verifier.js";
+
+export {
   toCredentialReport,
   type ActiveCredentialReport,
   type CheckCredentialResult,

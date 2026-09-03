@@ -9,7 +9,8 @@
     "paths": {
       "@agentpass/core": ["./packages/core/src/index.ts"],
       "@agentpass/sdk": ["./packages/sdk/src/index.ts"],
-      "@agentpay/agent": ["./apps/agent/src/index.ts"]
+      "@agentpay/agent": ["./apps/agent/src/index.ts"],
+      "@agentpay/mandate": ["./packages/mandate/src/index.ts"]
     }
   },
   "include": ["scripts/**/*"]

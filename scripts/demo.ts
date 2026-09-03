@@ -35,8 +35,10 @@ import {
 import { createAgentPass } from "@agentpass/sdk";
 import { Keypair } from "@stellar/stellar-sdk";
 
+import { anchorMandate, createMandate } from "@agentpay/mandate";
+
 import type { CreatePurchaseIntentResult } from "@agentpay/agent";
-import { createAgent, createMockCatalog, interpretPurchase } from "@agentpay/agent";
+import { createAgent, createMockCatalog, createOnChainMandateVerifier, interpretPurchase } from "@agentpay/agent";
 
 import { parseDemoArgs } from "./lib/demo-args.js";
 import { readEnvFile } from "./lib/env-file.js";
@@ -126,7 +128,7 @@ async function main(): Promise<void> {
   ]);
 
   // 2. Issue — a real credential, signed and anchored on chain.
-  step(2, "Emitir credencial (firmada, anclada en testnet)");
+  step(2, "Emitir credencial y mandato (firmados, anclados en testnet)");
   const issuerDid = stellarAddressToDid(issuer.publicKey(), "testnet");
   const now = new Date();
   const credential: AgentPassCredential = {
@@ -153,13 +155,34 @@ async function main(): Promise<void> {
   line("venue", demoScope.scope.venues[0] ?? "(none)");
   line("perTx", `${demoScope.scope.limits.perTx} ${demoScope.scope.limits.currency}`);
 
-  // 3. Start the agent: it verifies that same credential against the real
-  //    registry (T11) before deciding which tools it has.
-  step(3, "El agente verifica su credencial y arranca");
+  // The principal's own consent (Fase 3, T16/T20) — same principal, same
+  // agent, same grant as the credential's scope. Anchored on the same
+  // registry, through the same generic `anchor()` the credential just used
+  // (`M-17`/`M-18`): no separate registration step, no separate contract.
+  const mandate = createMandate({
+    principal: issuerDid,
+    agent: stellarAddressToDid(agentKeypair.publicKey(), "testnet"),
+    grant: demoScope.scope,
+    registry: agentpass.config.contractId,
+    validFrom: now.toISOString(),
+    validUntil: new Date(
+      now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000,
+    ).toISOString(),
+  });
+  const anchoredMandate = await anchorMandate(agentpass, { mandate, principal: issuer });
+  line("mandato", anchoredMandate.hash);
+  line("tx", anchoredMandate.transactionHash);
+
+  // 3. Start the agent: it verifies that same credential — and now the
+  //    mandate too (T21) — against the real registry (T11) before deciding
+  //    which tools it has.
+  step(3, "El agente verifica su credencial y su mandato, y arranca");
   const agent = await createAgent({
     credential: issued.jws,
+    mandate: anchoredMandate.jws,
     catalog,
     verifier: agentpass,
+    mandateVerifier: createOnChainMandateVerifier(agentpass),
     signer: agentKeypair,
   });
   line("status", agent.credential.usable ? "Active" : "unusable");

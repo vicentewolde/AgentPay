@@ -13,20 +13,22 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T20 · **Siguiente:** T21
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T21 · **Siguiente:** T22 (depende de `M-12`)
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
 concreta (T17), hay memoria de cuánto se gastó hoy (T18), existe el lugar
-donde todo eso se aplica junto (T19), y ahora ese consentimiento **se puede
-anclar y cortar desde afuera del agente, en la misma cadena y el mismo
-contrato que ya hace eso con la identidad** (T20). Falta cablearlo en el
-agente (T21).
+donde todo eso se aplica junto (T19), ese consentimiento se puede anclar y
+cortar desde afuera del agente (T20), y ahora **todo eso corre dentro del
+agente real, no como piezas sueltas probadas por separado** (T21):
+`create_purchase_intent` solo existe cuando la credencial *y* el mandato
+verificaron al arrancar, y cada compra pasa por `PolicyRail` antes de
+firmarse.
 
 | | |
 |---|---|
-| Tests TypeScript | **537** rápidos (core 74 · **mandate 44** · sdk 16 · cli 29 · agent 342 · scripts 32) |
-| Tests de integración | **6** contra testnet real (3 credenciales + **3 mandatos, nuevo**) |
+| Tests TypeScript | **559** rápidos (core 74 · mandate 44 · sdk 16 · cli 29 · **agent 364** · scripts 32) |
+| Tests de integración | 6 contra testnet real (3 credenciales + 3 mandatos) |
 | Tests Rust | 22 en verde (sin cambios — el contrato no se tocó, `M-3`) |
 | Paquete nuevo | `@agentpay/mandate` |
 | Bloqueado por el embajador | **Nada.** Ver abajo |
@@ -63,9 +65,9 @@ convención — T19 en `cc/t19-policy-rail`, T20 en `cc/t20-anchor-mandate`.
 | T18 | La memoria de gastos, y el límite diario | ✅ cerrado |
 | T19 | PolicyRail: dónde se autoriza o se bloquea | ✅ cerrado |
 | T20 | Anclar y revocar un mandato en cadena | ✅ cerrado |
-| T21 | Cablearlo en el agente | ⏳ siguiente |
+| T21 | Cablearlo en el agente | ✅ cerrado |
 | T22 | El límite hecho cumplir on-chain, como smart account | 🚧 depende de un spike, `M-12` |
-| T23 | Demo de la fase completa | ⏳ |
+| T23 | Demo de la fase completa | ⏳ siguiente |
 
 ---
 
@@ -395,3 +397,52 @@ cualquier flujo de registro de principal más allá de reusar
 `AgentPass.registerIssuer()` tal cual — si algún día principal y emisor dejan
 de ser la misma llave en el piloto, la operación de admin ya existe, solo hay
 que correrla para esa dirección nueva.
+
+---
+
+## T21 · Cablearlo en el agente — cerrado 2026-09-03
+
+**Qué quedó funcionando, en lenguaje llano.** Hasta este hito, cada pieza de
+esta fase —el Mandato, `checkMandate`, la memoria de gastos, `PolicyRail`, el
+anclaje en cadena— estaba probada por su cuenta, aislada. Ninguna estaba
+todavía conectada al agente que de verdad compra. Ahora sí: el agente arranca
+verificando **dos** documentos, no uno —su credencial y el mandato de quien lo
+opera— y la herramienta que produce una compra firmada, `create_purchase_intent`,
+directamente **no existe** si cualquiera de los dos falta o no es válido. No es
+un mensaje de "no tienes permiso" que un texto astuto pudiera discutir: es que
+no hay ninguna herramienta con ese nombre para invocar.
+
+Y cada compra que sí se intenta pasa, ahora de verdad y dentro del agente, por
+el único lugar que obliga (`PolicyRail`, T19): lo que firmó el emisor, lo que
+consintió el principal, y cuánto se lleva gastado hoy, los tres a la vez,
+antes de que el agente firme nada.
+
+**Un detalle que importa tanto como el resto.** Justo antes de cerrar este
+hito, al preparar las pruebas de mutación que buscan errores deliberados en el
+código, la suite completa encontró uno que **no era deliberado**: el reporte
+de si el agente puede o no crear una intención de compra
+(`can_create_purchase_intent`, la señal que un operador —o un modelo— lee para
+saber si vale la pena intentarlo) estaba devolviendo siempre `true`, sin
+importar si la herramienta realmente existía. Dos tests que ya estaban
+escritos lo habían estado señalando; se corrigió con una línea, usando el
+mismo cálculo que ya decide si la herramienta se construye, en vez de
+repetirlo aparte. Es la tercera fase seguida en que el mutation testing
+deliberado destapa, de pasada, un bug real que nadie había puesto ahí a
+propósito.
+
+**Evidencia técnica.** [evidencia/T21.md](evidencia/T21.md) — el demo completo
+contra testnet real emitiendo y anclando credencial *y* mandato, 22 tests
+nuevos, ocho mutaciones deliberadas: siete cayeron, y la que sobrevivió resultó
+equivalente por la misma razón que ya apareció en T20 — mientras el agente
+sostenga un único documento firmado por vez, comparar "la versión de arranque"
+contra "la versión recién revisada" del mismo documento no puede dar resultados
+distintos, porque los dos vienen de decodificar exactamente los mismos bytes.
+
+**Decisiones nuevas:** `M-19` (el bug real, y por qué correr los tests antes de
+escribir una mutación sobre un archivo importa) y `M-20` (por qué la mutación
+del mandato fresco-vs-arranque es equivalente, y hasta cuándo).
+
+**Fuera de alcance, a propósito, otra vez:** el contrato `policy_rail` on-chain
+(T22, depende de `M-12`), el chequeo de `payTo` en el reto 402 (`M-14`, sigue
+sin nada firmado contra qué compararlo), y renovar un mandato sin reiniciar el
+agente (lo que haría dejar de ser equivalente a `M-20`).

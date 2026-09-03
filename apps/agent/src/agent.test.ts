@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createAgent } from "./agent.js";
 import { createMockCatalog } from "./catalog/mock.js";
 import { createStubVerifier, makeTestCredential } from "./testing/credentials.js";
+import { createStubMandateVerifier, makeTestMandate } from "./testing/mandates.js";
 import type { ActiveCredentialReport, UnusableCredentialReport } from "./tools/agent-tools.js";
 import type { SimulatedStatus } from "./testing/credentials.js";
 
@@ -15,22 +16,29 @@ async function startAgent(
     validUntil?: string;
     now?: Date;
     jws?: string;
+    withMandate?: boolean;
   } = {},
 ) {
   const credential = await makeTestCredential({
     validFrom: options.validFrom,
     validUntil: options.validUntil,
   });
+  const withMandate = options.withMandate ?? true;
+  const mandate = withMandate
+    ? await makeTestMandate({ principal: credential.issuerKeypair, agent: credential.subjectKeypair })
+    : undefined;
 
   const agent = await createAgent({
     credential: options.jws ?? credential.jws,
+    mandate: mandate?.jws,
     catalog: createMockCatalog(),
     verifier: createStubVerifier({ status: options.status, failWith: options.failWith }),
+    mandateVerifier: mandate === undefined ? undefined : createStubMandateVerifier(),
     signer: credential.subjectKeypair,
     now: options.now,
   });
 
-  return { agent, credential };
+  return { agent, credential, mandate };
 }
 
 function names(agent: { tools: { list(): readonly { name: string }[] } }): string[] {
@@ -140,6 +148,91 @@ describe("a credential that does not verify", () => {
     expect(JSON.stringify(report)).not.toContain("compras-demo");
     expect(JSON.stringify(report)).not.toContain("50.00");
     expect(JSON.stringify(report)).not.toContain("agentpay-pilot");
+  });
+});
+
+describe("the mandate, T21", () => {
+  it("no mandate configured: the agent starts, reads the catalogue, but has no purchase tool", async () => {
+    const { agent } = await startAgent({ withMandate: false });
+
+    expect(agent.credential.usable).toBe(true);
+    expect(agent.mandate).toBeUndefined();
+    expect(names(agent)).toEqual(["list_products", "get_product", "check_my_credential"]);
+    await expect(agent.tools.invoke("list_products", {})).resolves.toBeDefined();
+  });
+
+  /**
+   * The mandate's own equivalent of "a credential that does not verify":
+   * revocation, an unknown anchor, and a deactivated principal all withhold
+   * the tool the same way an unusable credential already does, even though
+   * the credential itself is perfectly fine.
+   */
+  it.each([
+    ["revoked", { status: "Revoked" as const }, "MandateRevoked"],
+    ["never anchored", { status: "Unknown" as const }, "MandateUnknown"],
+    ["principal deactivated", { status: "IssuerInactive" as const }, "IssuerInactive"],
+  ])("mandate %s: create_purchase_intent is absent, credential unaffected", async (_label, mandateOptions, code) => {
+    const credential = await makeTestCredential();
+    const mandate = await makeTestMandate({
+      principal: credential.issuerKeypair,
+      agent: credential.subjectKeypair,
+    });
+    const agent = await createAgent({
+      credential: credential.jws,
+      mandate: mandate.jws,
+      catalog: createMockCatalog(),
+      verifier: createStubVerifier(),
+      mandateVerifier: createStubMandateVerifier(mandateOptions),
+      signer: credential.subjectKeypair,
+    });
+
+    expect(agent.credential.usable).toBe(true);
+    expect(names(agent)).toEqual(["list_products", "get_product", "check_my_credential"]);
+
+    if (agent.mandate?.usable !== false) expect.unreachable("expected an unusable mandate");
+    expect(agent.mandate.problem.code).toBe(code);
+  });
+
+  /**
+   * `M-4`'s identity check, applied at startup rather than against an intent:
+   * a mandate signed for a different agent is a misconfiguration, loud and
+   * immediate, the same direction as the existing signer/subject check.
+   */
+  it("refuses at startup when the mandate empowers a different agent than the credential names", async () => {
+    const credential = await makeTestCredential();
+    const mandate = await makeTestMandate({
+      principal: credential.issuerKeypair,
+      // A stranger, not this credential's own subject.
+    });
+
+    await expect(
+      createAgent({
+        credential: credential.jws,
+        mandate: mandate.jws,
+        catalog: createMockCatalog(),
+        verifier: createStubVerifier(),
+        mandateVerifier: createStubMandateVerifier(),
+        signer: credential.subjectKeypair,
+      }),
+    ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "MandateAgentMismatch"));
+  });
+
+  it("refuses to start with a mandate but no mandateVerifier to check it, as ConfigError", async () => {
+    const credential = await makeTestCredential();
+    const mandate = await makeTestMandate({
+      principal: credential.issuerKeypair,
+      agent: credential.subjectKeypair,
+    });
+
+    await expect(
+      createAgent({
+        credential: credential.jws,
+        mandate: mandate.jws,
+        catalog: createMockCatalog(),
+        verifier: createStubVerifier(),
+        signer: credential.subjectKeypair,
+      }),
+    ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "ConfigError"));
   });
 });
 

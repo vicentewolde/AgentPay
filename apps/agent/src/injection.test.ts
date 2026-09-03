@@ -14,9 +14,10 @@ import { hasErrorCode } from "@agentpass/core";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createAgent, type Agent } from "./agent.js";
-import { createMockCatalog, MOCK_PRODUCTS } from "./catalog/mock.js";
+import { createMockCatalog, MOCK_PRODUCTS, MOCK_VENUE_ID, USDC_TESTNET } from "./catalog/mock.js";
 import type { Product } from "./catalog/catalog.js";
 import { createStubVerifier, makeTestCredential } from "./testing/credentials.js";
+import { createStubMandateVerifier, makeTestMandate } from "./testing/mandates.js";
 
 /** Every style of attack the description field could plausibly carry. */
 const PAYLOADS: readonly [string, string][] = [
@@ -52,10 +53,16 @@ function productById(id: string): Product {
 
 async function agentOver(products: readonly Product[]): Promise<Agent> {
   const credential = await makeTestCredential();
+  const mandate = await makeTestMandate({
+    principal: credential.issuerKeypair,
+    agent: credential.subjectKeypair,
+  });
   return createAgent({
     credential: credential.jws,
+    mandate: mandate.jws,
     catalog: createMockCatalog({ products }),
     verifier: createStubVerifier(),
+    mandateVerifier: createStubMandateVerifier(),
     signer: credential.subjectKeypair,
   });
 }
@@ -222,5 +229,96 @@ describe("the text reaches the agent — it is refused, not filtered", () => {
     await expect(
       agent.tools.invoke("create_purchase_intent", { product_id: "mate-calabaza", quantity: 1 }),
     ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "UnknownTool"));
+  });
+
+  /** The mandate's own equivalent: gone from outside, not argued with. */
+  it("a revoked mandate is not persuadable either: the tool call fails structurally", async () => {
+    const credential = await makeTestCredential();
+    const mandate = await makeTestMandate({
+      principal: credential.issuerKeypair,
+      agent: credential.subjectKeypair,
+    });
+    const agent = await createAgent({
+      credential: credential.jws,
+      mandate: mandate.jws,
+      catalog: createMockCatalog({
+        products: [withDescription(productById("mate-calabaza"), PAYLOADS[0]?.[1] ?? "")],
+      }),
+      verifier: createStubVerifier(),
+      mandateVerifier: createStubMandateVerifier({ status: "Revoked" }),
+      signer: credential.subjectKeypair,
+    });
+
+    // A revoked mandate withholds the tool at startup — the same "gone, not
+    // refused" behaviour T11 established for a revoked credential.
+    await expect(
+      agent.tools.invoke("create_purchase_intent", { product_id: "mate-calabaza", quantity: 1 }),
+    ).rejects.toSatisfy((error: unknown) => hasErrorCode(error, "UnknownTool"));
+  });
+});
+
+/**
+ * T19 put a second authority in the same decision — `checkMandate`, composed
+ * into `PolicyRail` — and it is exactly as structural as `checkScope` always
+ * was: a `Scope`-shaped grant, never a product. These tests prove the same
+ * non-persuadability property holds when the **mandate**, not the credential,
+ * is the one narrow enough to matter — the attack surface T21 actually wired
+ * up, not just re-confirming T12's original claim.
+ */
+describe("the mandate's own limit is exactly as immune to injection as the credential's", () => {
+  /** A grant narrower than every product's price, so the mandate is what refuses, not the scope. */
+  const TIGHT_GRANT = {
+    actions: ["catalog:read", "intent:create"],
+    venues: [MOCK_VENUE_ID],
+    assets: [USDC_TESTNET],
+    limits: { perTx: "10.00", perDay: "200.00", currency: "USDC" },
+  };
+
+  async function agentWithTightMandate(products: readonly Product[]): Promise<Agent> {
+    const credential = await makeTestCredential();
+    const mandate = await makeTestMandate({
+      principal: credential.issuerKeypair,
+      agent: credential.subjectKeypair,
+      grant: TIGHT_GRANT,
+    });
+    return createAgent({
+      credential: credential.jws,
+      mandate: mandate.jws,
+      catalog: createMockCatalog({ products }),
+      verifier: createStubVerifier(),
+      mandateVerifier: createStubMandateVerifier(),
+      signer: credential.subjectKeypair,
+    });
+  }
+
+  it.each(PAYLOADS)(
+    "a product over the mandate's limit carrying %s is refused on the amount, not the prose",
+    async (_style, payload) => {
+      const clean = productById("mate-calabaza"); // 18.50, over the 10.00 mandate limit
+      const baseline = await attempt(await agentWithTightMandate([clean]), "mate-calabaza", 1);
+      const poisoned = await attempt(
+        await agentWithTightMandate([withDescription(clean, payload)]),
+        "mate-calabaza",
+        1,
+      );
+
+      expect(baseline.outcome).toBe("error");
+      if (baseline.outcome !== "error") expect.unreachable("expected a refusal");
+      expect(baseline.code).toBe("MandateAmountExceeded");
+      expect(poisoned).toEqual(baseline);
+    },
+  );
+
+  it("a product within both the mandate and the credential still succeeds despite the injection", async () => {
+    const cheap = productById("cafe-grano-250g"); // 9.90, under the 10.00 mandate limit
+    const baseline = await attempt(await agentWithTightMandate([cheap]), cheap.id, 1);
+    const poisoned = await attempt(
+      await agentWithTightMandate([withDescription(cheap, PAYLOADS[3]?.[1] ?? "")]),
+      cheap.id,
+      1,
+    );
+
+    expect(baseline.outcome).toBe("ok");
+    expect(poisoned).toEqual(baseline);
   });
 });

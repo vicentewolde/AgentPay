@@ -344,7 +344,61 @@ implementación de este mismo puerto, y lo que decide si es posible es el
 soporte de cuentas de contrato en `@x402/stellar` y en el facilitator, no el
 bazaar (`M-12`).
 
-## 10. Manejo de errores
+## 10. Cableado en el agente — T21 ✅
+
+`createAgent()` verifica el mandato al arrancar, igual que ya hacía con la
+credencial desde T11 — mismo patrón, puerto nuevo:
+
+```ts
+interface MandateVerifier {
+  verify(jws: string, options?: VerifyMandateOptions): Promise<VerifiedOwnMandate>;
+}
+```
+
+`createOnChainMandateVerifier(registry: RegistryAccess)` lo satisface contra
+un registro real; `checkOwnMandate()` (`apps/agent/src/mandate/verifier.ts`)
+corre ambos chequeos offline y el on-chain, y nunca lanza — devuelve
+`UsableMandate | UnusableMandate`, exactamente el mismo molde que
+`CredentialState` de T11. Un RPC caído cuenta como no-usable, no como "no lo
+sé": la misma dirección fail-closed que rige todo lo demás.
+
+**`create_purchase_intent` existe solo si las dos verificaciones de arranque
+dieron `usable`** — credencial y mandato — y además hay `signer` y
+`mandateVerifier`. `purchaseIntentDepsOf()` es el único lugar que decide esto;
+`createAgentTools()` y `checkMyCredentialTool()` leen su resultado, nunca
+recalculan la condición cada uno por su cuenta. Un chequeo repetido en dos
+sitios es un lugar donde pueden divergir sin que nadie lo note — ver `M-19`.
+
+**Un mandato que empodera a otro agente es una desconfiguración, no un estado
+de política.** Igual que `SignerMismatch` en la Fase 2: si `mandate.agent` no
+coincide con el `subject` de la credencial, `createAgent()` rechaza con
+`MandateAgentMismatch` en el arranque, en voz alta, en vez de dejar que el
+tool set se arme silenciosamente sobre una combinación que nunca debería
+haber pasado la configuración.
+
+**Dentro de `create_purchase_intent`, el orden importa (extiende T12/B-17):**
+
+| # | Paso | Toca red |
+|---|---|---|
+| 1 | `checkScope` + `checkMandate`, contra el mandato y el scope **de arranque** | no |
+| 2 | `checkOwnCredential` — la credencial, otra vez, al instante de firmar | sí |
+| 3 | `checkOwnMandate` — el mandato, otra vez, al instante de firmar | sí |
+| 4 | `policyRail.authorise()` — la decisión que obliga (T19) | no (el ledger es local) |
+| 5 | `signIntent` | no |
+
+El paso 1 es el mismo camino rápido que T12 ya justificaba: una compra
+obviamente fuera de scope o de mandato no debería costar dos idas y vueltas a
+la red antes de decir que no. No es la decisión final — es la misma que
+`policyRail.authorise()` alcanzaría de todos modos, adelantada.
+
+El paso 4 recibe el mandato **recién reverificado** (`freshMandate.verified.mandate`),
+no el de arranque — la misma disciplina de frescura que `B-17` fijó para la
+credencial, aplicada al consentimiento. Con un único JWS de mandato por
+agente, ambos documentos decodifican exactamente lo mismo (`M-20`); la
+distinción importa el día que anclar un mandato nuevo — con otro JWS — deje
+de requerir reiniciar el agente.
+
+## 11. Manejo de errores
 
 Códigos que la Fase 3 agregó a la misma unión de `packages/core/src/errors.ts`
 — ninguna jerarquía paralela:
@@ -371,27 +425,31 @@ verificar un mandato contra el registro: el propio esquema del Mandato ya
 llama `issuer` al principal, así que ninguno de los tres describe mal a un
 mandato (`M-18`).
 
-## 11. Testing
+## 12. Testing
 
 | suite | tests | toca red |
 |---|---|---|
 | `packages/core` | 74 (60 de la Fase 1 + **14 de `jws-document`**) | no |
-| `packages/mandate` | **44** (27 de T16 + **17 de `anchor`**) | no / 3 sí (integración, nuevo) |
+| `packages/mandate` | 44 (27 de T16 + 17 de `anchor`) | no / 3 sí (integración) |
 | `packages/sdk` | 16 | no / 3 sí (integración) |
 | `packages/cli` | 29 | no |
-| `apps/agent` | **342** (30 de `checkMandate`, 22 de `ledger/`, 38 de `policy/`) | no |
+| `apps/agent` | **364** (30 de `checkMandate`, 22 de `ledger/`, 38 de `policy/`, **22 nuevos de T21**) | no |
 | `scripts/` | 32 | no |
 
-**537 tests rápidos, 0 fallando** (520 antes de T20). Los 5 tests que `sdk`
+**559 tests rápidos, 0 fallando** (537 antes de T21). Los 5 tests que `sdk`
 sumó frente a T16 no son de esta fase — ver la nota en `BITACORA.md`.
 
 Mutation testing deliberado en cada punto crítico, con las salidas en
 [evidencia/](evidencia/). En T16 pasó de nuevo lo que la Fase 2 anotó: la
 mutación que **sobrevivió** (`M1`, "`kid` elige la llave") valió más que las que
 cayeron — resultó ser equivalente, porque otra protección la tapaba, y al
-analizarla apareció el test que faltaba de verdad.
+analizarla apareció el test que faltaba de verdad. En T21 pasó otra vez, con
+un giro: una de las mutaciones planeadas (`M7`, "`can_create_purchase_intent`
+hardcodeado a `true`") describía, sin que nadie lo hubiera notado todavía, el
+estado real del código en ese momento — no era una mutación por aplicar, era
+un bug ya presente, capturado por tests que ya existían (`M-19`).
 
-## 12. Fuera de alcance de la Fase 3, a propósito
+## 13. Fuera de alcance de la Fase 3, a propósito
 
 MandateGate (Fase 4) · MandateVault (Fase 5) · cualquier UI web · Stellar
 mainnet · rieles fiat o PSP · movimiento real de fondos · unificar las tres

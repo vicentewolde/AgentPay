@@ -4,7 +4,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { createMockCatalog, MOCK_VENUE_ID } from "../catalog/mock.js";
 import { checkOwnCredential, type CredentialState } from "../credential/verifier.js";
+import { createInMemorySpendLedger } from "../ledger/spend-ledger.js";
+import { checkOwnMandate, type MandateState } from "../mandate/verifier.js";
 import { createStubVerifier, makeTestCredential } from "../testing/credentials.js";
+import { createStubMandateVerifier, makeTestMandate } from "../testing/mandates.js";
 import {
   createAgentTools,
   type ActiveCredentialReport,
@@ -13,20 +16,30 @@ import {
 } from "./agent-tools.js";
 
 let activeState: CredentialState;
+let activeMandateState: MandateState;
 let signer: Keypair;
 
 beforeAll(async () => {
   const credential = await makeTestCredential();
   signer = credential.subjectKeypair;
   activeState = await checkOwnCredential(createStubVerifier(), credential.jws);
+
+  const mandate = await makeTestMandate({
+    principal: credential.issuerKeypair,
+    agent: credential.subjectKeypair,
+  });
+  activeMandateState = await checkOwnMandate(createStubMandateVerifier(), mandate.jws);
 });
 
-function tools(credential: CredentialState = activeState) {
+function tools(credential: CredentialState = activeState, mandate: MandateState = activeMandateState) {
   return createAgentTools({
     catalog: createMockCatalog(),
     credential,
+    mandate,
+    mandateVerifier: createStubMandateVerifier(),
     signer,
     verifier: createStubVerifier(),
+    ledger: createInMemorySpendLedger(),
   });
 }
 

@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-02 · Fase actual: **Fase 3 — T16 cerrado** (Fase 2: T9–T14 completos, T15 bloqueado por el embajador)
+Última revisión: 2026-09-03 · Fase actual: **Fase 3 — T21 cerrado** (Fase 2: T9–T14 completos, T15 desbloqueado sin construir)
 
 ---
 
@@ -92,8 +92,8 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 |---|---|---|---|---|
 | 0 | Fundamentos | Que hay una tesis técnica y una ventana regulatoria reales, no solo entusiasmo | ✅ Completa (pre-código) | — |
 | 1 | **AgentPass** | Identidad verificable del agente, revocable desde afuera | ✅ Completa (T1–T8) | — |
-| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 T9–T14 completos, T15 pendiente | Respuestas del embajador, **solo para T15** (preguntas ya redactadas, ver Fase 2) |
-| 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | 🔄 En curso — T16 cerrado | Pregunta 6 del embajador, **solo para T22**, y con un supuesto explícito registrado (`M-1`) |
+| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 T9–T14 completos, T15 desbloqueado (2026-09-03) sin construir | **Nada.** T15 dejó de depender del embajador — el catálogo es una API pública (ver Fase 2) |
+| 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | 🔄 En curso — T21 cerrado | Nada para T16–T21. Solo T22 depende de un spike propio, no del embajador (`M-12`) |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ⏳ Sin diseñar | Timeline de integración del embajador; es el hito de mayor riesgo del proyecto |
 | 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | ⏳ Sin diseñar | Fases 2–4 cerradas |
 | 6 | **Después: AgentGuard + comercialización** | Qué viene si SCF financia esto — no es parte del piloto | 🔲 Sin definir, a propósito | Todo lo anterior |
@@ -290,9 +290,9 @@ El desglose sale de esa decisión: **el corte no es "Mandato vs PolicyRail", es
 | T18 | `SpendLedger` y `perDay` — el estado que `B-16` dejó pendiente | — | ✅ |
 | T19 | `PolicyRail.authorise()` como puerto + `LocalPolicyRail` off-chain, con reconciliación de los términos del 402 | — | ✅ |
 | T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | — | ✅ |
-| T21 | Cableado en el agente + tests de inyección | — | ⏳ |
+| T21 | Cableado en el agente + tests de inyección | — | ✅ |
 | T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | **`M-12`** | 🚧 |
-| T23 | Demo de la fase completa | parcial | ⏳ |
+| T23 | Demo de la fase completa | — | ⏳ |
 
 **Actualizado el 2026-09-03 (T19): `M-1` quedó `Superada`.** Al leerse el repo
 real del bazaar se confirmó que no hay contrato de compra desplegado, así que

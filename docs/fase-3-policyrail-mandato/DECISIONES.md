@@ -611,6 +611,88 @@ ubicada en el paquete que gobierna la confianza del registro completo.
 
 ---
 
+### M-19 · `can_create_purchase_intent` se calcula en un único lugar; un valor hardcodeado ahí fue un bug real, no una mutación · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T21
+
+`createAgentTools()` construye `check_my_credential` pasándole
+`purchaseIntentDeps !== undefined` — la misma condición, ya calculada, que
+decide si `create_purchase_intent` entra al tool set. Durante el desarrollo de
+este hito, esa línea decía `checkMyCredentialTool(deps.credential, true)`: un
+valor fijo, sin relación con si el mandato realmente estaba presente y era
+usable.
+
+**Cómo se encontró.** No lo encontró un test nuevo — lo encontraron dos tests
+que ya existían (`agent.test.ts`, "says why, through check_my_credential"; y
+`intent/create.test.ts`, "is false when the credential is active but no
+mandate was configured"), corriendo antes de escribir la mutación planeada
+`M7` sobre este mismo código. Al preparar esa mutación para el registro de
+mutation testing de este hito, la suite completa ya estaba en rojo por esas
+dos aserciones: `can_create_purchase_intent` reportaba `true` con la
+credencial revocada y con el mandato ausente, en los dos casos donde
+`create_purchase_intent` ni siquiera está en el tool set.
+
+**Por qué importa, más allá del bug puntual.** Es la misma clase de error que
+`M-9` nombra al justificar por qué el rail nunca deja que dos autoridades
+compartan un código de error: un valor booleano que un llamador (acá, un
+modelo leyendo `check_my_credential`) usa para decidir si vale la pena
+intentar una compra, calculado por fuera de la única función que sabe la
+respuesta real, es un lugar donde la verdad y lo reportado pueden divergir sin
+que nada lo note — y en este caso divergieron, silenciosamente, hasta que un
+test que ya estaba escrito lo dijo.
+
+**La corrección no agregó código nuevo.** `purchaseIntentDepsOf(deps)` ya
+existía y ya era la fuente de verdad de si el tool se construye; el arreglo
+fue pasar su resultado (`!== undefined`) en vez de repetir el juicio a mano.
+
+**Alternativa descartada:** ninguna — no hay una segunda forma razonable de
+calcular esto. La lección es de proceso, no de diseño: correr la suite antes
+de escribir mutaciones nuevas sobre un archivo, no solo después, porque a
+veces el bug que la mutación iba a simular ya está ahí.
+
+---
+
+### M-20 · La mutación que compara mandato "fresco" contra "de arranque" es equivalente, mientras exista un solo JWS por agente · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T21
+
+`policyRail.authorise()` recibe `mandate: freshMandate.verified.mandate` — el
+documento que la reverificación inmediatamente anterior a la firma acaba de
+confirmar — no `mandate.verified.mandate`, el de arranque. Una mutación
+deliberada que cambia uno por el otro **sobrevive**: ningún test la detecta.
+
+**Por qué es equivalente, y no un hueco.** `checkOwnMandate()` decodifica el
+mismo JWS las dos veces — el de arranque (`config.mandate`) y el de la
+reverificación (`mandate.verified.jws`, que es el mismo string) — y
+`verifyMandate()` es una función pura sobre esos bytes. Dos decodificaciones
+del mismo documento firmado producen, siempre, el mismo `AgentPayMandate`. No
+hay hoy ningún camino en el código por el que el agente sostenga dos JWS de
+mandato distintos entre el arranque y una llamada a `create_purchase_intent`:
+un mandato no se "edita" — anclar un consentimiento distinto significa firmar
+y anclar un JWS nuevo, con su propio hash, lo que en este diseño implica
+reconfigurar el agente con ese nuevo `mandate.jws`, no mutar el que ya tiene.
+
+Es el mismo patrón que `M-5` de `docs/fase-3-policyrail-mandato/DECISIONES.md`
+(T20) ya documentó para `verify()`: una mutación puede sobrevivir
+honestamente porque el camino que necesitaría para importar no existe todavía
+en el sistema, no porque el test esté mal escrito.
+
+**Por qué se prefiere igual el valor fresco, aunque hoy sea idéntico.** Es la
+misma disciplina que `B-17` fijó para la credencial: el valor que entra a la
+decisión que obliga (`PolicyRail.authorise()`) debe ser el que la
+reverificación *inmediatamente anterior* a la firma confirmó, no el de
+arranque — para que el día en que el agente sí pueda sostener un mandato
+renovado sin reiniciar (fuera de alcance hoy), el código ya esté escrito
+apuntando al documento correcto y no haga falta encontrar y corregir esta
+línea bajo presión.
+
+**Alternativa descartada:** fabricar un `MandateVerifier` de prueba que
+devuelva un `AgentPayMandate` distinto en la segunda llamada, solo para que la
+mutación caiga. Se descartó porque simularía una capacidad —mandatos que
+cambian de contenido bajo el mismo agente sin reconfigurarlo— que el sistema
+no tiene y que documentar como si la tuviera sería más engañoso que dejar la
+mutación anotada como equivalente, igual que `M-5`.
+
+---
+
 ### M-18 · Se agregó `anchor()` a la superficie pública de `AgentPass`; nada más de `@agentpass/sdk` cambió · `Vigente`
 **Fecha:** 2026-09-03 · **Hito:** T20
 
