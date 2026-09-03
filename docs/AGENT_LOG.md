@@ -799,3 +799,22 @@ Pendiente: el usuario todavía no confirmó que el próximo deploy en Render
 pasa — esta sesión no tiene acceso al dashboard/API de Render para
 verificarlo directamente. Si vuelve a fallar, pedir el log completo del
 build antes de seguir iterando.
+
+**Corrección, mismo día — el diagnóstico de arriba estaba incompleto.** El
+usuario pegó el log real del deploy: la causa nunca fue la rotación de
+llave de npm. Es `pnpm@11.24.0` (fijado en `packageManager`) que exige
+Node ≥22.13, mientras `render.yaml` tenía `NODE_VERSION=22.11.0`. Con
+`npm install -g pnpm` el error es limpio ("This version of pnpm requires
+at least Node.js v22.13"); con Corepack, en cambio, revienta con
+`ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING` — Corepack intenta cargar el
+bundle ESM de pnpm bajo un Node demasiado viejo, y el crash resultante se
+parece lo suficiente a un fallo de verificación como para llevar a un
+diagnóstico equivocado sin ver el log real. Arreglado subiendo
+`NODE_VERSION` a `22.14.0`. `COREPACK_INTEGRITY_KEYS=""` se dejó como
+seguro adicional, sin costo, pero no era la causa real.
+
+**Lección para la próxima vez:** no diagnosticar un error de build a
+partir del texto del error solo — pedir el log completo apenas esté
+disponible. El texto que el usuario pegó al abrir la sesión ("Cannot find
+matching keyid") era real pero de una corrida vieja/cacheada; los dos
+intentos frescos mostraban un error totalmente distinto.
