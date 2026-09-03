@@ -80,6 +80,10 @@ export type AgentPassErrorCode =
   | "MandateExpired"
   /** `now` is before the mandate's `validFrom`. */
   | "MandateNotYetValid"
+  /** The registry reports this mandate's anchored hash as revoked. */
+  | "MandateRevoked"
+  /** The registry has never seen this mandate's anchored hash. */
+  | "MandateUnknown"
   /** The mandate's `credentialSubject.id` does not name the intent's agent. */
   | "MandateAgentMismatch"
   /** The mandate's `issuer` does not name the intent's principal. */

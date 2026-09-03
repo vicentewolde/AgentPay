@@ -84,6 +84,9 @@ importers:
       '@agentpass/core':
         specifier: workspace:*
         version: link:../core
+      '@agentpass/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@stellar/stellar-sdk':
         specifier: ^17.0.1
         version: 17.0.1(debug@4.4.3)

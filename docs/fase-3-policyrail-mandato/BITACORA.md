@@ -13,18 +13,20 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T19 · **Siguiente:** T20
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T20 · **Siguiente:** T21
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
-concreta (T17), hay memoria de cuánto se gastó hoy (T18), y ahora existe **el
-lugar donde todo eso se aplica junto y no se puede aplicar a medias** (T19).
-Falta anclarlo en cadena (T20) y cablearlo en el agente (T21).
+concreta (T17), hay memoria de cuánto se gastó hoy (T18), existe el lugar
+donde todo eso se aplica junto (T19), y ahora ese consentimiento **se puede
+anclar y cortar desde afuera del agente, en la misma cadena y el mismo
+contrato que ya hace eso con la identidad** (T20). Falta cablearlo en el
+agente (T21).
 
 | | |
 |---|---|
-| Tests TypeScript | **520** rápidos (core 74 · mandate 27 · sdk 16 · cli 29 · **agent 342** · scripts 32) |
-| Tests de integración | 3 contra testnet real (sin cambios) |
+| Tests TypeScript | **537** rápidos (core 74 · **mandate 44** · sdk 16 · cli 29 · agent 342 · scripts 32) |
+| Tests de integración | **6** contra testnet real (3 credenciales + **3 mandatos, nuevo**) |
 | Tests Rust | 22 en verde (sin cambios — el contrato no se tocó, `M-3`) |
 | Paquete nuevo | `@agentpay/mandate` |
 | Bloqueado por el embajador | **Nada.** Ver abajo |
@@ -50,7 +52,7 @@ pregunta para el embajador (`M-11`, `M-12`). En concreto:
 unitarios de `guards.ts`), coordinado y revisado según `P-2` en
 `docs/DECISIONES.md`. Cada hito desde T17 se trabaja en su propia rama
 (`cc/t17-check-mandate`, `cc/t18-spend-ledger`), siguiendo esa misma
-convención — T19 en `cc/t19-policy-rail`.
+convención — T19 en `cc/t19-policy-rail`, T20 en `cc/t20-anchor-mandate`.
 
 ### Progreso
 
@@ -60,8 +62,8 @@ convención — T19 en `cc/t19-policy-rail`.
 | T17 | Comparar un mandato contra una compra concreta | ✅ cerrado |
 | T18 | La memoria de gastos, y el límite diario | ✅ cerrado |
 | T19 | PolicyRail: dónde se autoriza o se bloquea | ✅ cerrado |
-| T20 | Anclar y revocar un mandato en cadena | ⏳ siguiente |
-| T21 | Cablearlo en el agente | ⏳ |
+| T20 | Anclar y revocar un mandato en cadena | ✅ cerrado |
+| T21 | Cablearlo en el agente | ⏳ siguiente |
 | T22 | El límite hecho cumplir on-chain, como smart account | 🚧 depende de un spike, `M-12` |
 | T23 | Demo de la fase completa | ⏳ |
 
@@ -340,3 +342,56 @@ a `M-16`.
 **Fuera de alcance, a propósito:** liberar una reserva cuando una compra falla
 (no existe todavía nada que pueda avisar que falló — ese aviso es el recibo de
 settlement, que es de la Fase 4) y cablear el rail dentro del agente (T21).
+
+---
+
+## T20 · Anclar y revocar un mandato en cadena — cerrado 2026-09-03
+
+**Qué quedó funcionando, en lenguaje llano.** El consentimiento firmado del
+principal (el Mandato, de T16) ya se podía verificar, pero solo *offline*:
+nada impedía que un mandato revocado por el principal siguiera pasando por
+válido, porque nadie consultaba la cadena. Ahora sí. El principal ancla el
+mandato en el mismo contrato que ya identifica y revoca agentes, y desde ese
+momento revocarlo es tan simple como ya lo era revocar una credencial — y
+tiene exactamente el mismo efecto: el mismo documento, la misma firma válida,
+deja de contar como autorización, sin que el agente haga nada ni pueda
+evitarlo.
+
+Y hay un efecto colateral bueno que no se buscaba a propósito: si el registro
+**desactiva a un principal entero** (una operación de administrador que ya
+existía, para emisores de credenciales), todos los mandatos de esa persona
+dejan de verificar también — el mismo interruptor general alcanza ahora tanto
+a la identidad de los agentes como al consentimiento de quienes los operan.
+
+**Lo que este hito NO tuvo que construir, y por qué importa.** `M-3` había
+anotado un costo pendiente: alguien tiene que registrar al principal como
+"emisor" en el contrato antes de que pueda anclar un mandato. La respuesta
+resultó ser: nada nuevo. La misma operación que ya registra a un emisor de
+credenciales sirve tal cual para un principal — el contrato nunca distinguió
+entre los dos roles. Se verificó de punta a punta contra testnet real,
+reusando la misma llave que ya está registrada para credenciales.
+
+**Evidencia técnica.** [evidencia/T20.md](evidencia/T20.md) — el ciclo
+completo (anclar → verificar → revocar → falla) primero contra un registro
+simulado y después **contra Stellar testnet real**, con transacciones
+verdaderas. 17 tests nuevos, nueve mutaciones deliberadas: ocho cayeron, y la
+que sobrevivió resultó ser una simetría defensiva sin camino real para
+alcanzarla — el mismo patrón, sin testear, que ya vive en el código de
+credenciales de la Fase 1 desde antes de esta fase.
+
+**Decisiones nuevas:** `M-17` (cómo se resolvió el costo pendiente de `M-3`)
+y `M-18` (el único cambio a un paquete de la Fase 1: un método genérico nuevo
+en `AgentPass`, sin que `@agentpass/sdk` aprenda qué es un Mandato).
+
+**Nota de coordinación.** Al empezar este hito se encontró otra sesión
+escribiendo en la misma carpeta compartida, en la misma rama
+`cc/t20-anchor-mandate` — resultó ser Devin, no otra sesión de Claude Code.
+El usuario pausó esa sesión y revirtió sus cambios (commit `b6bcee0`) antes de
+que este hito arrancara desde `main` limpio. Ver la entrada correspondiente en
+`docs/AGENT_LOG.md`.
+
+**Fuera de alcance, a propósito:** cablear esto en el agente real (T21) y
+cualquier flujo de registro de principal más allá de reusar
+`AgentPass.registerIssuer()` tal cual — si algún día principal y emisor dejan
+de ser la misma llave en el piloto, la operación de admin ya existe, solo hay
+que correrla para esa dirección nueva.

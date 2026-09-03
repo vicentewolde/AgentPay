@@ -62,6 +62,23 @@ export interface RegisterIssuerParams {
   readonly metaHash: string;
 }
 
+/**
+ * The registry's `anchor()` call, with no document-specific signing bolted on.
+ *
+ * `issue()` is exactly this plus `signCredential` in front of it — the
+ * contract itself never knew what a credential was, only a hash, a subject
+ * and an expiry. Exposed on its own so a later phase's document (a Mandate,
+ * `M-3`/T20) can anchor through the same registry without this package
+ * having to learn that document exists: it hands over a hash, not a type.
+ */
+export interface AnchorParams {
+  readonly credentialHash: string;
+  readonly subject: string;
+  readonly expiresAt: Date;
+  /** Must be the party the anchored hash names as issuer. */
+  readonly issuer: Keypair;
+}
+
 export interface AgentPass {
   readonly config: AgentPassConfig;
   issue(params: IssueParams): Promise<IssuedCredential>;
@@ -73,6 +90,8 @@ export interface AgentPass {
   /** Admin operation, outside the issue/verify/revoke surface. */
   registerIssuer(params: RegisterIssuerParams): Promise<string>;
   deactivateIssuer(params: { admin: Keypair; issuer: string }): Promise<string>;
+  /** The raw registry call `issue()` already makes internally. See {@link AnchorParams}. */
+  anchor(params: AnchorParams): Promise<string>;
 }
 
 function addressOf(did: StellarDid): string {
@@ -167,6 +186,15 @@ export async function createAgentPass(config: unknown): Promise<AgentPass> {
 
     async deactivateIssuer(params: { admin: Keypair; issuer: string }): Promise<string> {
       return registry.deactivateIssuer(params);
+    },
+
+    async anchor(params: AnchorParams): Promise<string> {
+      return registry.anchor({
+        issuer: params.issuer,
+        credentialHash: params.credentialHash,
+        subject: params.subject,
+        expiresAt: params.expiresAt,
+      });
     },
   };
 }

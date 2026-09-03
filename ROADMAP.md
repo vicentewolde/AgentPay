@@ -289,7 +289,7 @@ El desglose sale de esa decisión: **el corte no es "Mandato vs PolicyRail", es
 | T17 | `checkMandate(mandate, intent)` — pura, fail-closed, aritmética exacta | — | ✅ |
 | T18 | `SpendLedger` y `perDay` — el estado que `B-16` dejó pendiente | — | ✅ |
 | T19 | `PolicyRail.authorise()` como puerto + `LocalPolicyRail` off-chain, con reconciliación de los términos del 402 | — | ✅ |
-| T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | — | ⏳ |
+| T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | — | ✅ |
 | T21 | Cableado en el agente + tests de inyección | — | ⏳ |
 | T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | **`M-12`** | 🚧 |
 | T23 | Demo de la fase completa | parcial | ⏳ |

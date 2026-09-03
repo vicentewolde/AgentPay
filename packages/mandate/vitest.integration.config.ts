@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 
+// The live-network suite. Slow, stateful, and needs .env.local — kept out of
+// `pnpm test` so the fast suite stays fast and runnable without keys.
 export default defineConfig({
   resolve: {
     alias: {
@@ -11,7 +13,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
-    exclude: ["src/**/*.integration.test.ts"],
+    include: ["src/**/*.integration.test.ts"],
+    testTimeout: 300_000,
+    hookTimeout: 300_000,
+    fileParallelism: false,
   },
 });

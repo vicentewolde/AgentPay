@@ -304,3 +304,52 @@ Code pueda continuar con T20 desde el estado limpio de `main`.
 
 Pendiente: ninguna. El repo está en `main` con working tree clean, listo para
 que Claude Code continúe con T20 en una nueva sesión.
+
+## 2026-09-03 (8) — cc/t20-anchor-mandate
+
+Agente: Claude Code
+
+Qué: T20 de la Fase 3 — anclar y revocar un Mandato contra `agent_registry`,
+reusando el mismo contrato de la Fase 1 sin tocarlo (`M-3`). `anchorMandate`,
+`verifyMandateOnChain` y `revokeMandate` en `@agentpay/mandate`, sobre un
+puerto angosto (`RegistryAccess`, cuatro métodos) que una `AgentPass` real
+satisface estructuralmente. Único cambio a un paquete de la Fase 1: se agregó
+`anchor()` a la superficie pública de `AgentPass` — la misma llamada cruda que
+`issue()` ya hacía por dentro, sin `signCredential` delante (`M-18`). 17 tests
+nuevos, 9 mutaciones (8 cayeron; la que sobrevivió es una simetría defensiva
+sin camino real, igual que un patrón sin testear que ya vive en el código de
+credenciales de la Fase 1). Ciclo completo verificado también **contra
+Stellar testnet real** (`anchor.integration.test.ts`, nuevo — `pnpm run
+test:integration` ahora corre sdk y mandate).
+
+Por qué: `M-3` dejó T16 con el anclaje pendiente para este hito, y anotó un
+costo conocido — el principal tiene que estar registrado como emisor. Se
+resolvió sin código nuevo: `AgentPass.registerIssuer()` ya es genérico, y la
+misma llave que ya está registrada para credenciales sirve tal cual como
+principal en el piloto (`M-17`).
+
+**Colisión de sesiones, importante para cualquier sesión futura.** Al arrancar
+este hito, la sesión encontró la rama `cc/t20-anchor-mandate` ya existente y
+con cambios sin commitear en curso — otra sesión estaba escribiendo en la
+carpeta compartida en tiempo real (se confirmó viendo un archivo cambiar de
+contenido entre dos lecturas consecutivas). Se paró de inmediato, sin tocar ni
+sobreescribir nada, y se preguntó al usuario. Resultó ser **Devin**, no otra
+sesión de Claude Code — trabajando fuera de la convención de branch `devin/*`
+que el protocolo de coordinación pide (usó `cc/t20-anchor-mandate`, un nombre
+reservado a Claude Code). El usuario pausó esa sesión y revirtió sus cambios
+(commit `b6bcee0`, con coautoría de Devin) antes de que esta sesión volviera a
+crear la misma rama desde `main` limpio. **Para la próxima vez:** el protocolo
+de `CLAUDE.md` asume que solo Devin puede estar corriendo en paralelo sobre
+esta carpeta; en la práctica también puede estar corriendo sin respetar su
+propio prefijo de rama. Vale la pena que cualquier sesión — de cualquiera de
+los dos agentes — corra `git status`/`git branch` con más frecuencia durante
+un hito largo, no solo al principio.
+
+Decisiones: `M-17`, `M-18` nuevas. Documentación tocada: `ROADMAP.md`,
+`CLAUDE.md`, `BITACORA.md`, `ARQUITECTURA.md` (nueva §6, renumeradas §7–§12) y
+`DECISIONES.md` de la Fase 3, más `evidencia/T20.md`.
+
+Pendiente: mergear `cc/t20-anchor-mandate` a `main` y **pushear (a confirmar
+con el usuario)**. Siguiente hito: T21, cablear todo esto —`checkScope`,
+`checkMandate`, `checkDailyLimit`, `PolicyRail`, y ahora el anclaje/revocación
+del mandato— dentro del agente real, con tests de inyección.

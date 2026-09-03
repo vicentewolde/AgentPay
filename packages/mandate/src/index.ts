@@ -32,3 +32,14 @@ export {
   type VerifiedMandate,
   type VerifyMandateOptions,
 } from "./sign.js";
+
+export {
+  anchorMandate,
+  revokeMandate,
+  verifyMandateOnChain,
+  type AnchorMandateParams,
+  type AnchoredMandate,
+  type FullyVerifiedMandate,
+  type RegistryAccess,
+  type RevokeMandateParams,
+} from "./anchor.js";

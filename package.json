@@ -12,7 +12,7 @@
     "demo": "tsx --tsconfig tsconfig.scripts.json scripts/demo.ts",
     "build": "tsc -b",
     "test": "pnpm -r --stream test && vitest run",
-    "test:integration": "pnpm --filter @agentpass/sdk run test:integration",
+    "test:integration": "pnpm --filter @agentpass/sdk run test:integration && pnpm --filter @agentpay/mandate run test:integration",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "check": "pnpm typecheck && pnpm test",
     "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo"

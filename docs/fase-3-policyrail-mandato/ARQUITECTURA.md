@@ -158,7 +158,58 @@ qué registro confiar es del llamador — misma regla de `RegistryMismatch`), ni
 comparar el mandato contra ningún intent (eso es `checkMandate`, T17, y
 separarlo es lo que la deja ser una función pura).
 
-## 6. `checkMandate()` — T17 ✅
+## 6. Anclar y revocar un Mandato — T20 ✅
+
+```ts
+interface RegistryAccess {           // el puerto — cuatro métodos, no un AgentPass completo
+  readonly config: { readonly contractId: string };
+  anchor(params): Promise<string>;
+  status(hash): Promise<CredStatus>;
+  issuerStatus(address): Promise<{ registered: boolean; active: boolean }>;
+  revoke(params): Promise<string>;
+}
+
+anchorMandate(registry, { mandate, principal }): Promise<AnchoredMandate>
+verifyMandateOnChain(registry, jws, { now? }): Promise<FullyVerifiedMandate>
+revokeMandate(registry, { mandateHash, principal }): Promise<string>
+```
+
+Mismo contrato de la Fase 1 (`agent_registry`), sin tocarlo — el mapeo de `M-3`:
+
+| `anchor(issuer, cred_hash, subject, expires_at)` | el Mandato |
+|---|---|
+| `issuer` | `mandate.issuer` — el principal |
+| `cred_hash` | `sha256(jws)` |
+| `subject` | `mandate.credentialSubject.id` — el agente |
+| `expires_at` | `mandate.validUntil` |
+
+`RegistryAccess` es un puerto angosto a propósito, mismo espíritu que
+`CredentialVerifier` en `apps/agent`: nombra solo los cuatro métodos que
+necesita, y una `AgentPass` real de `@agentpass/sdk` lo satisface
+estructuralmente, sin adaptador — porque los cuatro (`anchor`, `status`,
+`issuerStatus`, `revoke`) ya eran genéricos en el SDK antes de este hito;
+`anchor()` es el único que se agregó (`M-18`), y es la misma llamada cruda que
+`issue()` ya hacía por dentro, sin la firma de credencial delante.
+
+`verifyMandateOnChain` corre cuatro chequeos, en el mismo orden que
+`AgentPass.verify()` ya estableció para credenciales: firma → ventana firmada
+(ambas offline, vía `verifyMandate`) → ¿el hash anclado sigue activo? → ¿el
+principal que lo ancló sigue siendo confiable? Revocar es simétrico a la Fase
+1: el principal corta su propio consentimiento desde afuera del agente, y es
+idempotente.
+
+**Códigos:** `MandateRevoked`/`MandateUnknown` son nuevos porque
+`CredentialRevoked`/`CredentialUnknown` llevan "credential" en el propio
+identificador que un llamador usa para branchear. `IssuerNotRegistered`,
+`IssuerInactive`, `RegistryMismatch` y `MandateExpired` se reutilizan
+verbatim — el esquema del Mandato ya llama `issuer` a este rol, así que nada
+en esos tres códigos describe mal a un mandato (`M-18`).
+
+**Registrar al principal** no tiene función propia. `AgentPass.registerIssuer()`
+ya toma una dirección `G...` cruda; un principal se registra llamándola tal
+cual, la misma operación que ya registra a un emisor de credenciales (`M-17`).
+
+## 7. `checkMandate()` — T17 ✅
 
 Vive en `apps/agent/src/mandate/check-mandate.ts` — no en `@agentpay/mandate`,
 a propósito: es un consumidor de dos documentos (`AgentPayMandate` del paquete
@@ -193,7 +244,7 @@ Los ocho códigos son propios de la fase, distintos de los `Scope*` de la Fase 2
 aunque `grant` y `scope` compartan forma (`M-9`): permite saber, sin ambigüedad,
 cuál de las dos autoridades rechazó una compra.
 
-## 7. `perDay` y el estado — T18 ✅
+## 8. `perDay` y el estado — T18 ✅
 
 `B-16` dejó `scope.limits.perDay` sin aplicar y dijo por qué: un total diario
 necesita memoria de gastos pasados, que es *enforcement con estado*. T17 dejó
@@ -232,7 +283,7 @@ segura (consultar, decidir, recién entonces registrar) y la atomicidad entre
 esos pasos quedan para T19 (`M-10`, riesgo conocido y aceptado mientras todo
 corra en un solo proceso secuencial, como hasta ahora).
 
-## 8. PolicyRail — T19 ✅
+## 9. PolicyRail — T19 ✅
 
 ```ts
 interface PolicyRail {
@@ -293,7 +344,7 @@ implementación de este mismo puerto, y lo que decide si es posible es el
 soporte de cuentas de contrato en `@x402/stellar` y en el facilitator, no el
 bazaar (`M-12`).
 
-## 9. Manejo de errores
+## 10. Manejo de errores
 
 Códigos que la Fase 3 agregó a la misma unión de `packages/core/src/errors.ts`
 — ninguna jerarquía paralela:
@@ -301,29 +352,37 @@ Códigos que la Fase 3 agregó a la misma unión de `packages/core/src/errors.ts
 ```
 InvalidMandate · MandateExpired · MandateNotYetValid
 TermsVenueMismatch · TermsAssetMismatch · TermsAmountMismatch
+MandateRevoked · MandateUnknown
 ```
 
 Los tres códigos `Terms*` son propios y no reutilizan los de `checkScope()` ni
 los de `checkMandate()`, por el mismo motivo de `M-9`: quien recibe el rechazo
 necesita saber que lo frenó una discrepancia con lo que el comercio pide, no
-un límite.
+un límite. `MandateRevoked`/`MandateUnknown` son propios por la misma razón que
+los `Terms*`, pero mirando hacia otro lado: `CredentialRevoked`/
+`CredentialUnknown` llevan "credential" en el identificador que un llamador
+usa para branchear, no solo en un mensaje (`M-18`).
 
 `SignerMismatch` se reutiliza tal cual de la Fase 2: es exactamente el mismo
 significado (la llave no es la que el documento nombra), y darle un código
-propio al mandato habría partido un concepto en dos.
+propio al mandato habría partido un concepto en dos. `IssuerNotRegistered`,
+`IssuerInactive` y `RegistryMismatch` se reutilizan igual, verbatim, al
+verificar un mandato contra el registro: el propio esquema del Mandato ya
+llama `issuer` al principal, así que ninguno de los tres describe mal a un
+mandato (`M-18`).
 
-## 10. Testing
+## 11. Testing
 
 | suite | tests | toca red |
 |---|---|---|
 | `packages/core` | 74 (60 de la Fase 1 + **14 de `jws-document`**) | no |
-| `packages/mandate` | 27 | no |
+| `packages/mandate` | **44** (27 de T16 + **17 de `anchor`**) | no / 3 sí (integración, nuevo) |
 | `packages/sdk` | 16 | no / 3 sí (integración) |
 | `packages/cli` | 29 | no |
-| `apps/agent` | **342** (30 de `checkMandate`, 22 de `ledger/`, **38 de `policy/`**) | no |
+| `apps/agent` | **342** (30 de `checkMandate`, 22 de `ledger/`, 38 de `policy/`) | no |
 | `scripts/` | 32 | no |
 
-**520 tests rápidos, 0 fallando** (482 antes de T19). Los 5 tests que `sdk`
+**537 tests rápidos, 0 fallando** (520 antes de T20). Los 5 tests que `sdk`
 sumó frente a T16 no son de esta fase — ver la nota en `BITACORA.md`.
 
 Mutation testing deliberado en cada punto crítico, con las salidas en
@@ -332,7 +391,7 @@ mutación que **sobrevivió** (`M1`, "`kid` elige la llave") valió más que las
 cayeron — resultó ser equivalente, porque otra protección la tapaba, y al
 analizarla apareció el test que faltaba de verdad.
 
-## 11. Fuera de alcance de la Fase 3, a propósito
+## 12. Fuera de alcance de la Fase 3, a propósito
 
 MandateGate (Fase 4) · MandateVault (Fase 5) · cualquier UI web · Stellar
 mainnet · rieles fiat o PSP · movimiento real de fondos · unificar las tres

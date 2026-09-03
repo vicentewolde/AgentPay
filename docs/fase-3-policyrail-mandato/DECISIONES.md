@@ -566,3 +566,94 @@ serlo, el sujeto pasa a ser `agente + principal` y esta entrada se supera.
 **Alternativa descartada:** el hash de la credencial como sujeto, que era lo
 más fiel a "el presupuesto de esta credencial". Se descartó por el reseteo por
 reemisión de arriba.
+
+---
+
+### M-17 · Anclar un Mandato reutiliza `AgentPass.registerIssuer()` tal cual; no se construyó ninguna máquina de "registro de principal" · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T20 — cierra el costo conocido que `M-3` dejó anotado
+
+`M-3` dejó anotado un costo: "el principal tiene que estar registrado como
+emisor en el registro... cuando dejen de serlo, hay que registrarlo. Queda
+anotado como lo primero a resolver en T20." Se resolvió **sin escribir código
+nuevo para resolverlo**: `AgentPass.registerIssuer({ admin, issuer, metaHash })`
+de `@agentpass/sdk` ya toma una dirección `G...` cruda, sin saber ni preguntar
+qué tipo de documento va a anclar esa dirección después. Un principal se
+registra llamando exactamente esa función — la misma que ya registra a un
+emisor de credenciales — porque el contrato nunca distinguió entre los dos
+roles: `Issuer(Address) -> IssuerRecord` no tiene un campo que diga "esto es un
+emisor de credenciales" o "esto es un principal de mandatos".
+
+**Motivo.** Construir una función `ensurePrincipalRegistered()` específica del
+paquete de Mandato habría sido duplicar `registerIssuer()`/`issuerStatus()`
+sin ganar nada — exactamente el tipo de capa extra que este proyecto evita a
+propósito (ver la regla de "no construir abstracciones antes de que hagan
+falta"). El costo real que `M-3` señalaba no era la falta de una función; era
+la falta de **verificarlo**: que anclar un mandato con un principal no
+registrado de verdad falle con el código correcto, y que ese mismo camino
+genérico de registro alcance para el caso en que principal y emisor dejen de
+ser la misma llave. Ambas cosas quedaron probadas — la primera con el test
+unitario de `anchor.test.ts`, la segunda con el ciclo completo contra testnet
+real en `anchor.integration.test.ts`, reusando `ISSUER_SECRET_KEY` como
+principal.
+
+**Lo que sigue costando igual, dicho en voz alta:** el día que un principal
+real no coincida con ningún emisor de credenciales existente, alguien con la
+llave de `admin` tiene que llamar `registerIssuer()` para esa dirección antes
+de que el primer mandato de esa persona pueda anclarse. Eso no cambió — es
+una operación de admin, fuera del alcance de esta fase, igual que ya lo es
+para credenciales.
+
+**Alternativa descartada:** una función `ensurePrincipalRegistered()` en
+`@agentpay/mandate` que llamara a `registerIssuer()` por dentro, con
+vocabulario de Mandato. Habría sido una capa de una sola línea de valor real
+(el nombre) sobre una función que ya existe, genérica, y correctamente
+ubicada en el paquete que gobierna la confianza del registro completo.
+
+---
+
+### M-18 · Se agregó `anchor()` a la superficie pública de `AgentPass`; nada más de `@agentpass/sdk` cambió · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T20
+
+El único cambio a un paquete de la Fase 1 en todo T20: `AgentPass` ganó un
+método `anchor({ credentialHash, subject, expiresAt, issuer })` que reenvía
+directo a la llamada `anchor()` del contrato — exactamente lo que `issue()`
+ya hacía por dentro, sin el `signCredential` que `issue()` le antepone.
+
+**Motivo.** Anclar un mandato necesita esa llamada cruda, y no había forma de
+llegar a ella desde la superficie pública existente: `issue()` la tiene
+enterrada detrás de la firma de una credencial. Las alternativas para no tocar
+`@agentpass/sdk` en absoluto eran peores:
+
+1. **Exportar la clase `Registry` completa.** Habría expuesto de una vez
+   `registerIssuer`, `deactivateIssuer`, la conexión, el manejo de errores — mucha
+   más superficie de la que Mandato necesita, para un paquete de una fase
+   posterior. `anchor()` sola es la pieza mínima.
+2. **Reimplementar la llamada Soroban en `@agentpay/mandate`.** Habría
+   duplicado exactamente lo que el comentario de `registry.ts` dice que existe
+   para evitar: "reimplementar el mapeo que el spec del contrato ya describe,
+   que es peor lugar para estar equivocado."
+
+**Por qué esto no repite el problema que `M-2` evita.** `M-2` existe para que
+`@agentpass/core` no empiece a cargar documentos de fases posteriores.
+`anchor()` no sabe qué es un Mandato — su tipo entero son primitivas
+(`string`, `Date`, `Keypair`) en el vocabulario que el **contrato** ya usa
+(`cred_hash`, `subject`, `expires_at`, `issuer`), el mismo vocabulario que
+`status()` y `revoke()`, ya públicos, ya usan. Es una ampliación de lo que el
+SDK ya exponía genéricamente, no una que le enseña algo nuevo. `issue()` no se
+tocó — sigue llamando a `registry.anchor()` exactamente como antes; `anchor()`
+es un método hermano agregado al mismo objeto, sin riesgo para el camino ya
+probado de credenciales.
+
+**Códigos de error, y cuáles se reutilizan tal cual.** `MandateRevoked` y
+`MandateUnknown` son nuevos — `CredentialRevoked`/`CredentialUnknown` llevan
+"credential" en el propio identificador que un llamador usa para branchear
+(`error.code === "CredentialRevoked"`), no solo en un mensaje, y reusarlos
+para un mandato reportaría mal qué documento falló. En cambio
+`IssuerNotRegistered`, `IssuerInactive` y `RegistryMismatch` se reutilizan
+verbatim: el propio esquema del Mandato ya llama `issuer` a este rol
+(`mandate.issuer` *es* el principal, ver `mandate.ts`), así que nada en esos
+tres códigos describe mal a un mandato — solo el texto del mensaje cambia,
+igual que `SignerMismatch` en `M-9`. `MandateExpired` tampoco es nuevo: ya
+existía desde T16 para el chequeo offline, y se reutiliza para el mismo matiz
+que `CredentialExpired` cubre en `AgentPass.verify()` — el registro dice
+expirado aunque la ventana firmada diga lo contrario.
