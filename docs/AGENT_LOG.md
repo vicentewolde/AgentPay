@@ -54,3 +54,22 @@ branch" a simple vista, que es la base de la regla de no pisarse.
 
 Pendiente: verificar en la primera tarea real que Devin efectivamente respeta
 `devin/<task>` una vez indicado.
+
+## 2026-09-03 — devin/guards-unit-tests (mergeada)
+
+Agente: Devin
+
+Qué: primera tarea de prueba delegada — tests unitarios para
+`packages/sdk/src/guards.ts` (`assertTrustedRegistry`,
+`credentialHashToBytes`). PR [#1](https://github.com/vicentewolde/AgentPay/pull/1),
+revisado por Claude Code (diff + tests corridos en worktree aislado, 16/16
+pasan) y mergeado con squash. Branch borrada tras el merge.
+
+Por qué: validar el flujo completo de coordinación (prefijo de branch,
+scope acotado, revisión antes de mergear) con una tarea de riesgo mínimo.
+
+Pendiente: Devin respetó el prefijo `devin/` una vez indicado explícitamente
+(no es su default). Al delegar la próxima tarea, commitear primero
+cualquier cambio propio pendiente en `main` — un `checkout` de Devin en la
+carpeta compartida arrastra ediciones sin commitear a su branch (pasó en
+esta ronda, sin consecuencias porque se detectó a tiempo).
