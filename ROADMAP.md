@@ -182,8 +182,28 @@ caso de uso imaginario. Este agente mínimo es lo que convierte "límites de
 gasto" y "consentimiento firmado" en problemas concretos con forma conocida,
 en vez de abstracciones.
 
-**Bloqueante:** las respuestas del embajador a estas preguntas, ya redactadas y (a
-confirmar) enviadas:
+**Bloqueante — resuelto el 2026-09-03 (T19).** El repo del bazaar ya es
+público ([`CaBsCrypto/stellar-bazaar-x402`](https://github.com/CaBsCrypto/stellar-bazaar-x402),
+Apache-2.0) y se leyó contra estas diez preguntas. **Ocho quedaron respondidas,
+una reformulada y respondida mejor, y una sola sigue abierta** — y esa dejó de
+ser una pregunta para el embajador. El detalle está en
+[`docs/fase-3-policyrail-mandato/DECISIONES.md`](docs/fase-3-policyrail-mandato/DECISIONES.md)
+(`M-11`, `M-12`) y la evidencia en la bitácora de la Fase 3. Resumen:
+
+| # | Respuesta del repo |
+|---|---|
+| 1 | **API.** MCP Streamable HTTP (`POST /api/mcp`) + REST `/api/discovery/*` + OpenAPI. No hay contrato que consultar |
+| 2 | **No hay contract ID del bazaar.** Lo desplegado es la app; los únicos contratos del flujo son de terceros (el SAC de USDC testnet) |
+| 3 | `ServiceCard` v`bazaar.service-card/v0`, con `payment.{scheme,asset,amount,destination}` |
+| 4 | **No hay función de compra.** Hay un reto HTTP 402 con `PaymentRequirements` fijado a `scheme/network/payTo/asset/amount` + `extra` |
+| 5 | **Sí, y es la única forma:** el facilitator construye y envía; el comprador solo firma una autorización |
+| 6 | **Abierta, pero le cambió el destinatario:** ya no es del bazaar sino de `@x402/stellar` + el facilitator (`M-12`) |
+| 7 | Hoy no hay eventos del bazaar: el rastro es el recibo `PAYMENT-RESPONSE` + la transacción en Stellar |
+| 8 | **Atómica e irreversible.** Escrow y disputa están documentados como trabajo futuro *de ellos* |
+| 9 | **Sí:** MCP público, Friendbot, faucet de Circle, API key del facilitator gratis |
+| 10 | **Apache-2.0, y el hook no hace falta:** la autorización de política ya es un paso del comprador |
+
+Las preguntas, como se redactaron originalmente:
 
 1. ¿API/indexer, o contratos Soroban directos?
 2. ¿Desplegado en testnet? ¿Contract IDs?
@@ -223,10 +243,10 @@ configuración cuando lleguen las respuestas.
 | T12 | Chequeo de `scope` antes de emitir: venue permitido, asset permitido, monto bajo `perTx`. Rechazo estructurado, no un intento silencioso | ✅ |
 | T13 | `PurchaseIntent` firmado (JWS del agente, referencia al hash de su credencial) — su forma debería sobrevivir sin cambios hasta convertirse en el Mandato de la Fase 3 | ✅ |
 | T14 | Demo end-to-end de un comando, grabable en menos de 90 segundos: emitir credencial → instrucción en español → intent firmado → revocar → reintento rechazado | ✅ — `pnpm demo`, ~12 s contra testnet real |
-| T15 | `BazaarSorobanAdapter`: la implementación real, contra el bazaar en testnet | 🚧 bloqueado por el embajador |
+| T15 | El adaptador real contra el bazaar en testnet. **Ya no es un `BazaarSorobanAdapter`**: el catálogo es una API MCP/REST pública, no un contrato — el nombre y la forma se corrigen cuando se retome | 🔓 desbloqueado el 2026-09-03, sin construir |
 
-**Criterio de aceptación de la fase:** `pnpm demo` corre con el mock; cuando
-lleguen las respuestas del embajador, `pnpm demo --adapter=bazaar` produce un intent
+**Criterio de aceptación de la fase:** `pnpm demo` corre con el mock;
+`pnpm demo --adapter=bazaar` produce un intent
 con productos reales del bazaar, sin haber tenido que tocar T9–T14.
 **Primera mitad cumplida el 2026-09-02**: `pnpm demo` corre contra testnet real
 en ~12 segundos; `pnpm demo --adapter=bazaar` ya existe como seam y falla con
@@ -263,20 +283,24 @@ decisiones de la fase).
 El desglose sale de esa decisión: **el corte no es "Mandato vs PolicyRail", es
 "qué depende del supuesto y qué no".**
 
-| Hito | Qué construye | Depende de `M-1` | Estado |
+| Hito | Qué construye | Depende de | Estado |
 |---|---|---|---|
-| T16 | La forma firmada del Mandato: esquema, `signMandate`, `verifyMandate` | no | ✅ |
-| T17 | `checkMandate(mandate, intent)` — pura, fail-closed, aritmética exacta | no | ⏳ |
-| T18 | `SpendLedger` y `perDay` — el estado que `B-16` dejó pendiente | no | ⏳ |
-| T19 | `PolicyRail.authorise()` como puerto + `LocalPolicyRail` off-chain | no | ⏳ |
-| T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | no | ⏳ |
-| T21 | Cableado en el agente + tests de inyección | no | ⏳ |
-| T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | **sí** | 🚧 |
+| T16 | La forma firmada del Mandato: esquema, `signMandate`, `verifyMandate` | — | ✅ |
+| T17 | `checkMandate(mandate, intent)` — pura, fail-closed, aritmética exacta | — | ✅ |
+| T18 | `SpendLedger` y `perDay` — el estado que `B-16` dejó pendiente | — | ✅ |
+| T19 | `PolicyRail.authorise()` como puerto + `LocalPolicyRail` off-chain, con reconciliación de los términos del 402 | — | ✅ |
+| T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | — | ⏳ |
+| T21 | Cableado en el agente + tests de inyección | — | ⏳ |
+| T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | **`M-12`** | 🚧 |
 | T23 | Demo de la fase completa | parcial | ⏳ |
 
-Seis de los ocho hitos valen igual si el embajador contesta lo contrario de lo
-que `M-1` asume. Si el supuesto resulta falso, lo único que se pierde es T22 —
-el camino off-chain (T19) ya funciona en los dos escenarios.
+**Actualizado el 2026-09-03 (T19): `M-1` quedó `Superada`.** Al leerse el repo
+real del bazaar se confirmó que no hay contrato de compra desplegado, así que
+la pregunta que `M-1` asumía dejó de existir. Siete de los ocho hitos no
+dependen de nada externo. El único que sigue condicionado es T22, y ahora
+depende de algo verificable sin preguntarle a nadie: si `@x402/stellar` y el
+facilitator de OpenZeppelin aceptan una cuenta de contrato como pagador
+(`M-12`).
 
 **Lo que sí se puede decir ahora, porque no depende de nada pendiente:**
 
@@ -290,16 +314,15 @@ el camino off-chain (T19) ya funciona en los dos escenarios.
   una llave Stellar y verificarlo sin red" (VC-JWT + `did:stellar`), Mandato
   reutiliza esa misma maquinaria para un documento distinto, no una
   criptografía distinta.
-- **Dónde vive el enforcement es la pregunta de diseño central**, y tiene
-  exactamente dos respuestas posibles, determinadas por la pregunta 6 de el embajador:
-  si el comprador puede ser una cuenta de contrato, PolicyRail puede vivir
-  como *smart account* — el límite se hace cumplir en la misma transacción de
-  compra, on-chain, sin que nada pueda saltárselo. Si el comprador tiene que
-  ser una cuenta clásica, PolicyRail tiene que vivir como middleware
-  off-chain que autoriza o bloquea antes de que la transacción se firme —
-  más simple de construir, pero con una superficie de confianza distinta.
-  **La respuesta sigue sin llegar**; `M-1` asume la primera y aísla en un solo
-  hito (T22) todo lo que se perdería si el supuesto es falso.
+- **Dónde vive el enforcement ya no es una pregunta abierta.** Se decía acá
+  que tenía exactamente dos respuestas posibles, determinadas por la pregunta 6
+  del embajador. Ya no: el propio protocolo del bazaar define un paso
+  `buyer policy authorization` que es **del comprador**, descrito en su
+  documentación como *allowlist, presupuesto y reconciliación de la card* — que
+  es literalmente PolicyRail. Vive off-chain, no necesita cooperación del
+  comercio, y está construido (T19, `M-11`). El smart account on-chain sigue
+  siendo deseable como segunda implementación del mismo puerto, no como
+  reemplazo.
 
 **Qué se espera que entregue esta fase, en términos de resultado, no de
 tareas:** un `PurchaseIntent` de la Fase 2 no puede convertirse en una compra
@@ -313,14 +336,18 @@ dentro del checkout **real** del bazaar del embajador, no en un entorno de prueb
 propio. Es la integración del Mandato de la Fase 3 en el flujo de compra
 efectivo de un tercero.
 
-**Por qué es el hito de mayor riesgo del proyecto:** es la única fase que
-depende de una superficie que no controla este repo — el checkout del embajador. Si
-el embajador no puede o no quiere modificar su flujo para aceptar un hook de
-autorización, esta fase deja de ser un problema de código y pasa a ser un
-problema de coordinación entre dos equipos con timelines distintos. Por eso
-las preguntas 5, 6 y 10 de la Fase 2 se mandan lo antes posible: cuanto antes
-se sepa si el embajador puede acomodar esto, antes se puede planear alrededor de esa
-respuesta en vez de descubrirla a mitad de la Fase 4.
+**Dejó de ser el hito de mayor riesgo del proyecto — 2026-09-03 (T19).** Esta
+sección decía que la fase dependía de convencer al embajador de aceptar un hook
+de autorización en su checkout, y que si no podía o no quería, dejaba de ser un
+problema de código para volverse uno de coordinación entre dos equipos. Al
+leerse su repo real, eso resultó no ser cierto: **el hook no hace falta.** El
+flujo x402 define la autorización de política como un paso del comprador, antes
+de firmar, y el repo es Apache-2.0. La Fase 4 pasa a ser envolver el cliente
+x402 con el rail que la Fase 3 ya construyó — trabajo de este repo, sin
+dependencia de terceros. Ver `M-11` en las decisiones de la Fase 3.
+
+**El riesgo que sí queda** es el del pagador: si el facilitator acepta o no una
+cuenta de contrato (`M-12`). Eso afecta a T22, no al camino principal.
 
 **Asignación de modelo recomendada:** Opus 5 a esfuerzo alto para esta fase
 específicamente — es la única con ambigüedad arquitectónica genuina y

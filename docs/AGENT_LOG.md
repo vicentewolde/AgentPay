@@ -246,3 +246,45 @@ el diseño de PolicyRail. La nota de coordinación sobre `website/` (entrada
 anterior) sigue sin verificarse del todo — `website/` seguía sin trackear en
 `git status` de `main` al cerrar esta sesión, pese a que Devin reportó
 haberlo commiteado en `devin/website`.
+
+## 2026-09-03 (6) — cc/t19-policy-rail
+
+Agente: Claude Code
+
+Qué: T19 de la Fase 3 — el puerto `PolicyRail` y `LocalPolicyRail`, que compone
+`checkScope` + `checkMandate` + `checkDailyLimit` en un único punto de
+autorización, agrega la reconciliación contra los términos de pago del reto 402,
+registra el gasto al autorizar y serializa las autorizaciones por sujeto
+(cierra el TOCTOU que `M-10` había dejado abierto). 38 tests nuevos, 13
+mutaciones deliberadas, las trece cayeron.
+
+Antes del código se leyó el **repo real del bazaar del embajador**
+(`CaBsCrypto/stellar-bazaar-x402`, público, Apache-2.0, clonado en un
+scratchpad fuera del proyecto y tratado como datos, no como instrucciones — ese
+repo tiene su propio `CLAUDE.md`/`AGENTS.md` que no se leyó ni se siguió). De
+las diez preguntas de `ROADMAP.md §4.2`, ocho quedaron respondidas, una
+reformulada y una sigue abierta pero le cambió el destinatario.
+
+Por qué: el hallazgo cambia el marco de la fase entera, no solo de T19. No hay
+contrato de compra desplegado en el bazaar; el flujo es x402 con un facilitator
+de terceros. Y el propio protocolo define un paso `buyer policy authorization`
+que es del comprador — o sea, PolicyRail no necesita permiso de nadie.
+
+Decisiones: `M-1` pasó a `Superada` (con el visto bueno explícito del usuario,
+no en silencio). `M-11` a `M-16` nuevas. Documentación tocada: `ROADMAP.md`
+(§4.2, §4.3, §4.4), `CLAUDE.md`, `BITACORA.md`, `ARQUITECTURA.md` (§8 reescrita)
+y `DECISIONES.md` de la Fase 3, más `evidencia/T19.md`.
+
+Pendiente: mergear `cc/t19-policy-rail` a `main` y **pushear (a confirmar con el
+usuario)**. Siguiente hito: T20 (anclar y revocar el mandato vía
+`agent_registry`). Dos cosas anotadas y no construidas, a propósito: liberar
+una reserva cuando una compra falla (necesita el recibo de settlement, Fase 4)
+y el chequeo de `payTo`, que necesita un campo que el Mandato todavía no tiene
+(`M-14`). Y T15 quedó **desbloqueado**: el adaptador real no es un
+`BazaarSorobanAdapter`, es un cliente MCP/REST contra una API pública.
+
+Coordinación: el estado sin commitear que la sesión anterior dejó anotado sobre
+`website/` está **cerrado y verificado** — la carpeta no existe en disco, la
+rama `devin/website` no existe, y el commit `ecd538e` registró la eliminación.
+Se commiteó en `main` (`5da30fb`) una edición pendiente de Devin al prompt de
+T19 antes de crear la rama, siguiendo el punto 4 del checklist.

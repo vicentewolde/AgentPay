@@ -232,19 +232,66 @@ segura (consultar, decidir, recién entonces registrar) y la atomicidad entre
 esos pasos quedan para T19 (`M-10`, riesgo conocido y aceptado mientras todo
 corra en un solo proceso secuencial, como hasta ahora).
 
-## 8. PolicyRail — T19 *(pendiente)*, y la pregunta 6
+## 8. PolicyRail — T19 ✅
 
 ```ts
 interface PolicyRail {
-  authorise(intent: PurchaseIntent): Promise<Authorisation>;
+  authorise(request: AuthorisationRequest): Promise<AuthorisationDecision>;
+}
+
+interface AuthorisationRequest {
+  intent: PurchaseIntent;   // firmado por el agente
+  scope: Scope;             // de la credencial ya verificada
+  mandate: AgentPayMandate; // el mandato ya verificado
+  terms?: PaymentTerms;     // lo que el comercio pide cobrar, si hay un 402
 }
 ```
 
-`LocalPolicyRail` compone T17 + T18 off-chain y **funciona en los dos escenarios
-de la pregunta 6**. El smart account on-chain (`__check_auth` que hace cumplir
-el límite dentro de la misma transacción de compra) depende del supuesto `M-1`,
-va aislado detrás de este mismo puerto, y es el último hito de la fase — el
-único que se pierde si el supuesto resulta falso.
+El puerto tiene un método porque hay una pregunta. `LocalPolicyRail`
+(`apps/agent/src/policy/policy-rail.ts`) es la implementación off-chain y no
+guarda estado propio salvo el ledger (`M-13`).
+
+**El orden de los chequeos, y por qué.**
+
+| # | Chequeo | Contesta |
+|---|---|---|
+| 1 | `reconcileTerms` | **cuál** es esta compra |
+| 2 | `checkScope` | ¿la permite lo que firmó el emisor? |
+| 3 | `checkMandate` | ¿la permite lo que consintió el principal? |
+| 4 | `checkDailyLimit` × 2 | ¿queda presupuesto hoy, bajo cada autoridad? |
+| 5 | `ledger.record` | anotar lo gastado |
+
+Los términos van primero (`M-14`): 2–4 contestan *si esta compra está
+permitida*, y contestar eso sobre una compra distinta de la que está por
+pagarse no es un chequeo débil, es un chequeo sobre otra cosa.
+
+Los pasos 4 y 5 corren dentro de una **sección crítica serializada por
+sujeto** — consultar, decidir y registrar sin que otra autorización se meta en
+el medio. Cierra el TOCTOU que `M-10` difirió a este hito (`M-15`). Es una
+cadena de promesas: vale dentro de un proceso y en ninguna parte más.
+
+`PaymentTerms` es una forma **propia** —`venue`, `asset`, `amount`— no el
+`PaymentRequirements` de x402. Mapear uno al otro es trabajo del adaptador
+(T15), para que la capa de política no importe los tipos de un tercero. Se
+comparan solo los tres campos para los que existe un documento firmado contra
+qué compararlos; **`payTo` no se chequea**, y `M-14` dice por qué y qué le
+falta al Mandato para poder hacerlo.
+
+El presupuesto diario se lleva por **DID del agente**, con el reloj del rail y
+nunca con `intent.issuedAt` — que el agente firma sobre su propio documento y
+podría fechar ayer (`M-16`).
+
+### Y la pregunta 6
+
+Ya no es una pregunta para el embajador. El bazaar **no tiene contrato de
+compra desplegado**: el flujo real es x402 sobre HTTP con un *facilitator* de
+terceros que construye y envía la transacción. `LocalPolicyRail` encaja en un
+paso que el propio protocolo del bazaar define como del comprador —
+`buyer policy authorization`— y por lo tanto **no necesita cooperación de
+nadie** (`M-11`). El smart account on-chain (T22) sigue siendo una segunda
+implementación de este mismo puerto, y lo que decide si es posible es el
+soporte de cuentas de contrato en `@x402/stellar` y en el facilitator, no el
+bazaar (`M-12`).
 
 ## 9. Manejo de errores
 
@@ -253,7 +300,13 @@ Códigos que la Fase 3 agregó a la misma unión de `packages/core/src/errors.ts
 
 ```
 InvalidMandate · MandateExpired · MandateNotYetValid
+TermsVenueMismatch · TermsAssetMismatch · TermsAmountMismatch
 ```
+
+Los tres códigos `Terms*` son propios y no reutilizan los de `checkScope()` ni
+los de `checkMandate()`, por el mismo motivo de `M-9`: quien recibe el rechazo
+necesita saber que lo frenó una discrepancia con lo que el comercio pide, no
+un límite.
 
 `SignerMismatch` se reutiliza tal cual de la Fase 2: es exactamente el mismo
 significado (la llave no es la que el documento nombra), y darle un código
@@ -267,10 +320,10 @@ propio al mandato habría partido un concepto en dos.
 | `packages/mandate` | 27 | no |
 | `packages/sdk` | 16 | no / 3 sí (integración) |
 | `packages/cli` | 29 | no |
-| `apps/agent` | **304** (30 de `checkMandate`, 22 de `ledger/`) | no |
+| `apps/agent` | **342** (30 de `checkMandate`, 22 de `ledger/`, **38 de `policy/`**) | no |
 | `scripts/` | 32 | no |
 
-**482 tests rápidos, 0 fallando** (455 antes de T18). Los 5 tests que `sdk`
+**520 tests rápidos, 0 fallando** (482 antes de T19). Los 5 tests que `sdk`
 sumó frente a T16 no son de esta fase — ver la nota en `BITACORA.md`.
 
 Mutation testing deliberado en cada punto crítico, con las salidas en

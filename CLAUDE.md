@@ -16,12 +16,12 @@ imposible de saltar por prompt injection.
 | [docs/fase-1-agentpass/BITACORA.md](docs/fase-1-agentpass/BITACORA.md) | Estado actual, qué hito sigue, qué se hizo en cada uno |
 | [docs/fase-1-agentpass/DECISIONES.md](docs/fase-1-agentpass/DECISIONES.md) | Toda decisión importante, con su motivo y lo que se descartó |
 | [docs/fase-2-agente-compra/ARQUITECTURA.md](docs/fase-2-agente-compra/ARQUITECTURA.md) | Mapa técnico de la Fase 2: catálogo, herramientas, verificación de credencial, scope, forma del `PurchaseIntent` |
-| [docs/fase-2-agente-compra/BITACORA.md](docs/fase-2-agente-compra/BITACORA.md) | **T9–T14 cerrados** (T15 bloqueado por el embajador). Estado actual y qué se hizo en cada hito |
+| [docs/fase-2-agente-compra/BITACORA.md](docs/fase-2-agente-compra/BITACORA.md) | **T9–T14 cerrados** (T15 desbloqueado en T19, sin construir). Estado actual y qué se hizo en cada hito |
 | [docs/fase-2-agente-compra/DECISIONES.md](docs/fase-2-agente-compra/DECISIONES.md) | Decisiones de la Fase 2 (prefijo `B-`) |
 | [docs/fase-3-policyrail-mandato/CONTEXTO.md](docs/fase-3-policyrail-mandato/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, el bloqueante externo y qué se decidió hacer con él |
 | [docs/fase-3-policyrail-mandato/ARQUITECTURA.md](docs/fase-3-policyrail-mandato/ARQUITECTURA.md) | Mapa técnico de la Fase 3: los tres documentos firmados, la forma del Mandato, dónde vive el enforcement |
-| [docs/fase-3-policyrail-mandato/BITACORA.md](docs/fase-3-policyrail-mandato/BITACORA.md) | **T16 cerrado.** Estado actual y qué sigue |
-| [docs/fase-3-policyrail-mandato/DECISIONES.md](docs/fase-3-policyrail-mandato/DECISIONES.md) | Decisiones de la Fase 3 (prefijo `M-`). `M-1` es un **supuesto**, no un hecho |
+| [docs/fase-3-policyrail-mandato/BITACORA.md](docs/fase-3-policyrail-mandato/BITACORA.md) | **T16–T19 cerrados.** Estado actual y qué sigue |
+| [docs/fase-3-policyrail-mandato/DECISIONES.md](docs/fase-3-policyrail-mandato/DECISIONES.md) | Decisiones de la Fase 3 (prefijo `M-`). `M-1` quedó **superada** en T19; `M-11` y `M-12` la reemplazan |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Devin: qué se hizo, en qué branch, qué queda pendiente |
 | [README.md](README.md) | Cómo correr el proyecto |
 

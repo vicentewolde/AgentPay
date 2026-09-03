@@ -122,3 +122,52 @@ export {
 } from "./intent/sign.js";
 
 export { interpretPurchase, type PurchaseInterpretation } from "./interpret.js";
+
+// T17 and T18 left these unexported: nothing outside the package needed them
+// yet. PolicyRail changes that — `LocalPolicyRailDeps` names a `SpendLedger`,
+// so a consumer that cannot see the type cannot build a rail at all.
+export {
+  checkMandate,
+  mandateCheckError,
+  type MandateAllowed,
+  type MandateDecision,
+  type MandateDenied,
+  type MandateRejectionCode,
+} from "./mandate/check-mandate.js";
+
+export {
+  checkDailyLimit,
+  dailyLimitError,
+  type DailyLimitAllowed,
+  type DailyLimitDecision,
+  type DailyLimitDenied,
+  type DailyLimitRejectionCode,
+} from "./ledger/check-daily-limit.js";
+
+export {
+  createInMemorySpendLedger,
+  utcDayKey,
+  type SpendLedger,
+  type SpendLedgerEntry,
+} from "./ledger/spend-ledger.js";
+
+export {
+  createLocalPolicyRail,
+  policyRailError,
+  type AuthorisationDecision,
+  type AuthorisationGranted,
+  type AuthorisationRefused,
+  type AuthorisationRejectionCode,
+  type AuthorisationRequest,
+  type LocalPolicyRailDeps,
+  type PolicyRail,
+} from "./policy/policy-rail.js";
+
+export {
+  reconcileTerms,
+  termsError,
+  type PaymentTerms,
+  type TermsDecision,
+  type TermsDenied,
+  type TermsRejectionCode,
+} from "./policy/terms.js";

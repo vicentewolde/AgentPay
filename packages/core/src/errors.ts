@@ -99,7 +99,13 @@ export type AgentPassErrorCode =
   /** Today's running total plus this purchase would exceed `scope.limits.perDay`. */
   | "ScopeDailyLimitExceeded"
   /** Today's running total plus this purchase would exceed `grant.limits.perDay`. */
-  | "MandateDailyLimitExceeded";
+  | "MandateDailyLimitExceeded"
+  /** The venue is asking to be paid for a different venue than the intent names. */
+  | "TermsVenueMismatch"
+  /** The venue is asking to be paid in a different asset than the intent names. */
+  | "TermsAssetMismatch"
+  /** The venue is asking for a different amount than the intent's total. */
+  | "TermsAmountMismatch";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

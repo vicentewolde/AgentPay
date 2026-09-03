@@ -13,28 +13,44 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T18 · **Siguiente:** T19
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T19 · **Siguiente:** T20
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
-concreta (T17), y ahora también hay memoria de cuánto se gastó hoy, con una
-función que hace cumplir el límite diario contra esa memoria (T18). Falta el
-lugar donde todo esto se compone y se aplica de verdad (T19–T21).
+concreta (T17), hay memoria de cuánto se gastó hoy (T18), y ahora existe **el
+lugar donde todo eso se aplica junto y no se puede aplicar a medias** (T19).
+Falta anclarlo en cadena (T20) y cablearlo en el agente (T21).
 
 | | |
 |---|---|
-| Tests TypeScript | **482** rápidos (core 74 · mandate 27 · sdk 16 · cli 29 · **agent 304** · scripts 32) |
+| Tests TypeScript | **520** rápidos (core 74 · mandate 27 · sdk 16 · cli 29 · **agent 342** · scripts 32) |
 | Tests de integración | 3 contra testnet real (sin cambios) |
 | Tests Rust | 22 en verde (sin cambios — el contrato no se tocó, `M-3`) |
 | Paquete nuevo | `@agentpay/mandate` |
-| Bloqueado por el embajador | T15 (Fase 2). En esta fase, solo T22 — y por un supuesto explícito, `M-1` |
+| Bloqueado por el embajador | **Nada.** Ver abajo |
+
+**Lo que cambió en T19, y es lo más importante de esta fase.** Se leyó el repo
+real del bazaar del embajador, que ya es público
+([`CaBsCrypto/stellar-bazaar-x402`](https://github.com/CaBsCrypto/stellar-bazaar-x402),
+Apache-2.0). De las diez preguntas que estaban bloqueando cosas, **el repo
+responde ocho y reformula una**; la única que queda abierta dejó de ser una
+pregunta para el embajador (`M-11`, `M-12`). En concreto:
+
+- **T15 deja de estar bloqueado.** No hay contrato de compra que integrar: el
+  catálogo es una API pública (MCP/REST) sin credenciales.
+- **T19 no necesita permiso de nadie.** El propio protocolo del bazaar define
+  un paso `buyer policy authorization` que es del comprador — que es
+  exactamente esta pieza (`M-11`).
+- **`M-1` quedó `Superada`.** No por falsa: la pregunta que asumía dejó de
+  existir. La pregunta 6 se le corrió al SDK de x402 y al facilitator, y es
+  verificable leyendo código público (`M-12`).
 
 `sdk` pasó de 11 a 16 tests entre T16 y T17: no es trabajo de esta fase, es el
 [PR #1](https://github.com/vicentewolde/AgentPay/pull/1) de Devin (tests
 unitarios de `guards.ts`), coordinado y revisado según `P-2` en
 `docs/DECISIONES.md`. Cada hito desde T17 se trabaja en su propia rama
 (`cc/t17-check-mandate`, `cc/t18-spend-ledger`), siguiendo esa misma
-convención.
+convención — T19 en `cc/t19-policy-rail`.
 
 ### Progreso
 
@@ -43,10 +59,10 @@ convención.
 | T16 | La forma firmada del Mandato | ✅ cerrado |
 | T17 | Comparar un mandato contra una compra concreta | ✅ cerrado |
 | T18 | La memoria de gastos, y el límite diario | ✅ cerrado |
-| T19 | PolicyRail: dónde se autoriza o se bloquea | ⏳ siguiente |
-| T20 | Anclar y revocar un mandato en cadena | ⏳ |
+| T19 | PolicyRail: dónde se autoriza o se bloquea | ✅ cerrado |
+| T20 | Anclar y revocar un mandato en cadena | ⏳ siguiente |
 | T21 | Cablearlo en el agente | ⏳ |
-| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 depende del supuesto `M-1` |
+| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 depende de un spike, `M-12` |
 | T23 | Demo de la fase completa | ⏳ |
 
 ---
@@ -266,3 +282,61 @@ dejado sin reintento posible a una compra rechazada por un dato malformado.
 enforcement real ni cómo se compone con `checkScope()`/`checkMandate()` (T19),
 ni cablear nada al agente (T21), ni resolver la atomicidad entre consultar y
 registrar (`M-10`, diferido a T19).
+
+---
+
+## T19 · PolicyRail: dónde se autoriza o se bloquea — cerrado 2026-09-03
+
+**Qué quedó funcionando, en lenguaje llano.** Hasta ahora el proyecto tenía
+cuatro chequeos sueltos: uno miraba lo que el emisor firmó, otro lo que el
+principal consintió, otro cuánto se gastó hoy. Cada uno contestaba bien su
+pregunta, y **ninguno obligaba a nada**: un chequeo que nadie está obligado a
+llamar es una sugerencia, no un límite. T19 es la pieza que sí obliga — un
+único punto por donde toda compra tiene que pasar, que llama a los cuatro, en
+orden, y que un llamador no puede cumplir a medias.
+
+Y agrega un chequeo que no existía y que resultó ser el que faltaba: **¿el
+comercio está pidiendo cobrar por la compra que se firmó?** Antes se
+verificaba que la compra estuviera dentro de los límites, pero nada comparaba
+eso contra lo que el comercio efectivamente pide cobrar. Un comercio que pide
+40 por algo firmado en 37 pasaba todos los límites —40 está dentro de todo— y
+ahora se rechaza, porque no es la compra que el principal autorizó.
+
+Tres cosas más que ahora son ciertas y antes no:
+
+1. **Lo gastado se anota al autorizar, no al pagar.** Si algo sale mal, el
+   agente gasta de menos, nunca de más. Es la regla de "ante la duda, se
+   rechaza" aplicada al tiempo.
+2. **Dos compras al mismo tiempo ya no se cuelan las dos.** Antes, dos
+   autorizaciones simultáneas podían leer el mismo saldo viejo y aprobarse las
+   dos. Ahora hacen fila. Es el agujero que `M-10` había dejado anotado
+   explícitamente para este hito.
+3. **El agente no puede resetear su propio presupuesto.** El día contra el que
+   se cuenta lo decide el reloj de PolicyRail, no la fecha que el agente
+   escribe en su propio documento firmado. Un agente comprometido que fecha su
+   compra "ayer" para caer en un balde vacío ya no consigue nada.
+
+**Lo que este hito descubrió y no construyó, dicho en voz alta.** El campo más
+sensible de un cobro —**la cuenta que recibe la plata**— no se chequea contra
+nada, porque hoy no existe nada firmado contra qué compararlo: ni la credencial
+ni el mandato llevan una lista de destinatarios permitidos. Compararlo contra
+un valor que el mismo catálogo entregó daría la apariencia de una verificación
+sin la verificación. Queda anotado en `M-14` como el próximo campo que le falta
+al Mandato, no como deuda silenciosa.
+
+**Evidencia técnica.** [evidencia/T19.md](evidencia/T19.md) — el recorrido
+completo con salidas crudas, incluyendo seis autorizaciones concurrentes contra
+un presupuesto que alcanza para dos (pasan exactamente dos) y el intent
+fechado ayer que no consigue resetear nada. 38 tests nuevos, 13 mutaciones
+deliberadas y las trece cayeron. Dos de esas mutaciones cambiaron el código en
+vez de solo confirmarlo: una encontró un bug real —el rail reconciliaba contra
+un número y cobraba el presupuesto con otro— y la otra encontró un test que
+faltaba.
+
+**Decisiones nuevas:** `M-11` a `M-16`, y `M-1` pasó a `Superada`. La lectura
+del repo real del bazaar está en `M-11` y `M-12`; el diseño del rail en `M-13`
+a `M-16`.
+
+**Fuera de alcance, a propósito:** liberar una reserva cuando una compra falla
+(no existe todavía nada que pueda avisar que falló — ese aviso es el recibo de
+settlement, que es de la Fase 4) y cablear el rail dentro del agente (T21).
