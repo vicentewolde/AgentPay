@@ -13,16 +13,18 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T13 · **Siguiente:** T14
+**Fecha:** 2026-09-02 · **Último hito cerrado:** T14 · **Siguiente:** T15 (bloqueado por el embajador)
 
-El circuito está completo: el agente lee el catálogo, verifica quién es,
-comprueba si su credencial lo autoriza y produce una intención de compra
-firmada y trazable. Falta empaquetarlo como demo de un comando (T14) y
-enchufar el bazaar real (T15, bloqueado por el embajador).
+`pnpm demo` corre de punta a punta contra Stellar testnet real, en 12
+segundos: emite una credencial, entiende una instrucción en español, firma una
+intención de compra, revoca desde afuera y el mismo agente, en el mismo
+proceso, ve rechazado el reintento. T9–T14 están cerrados. Lo único que falta
+de la fase es T15 — el bazaar real — y depende de las respuestas del
+embajador, no de nada que este repo pueda resolver por su cuenta.
 
 | | |
 |---|---|
-| Tests TypeScript | **357** rápidos (core 60 · sdk 11 · **agent 232** · cli 29 · scripts 25) |
+| Tests TypeScript | **384** rápidos (core 60 · sdk 11 · **agent 252** · cli 29 · **scripts 32**) |
 | Tests de integración | 3 contra testnet real (sin cambios desde la Fase 1) |
 | Tests Rust | 22 en verde (sin cambios) |
 | Adaptador de catálogo | `MockCatalogAdapter`, 12 productos |
@@ -37,8 +39,76 @@ enchufar el bazaar real (T15, bloqueado por el embajador).
 | T11 | El agente verifica su propia credencial al arrancar | ✅ cerrado |
 | T12 | Chequeo de alcance antes de emitir una intención | ✅ cerrado |
 | T13 | La intención de compra firmada | ✅ cerrado |
-| T14 | Demo completa en un comando | ⏳ siguiente |
+| T14 | Demo completa en un comando | ✅ cerrado |
 | T15 | El catálogo real del bazaar | 🚧 bloqueado por el embajador |
+
+---
+
+## T14 · Demo end-to-end en un comando — cerrado 2026-09-02
+
+**Qué quedó funcionando.** `pnpm demo` es el recorrido completo de la fase,
+sin pasos manuales: emite una credencial real y anclada, le da al agente una
+instrucción en español, obtiene una intención de compra firmada, revoca la
+credencial desde afuera del agente, y el mismo agente —en el mismo proceso,
+sin reiniciarse— ve rechazado el reintento de la misma compra. Doce segundos
+de pared. El criterio de aceptación pedía menos de noventa.
+
+**No es una simulación de ninguna parte del proceso.** La credencial se
+firma y se ancla en testnet de verdad; la revocación es una transacción real,
+con su propio hash. Es lo mismo que ya probó la Fase 1 en su test de
+integración contra la red viva — acá corre dentro de la demo, no aparte.
+
+**La instrucción en español no la interpreta un modelo de lenguaje.** Se
+decidió a propósito: un comparador de palabras contra el catálogo, sin llamada
+a ninguna API externa. Tres motivos, registrados en `B-21`: la demo tiene que
+ser reproducible para grabarse (la misma frase, siempre el mismo producto);
+no puede depender de una llave de API de terceros solo para correr; y sobre
+todo, no es ahí donde vive la seguridad. El intérprete únicamente puede
+producir qué producto y cuántas unidades — nunca un comercio, un activo o un
+monto. Una mala lectura elige mal el producto; no puede otorgarle al agente
+autoridad que su credencial no tenga. Hay un test que lo prueba con una
+instrucción que lleva una inyección adentro.
+
+**El orden del script también es una decisión, encontrada al construirlo.**
+La primera versión emitía la credencial primero y recién después interpretaba
+la instrucción. Una instrucción que no matcheaba nada del catálogo fallaba
+**después** de haber gastado una transacción real y dejaba una credencial
+activa, huérfana, anclada para siempre en el registro. Se invirtió el orden:
+la instrucción se lee primero, sin tocar la red, así que un pedido sin sentido
+falla en una fracción de segundo y no deja rastro en la cadena.
+
+**El ejemplo de scope que T9 había dejado pendiente ya está, y se usa de
+verdad.** `examples/scope.json` autoriza cero compras a propósito
+(`B-1`); hacía falta un segundo ejemplo con comercio y activo explícitos para
+que la demo pudiera producir un intent. `examples/scope-bazaar.json` es ese
+archivo, y `demo.ts` lo lee y valida con el mismo esquema que usa `agentpass
+issue --scope` desde la Fase 1 — no un camino nuevo, el mismo.
+
+**El seam para el bazaar real ya está tendido.** `pnpm demo --adapter=bazaar`
+falla hoy con un error que nombra T15, sin tocar la red — es el criterio de
+aceptación de la fase completa, ya cumplido en su primera mitad: `pnpm demo`
+corre con el mock; cuando lleguen las respuestas del embajador, activar el
+bazaar real es implementar esa rama, no tocar T9–T14.
+
+**Mutation testing, cuarta vez que una mutación mal escrita enseña más que
+una bien escrita.** Cinco protecciones rotas sobre la lógica nueva —el
+intérprete y el parser de argumentos del comando—; cuatro cayeron. La quinta,
+que dejaba pasar una cantidad de cero, no rompió nada: nadie había escrito
+qué debía pasar con "compra 0 mates". El código ya lo manejaba bien
+—ignorarlo y usar el valor por defecto—, pero nada lo afirmaba. Se agregó el
+test que lo fija, y con él la mutación cae.
+
+**Lo que queda deliberadamente sin resolver.** `check_my_credential` sigue
+reportando el estado que vio al arrancar (`B-10`, T11); si se lo llamara
+inmediatamente después de revocar a mitad de sesión, diría "activa" un
+instante antes de que `create_purchase_intent` lo rechace de verdad. No es un
+agujero de seguridad —lo único que autoriza una compra es el chequeo de
+`B-17`, y ese sí es correcto en todo momento—, pero es una inconsistencia
+real entre lo que el agente *dice* y lo que puede *hacer*, y por eso la demo
+no vuelve a llamar a `check_my_credential` después de revocar. Queda anotado
+en `B-23` en vez de resuelto en silencio.
+
+📎 [evidencia/T14.md](evidencia/T14.md) · [apps/agent/README.md](../../apps/agent/README.md) · [DECISIONES.md](DECISIONES.md) (B-21 … B-23)
 
 ---
 

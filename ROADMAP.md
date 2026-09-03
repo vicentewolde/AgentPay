@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-02 · Fase actual: **Fase 2 en curso — T13 cerrado, T14 siguiente**
+Última revisión: 2026-09-02 · Fase actual: **Fase 2 — T9–T14 completos, T15 bloqueado por el embajador**
 
 ---
 
@@ -89,7 +89,7 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 |---|---|---|---|---|
 | 0 | Fundamentos | Que hay una tesis técnica y una ventana regulatoria reales, no solo entusiasmo | ✅ Completa (pre-código) | — |
 | 1 | **AgentPass** | Identidad verificable del agente, revocable desde afuera | ✅ Completa (T1–T8) | — |
-| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 En curso — T9–T13 cerrados | Respuestas del embajador, **solo para T15** (preguntas ya redactadas, ver Fase 2) |
+| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 T9–T14 completos, T15 pendiente | Respuestas del embajador, **solo para T15** (preguntas ya redactadas, ver Fase 2) |
 | 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | ⏳ Sin diseñar en detalle | Cierre de Fase 2 (define qué necesita autorizar el mandato en la práctica) |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ⏳ Sin diseñar | Timeline de integración del embajador; es el hito de mayor riesgo del proyecto |
 | 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | ⏳ Sin diseñar | Fases 2–4 cerradas |
@@ -212,19 +212,22 @@ configuración cuando lleguen las respuestas.
 **Desglose de tareas** (numeración continúa la secuencia de `docs/fase-1-agentpass/BITACORA.md`
 — T9 en adelante, no reinicia por fase):
 
-| Hito | Qué construye | Bloqueado por el embajador |
+| Hito | Qué construye | Estado |
 |---|---|---|
-| T9 | `CatalogAdapter`: interfaz + `MockCatalogAdapter` con ~12 productos | No |
-| T10 | Cuatro herramientas del agente: `list_products`, `get_product`, `check_my_credential`, `create_purchase_intent` — ninguna más | No |
-| T11 | Verificación de la propia credencial al arrancar; sin `create_purchase_intent` en la lista de herramientas si está revocada o expirada | No |
-| T12 | Chequeo de `scope` antes de emitir: venue permitido, asset permitido, monto bajo `perTx`. Rechazo estructurado, no un intento silencioso | No — pero necesita la decisión pendiente de §4.1 sobre `venues`/`assets` vacíos |
-| T13 | `PurchaseIntent` firmado (JWS del agente, referencia al hash de su credencial) — su forma debería sobrevivir sin cambios hasta convertirse en el Mandato de la Fase 3 | No |
-| T14 | Demo end-to-end de un comando, grabable en menos de 90 segundos: emitir credencial → instrucción en español → intent firmado → revocar → reintento rechazado | No |
-| T15 | `BazaarSorobanAdapter`: la implementación real, contra el bazaar en testnet | **Sí** |
+| T9 | `CatalogAdapter`: interfaz + `MockCatalogAdapter` con ~12 productos | ✅ |
+| T10 | Cuatro herramientas del agente: `list_products`, `get_product`, `check_my_credential`, `create_purchase_intent` — ninguna más | ✅ |
+| T11 | Verificación de la propia credencial al arrancar; sin `create_purchase_intent` en la lista de herramientas si está revocada o expirada | ✅ |
+| T12 | Chequeo de `scope` antes de emitir: venue permitido, asset permitido, monto bajo `perTx`. Rechazo estructurado, no un intento silencioso | ✅ |
+| T13 | `PurchaseIntent` firmado (JWS del agente, referencia al hash de su credencial) — su forma debería sobrevivir sin cambios hasta convertirse en el Mandato de la Fase 3 | ✅ |
+| T14 | Demo end-to-end de un comando, grabable en menos de 90 segundos: emitir credencial → instrucción en español → intent firmado → revocar → reintento rechazado | ✅ — `pnpm demo`, ~12 s contra testnet real |
+| T15 | `BazaarSorobanAdapter`: la implementación real, contra el bazaar en testnet | 🚧 bloqueado por el embajador |
 
 **Criterio de aceptación de la fase:** `pnpm demo` corre con el mock; cuando
 lleguen las respuestas del embajador, `pnpm demo --adapter=bazaar` produce un intent
 con productos reales del bazaar, sin haber tenido que tocar T9–T14.
+**Primera mitad cumplida el 2026-09-02**: `pnpm demo` corre contra testnet real
+en ~12 segundos; `pnpm demo --adapter=bazaar` ya existe como seam y falla con
+un `NotImplemented` que nombra T15, sin tocar la red.
 
 **Riesgo técnico específico de esta fase, además de el embajador:** el chequeo de
 scope (T12) es el primer punto del proyecto donde el texto de un producto del

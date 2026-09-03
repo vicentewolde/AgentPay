@@ -9,6 +9,7 @@
   "scripts": {
     "bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
     "deploy:registry": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-registry.ts",
+    "demo": "tsx --tsconfig tsconfig.scripts.json scripts/demo.ts",
     "build": "tsc -b",
     "test": "pnpm -r --stream test && vitest run",
     "test:integration": "pnpm --filter @agentpass/sdk run test:integration",

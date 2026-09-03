@@ -71,7 +71,9 @@ export type AgentPassErrorCode =
   /** `now` is before the intent's `issuedAt`. */
   | "IntentNotYetValid"
   /** The signing key is not the one the document's subject identifies. */
-  | "SignerMismatch";
+  | "SignerMismatch"
+  /** A natural-language purchase instruction matched no catalogue product. */
+  | "InstructionNotUnderstood";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

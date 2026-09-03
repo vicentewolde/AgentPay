@@ -486,3 +486,77 @@ límite".
 **Alternativa descartada:** sin expiración, delegando la frescura en la
 revocación de la credencial. Es insuficiente — la credencial dura meses, y un
 intent no debería sobrevivir a la conversación que lo originó.
+
+### B-21 · La instrucción en español la lee un comparador determinístico, no un LLM · `Vigente`
+**Fecha:** 2026-09-02 (T14)
+
+`interpretPurchase(instruccion, catalogo)` compara palabras contra el nombre de
+cada producto y elige el de mayor coincidencia; no hay llamada a un modelo de
+lenguaje en ningún punto de la demo.
+
+**Motivo.** Tres razones concretas:
+
+1. **Reproducibilidad.** La demo tiene que poder grabarse y repetirse: la misma
+   frase debe producir siempre el mismo resultado. Una llamada a un LLM no lo
+   garantiza — ni siquiera con temperatura cero hay esa garantía dura.
+2. **Sin dependencia externa para correr.** `pnpm demo` funciona con lo que ya
+   hay en `.env.local`. Exigir una llave de API de terceros solo para grabar el
+   video del hito agrega una dependencia y un costo que el criterio de
+   aceptación no pide.
+3. **No es la superficie de seguridad.** Es la continuación directa de `B-13`:
+   el intérprete solo puede producir un `productId` y una `quantity`, nunca un
+   venue, un activo o un monto — esos siguen viniendo del catálogo y de la
+   credencial. Una mala lectura de la instrucción elige mal el producto; no
+   puede otorgar autoridad que `checkScope` no vaya a verificar igual. Hay un
+   test que fija esta propiedad con una instrucción que lleva una inyección.
+
+**Alternativa descartada:** enchufar una llamada real a Claude con las cuatro
+herramientas como tool use. Es la versión "completa" del producto, y queda
+fuera de foco para lo que T14 tiene que demostrar — que el circuito
+identidad→scope→intent→revocación funciona de punta a punta. Añadir un LLM en
+el medio mezclaría dos preguntas distintas (¿la autorización se puede cortar
+desde afuera? ¿qué tan bien entiende lenguaje natural un modelo?) en una sola
+demo, y complicaría la primera con la segunda sin necesidad.
+
+### B-22 · La instrucción se interpreta antes de tocar la red, no después · `Vigente`
+**Fecha:** 2026-09-02 (T14)
+
+`demo.ts` interpreta la instrucción en español como su primer paso, sin haber
+llamado todavía a `createAgentPass` ni emitido ninguna credencial.
+
+**Motivo.** Descubierto al construir el script: la primera versión emitía la
+credencial primero. Una instrucción sin match en el catálogo fallaba recién
+después de una transacción real de anclaje, dejando una credencial activa y
+huérfana en el registro — gasto de una operación en cadena para un error que
+no necesitaba tocar la red para detectarse. Coincide además con la disciplina
+que ya sigue el CLI (T8): validar argumentos y datos locales antes de tocar la
+cadena, siempre.
+
+**Alternativa descartada:** dejar el orden original y aceptar la credencial
+huérfana como costo del error. Es testnet, así que el costo real es cero, pero
+es una molestia evitable y contradice la disciplina "falla rápido y offline"
+que el propio comentario del archivo ya prometía.
+
+### B-23 · `check_my_credential` no se reconsulta tras revocar; la demo no vuelve a llamarla · `Vigente`
+**Fecha:** 2026-09-02 (T14)
+
+Después de revocar, la demo **no** vuelve a invocar `check_my_credential`. Si
+lo hiciera, reportaría "active" — el estado que vio al arrancar (`B-10`), sin
+recheck contra el registro — un instante antes de que `create_purchase_intent`
+rechace la compra de verdad por `CredentialRevoked` (`B-17`).
+
+**Motivo.** No es un agujero de seguridad: `check_my_credential` no autoriza
+nada, solo informa, y el único punto que decide si una compra procede
+—`B-17`— sí reconsulta en cada intento. Pero es una inconsistencia real entre
+lo que el agente puede *decir* de sí mismo y lo que puede *hacer*, y mostrarla
+sin comentario en una demo grabada leería como un bug. Se deja anotada en vez
+de resuelta: convertir `check_my_credential` en una consulta en vivo extendería
+`B-10`/`B-11` de la Fase T11 fuera del alcance que T14 pidió, sobre una
+decisión que otro hito ya cerró con su propio motivo.
+
+**Alternativa descartada:** hacer que `check_my_credential` reconsulte el
+registro en cada llamada, igual que `B-17` lo hace antes de firmar. Es la
+solución más honesta a largo plazo, y probablemente la correcta — pero es un
+cambio de comportamiento sobre una decisión de un hito cerrado (T11), no algo
+que corresponda decidir en silencio mientras se arma una demo. Queda como
+candidato explícito para revisar, no como pendiente perdido.

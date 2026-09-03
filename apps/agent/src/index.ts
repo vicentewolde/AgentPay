@@ -120,3 +120,5 @@ export {
   type VerifiedIntent,
   type VerifyIntentOptions,
 } from "./intent/sign.js";
+
+export { interpretPurchase, type PurchaseInterpretation } from "./interpret.js";

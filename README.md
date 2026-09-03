@@ -202,3 +202,11 @@ Out of scope for this phase, deliberately: enforcing `scope.limits` (signed and
 transported, not yet enforced by anything), PolicyRail, Mandato, MandateGate,
 MandateVault, any web UI, mainnet, and fiat rails. See
 [docs/fase-1-agentpass/CONTEXTO.md](docs/fase-1-agentpass/CONTEXTO.md).
+
+This file documents phase 1 (AgentPass) specifically — see
+[ROADMAP.md](ROADMAP.md) for where the project stands as a whole.
+[`apps/agent`](apps/agent/README.md) is phase 2, the minimal purchasing agent
+built on top of AgentPass; from the repo root, after `bootstrap` and
+`deploy:registry`, `pnpm demo` runs its full walkthrough — issue a credential,
+a Spanish purchase instruction, a signed intent, a real revocation, a rejected
+retry — against live testnet in about twelve seconds.

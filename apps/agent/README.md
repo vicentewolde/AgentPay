@@ -6,8 +6,10 @@ rather than extending it: identity, signing and revocation stay in
 
 What is built so far: **T9**, the catalogue boundary; **T10**, the tool surface;
 **T11**, the startup credential check that decides what is in it; **T12**, the
-scope check that decides what it may buy; and **T13**, the signed purchase
-intent it produces.
+scope check that decides what it may buy; **T13**, the signed purchase intent
+it produces; and **T14**, the one-command demo — `pnpm demo` from the repo
+root — that runs the whole thing against real Stellar testnet in about twelve
+seconds.
 
 ## The catalogue
 
@@ -211,6 +213,16 @@ So it cannot issue a credential, cannot revoke one, and cannot register an
 issuer: those functions are not reachable, rather than merely not called.
 `AgentPass` satisfies the port structurally, checked at compile time.
 
+## Reading a Spanish instruction
+
+`interpretPurchase(instruction, products)` turns a sentence like *"Comprame un
+mate de calabaza curado"* into a `productId` and a `quantity` by comparing
+words against each product's name — deterministically, not via an LLM call
+(B-21). It returns nothing else: no venue, no asset, no amount override. A
+misread instruction can pick the wrong product; it cannot grant authority the
+scope check would otherwise refuse, and a test proves that with an instruction
+carrying a prompt injection.
+
 ## Commands
 
 ```bash
@@ -230,8 +242,8 @@ Every failure is an `AgentPassError` with a `code`, from the same union in
 `InvalidVenueId`, `InvalidAssetId`, `InvalidProduct`, `ProductNotFound`,
 `UnknownTool`, `InvalidToolInput`, `InvalidAmount`, `ScopeActionNotAllowed`,
 `ScopeVenueNotAllowed`, `ScopeAssetNotAllowed`, `ScopeCurrencyMismatch` and
-`ScopeAmountExceeded`, `InvalidIntent`, `IntentExpired`, `IntentNotYetValid`
-and `SignerMismatch`.
+`ScopeAmountExceeded`, `InvalidIntent`, `IntentExpired`, `IntentNotYetValid`,
+`SignerMismatch` and `InstructionNotUnderstood`.
 
 ## Documentation
 
