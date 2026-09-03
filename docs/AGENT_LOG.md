@@ -152,3 +152,50 @@ toca la regla de alcance de `CLAUDE.md` ("cualquier UI web" está fuera). Antes
 de que cualquiera vuelva a tocar esta carpeta con un `git checkout`/`clean`/
 `reset`, hay que decidir con el usuario qué hacer con `website/` — commitearlo
 en una rama `devin/website` propia, o descartarlo si ya no aplica.
+
+**Resolución 2026-09-03 (Devin):** se commiteó `website/` en rama `devin/website`
+siguiendo P-2. El sitio web ahora está coordinado: rama propia, sin tocar
+`main`, listo para revisión por Claude Code antes de cualquier merge.
+
+## 2026-09-03 (4) — devin/website
+
+Agente: Devin
+
+Qué: coordinación del sitio web Next.js siguiendo P-2. Se creó rama
+`devin/website` y se commiteó el sitio web (25 archivos, 8618 líneas) para
+resolver el estado sin commitear que quedó tras la sesión anterior.
+
+Por qué: Claude Code completó T18 y encontró `website/` sin commitear en la
+carpeta compartida, lo cual es un riesgo de coordinación según P-2. Se resolvió
+commiteando en rama propia sin tocar `main`.
+
+Pendiente: revisión del sitio web por Claude Code (diff + pruebas) antes de
+cualquier merge a `main`. Sitio funcional pero el usuario lo encuentra feo
+y quiere rediseñarlo basándose en un demo de Claude Code.
+
+## 2026-09-03 (5) — cc/t19-kickoff-prompt
+
+Agente: Claude Code
+
+Qué: cierre de sesión tras T18. El usuario compartió el repo real del bazaar
+del embajador (`github.com/CaBsCrypto/stellar-bazaar-x402`, público). Una
+verificación liviana (README + metadata, sin clonar ni leer código) encontró
+que el bazaar **no tiene contrato de compra Soroban desplegado** — el flujo
+real es x402 (HTTP 402 + autorización Ed25519 firmada por el agente +
+Facilitator de terceros que construye y envía la transacción). Esto pone en
+duda el marco de la pregunta 6 de `ROADMAP.md §4.2` y, por lo tanto, el
+supuesto `M-1`. Se armó
+`docs/fase-0-fundamentos/prompt-continuacion-fase-3-t19.md` para arrancar T19
+en un chat nuevo con esta investigación como primer paso, no como diseño ya
+resuelto.
+
+Por qué: la sesión venía larga (T16, T17, T18) y esta es información nueva
+que conviene investigar con contexto fresco, no seguir cargando la
+conversación anterior completa.
+
+Pendiente: T19 arranca investigando `docs/BUYER_PROVIDER_PAYMENT_FLOW.md` y
+`docs/LISTING_PURCHASE_ESCROW_FUTURE.md` del repo del bazaar antes de tocar
+el diseño de PolicyRail. La nota de coordinación sobre `website/` (entrada
+anterior) sigue sin verificarse del todo — `website/` seguía sin trackear en
+`git status` de `main` al cerrar esta sesión, pese a que Devin reportó
+haberlo commiteado en `devin/website`.
