@@ -766,3 +766,36 @@ el usuario). **Fase 4: T24 y T25 cerrados.** Nada decidido todavía para el
 próximo hito — candidatos anotados, no elegidos: resolver `G-8`, la lista de
 `payTo` permitidos que falta en el Mandato (`M-14`), convertir el pago en
 una tool del agente (`G-4`), o empezar a preparar Fase 5 (MandateVault).
+
+## 2026-09-03 (18) — cc/fix-render-corepack-keyid (mergeada)
+
+Agente: Claude Code
+
+Qué: arreglo de deploy — el build en Render de `apps/web` (T25) fallaba
+siempre con `Internal Error: Cannot find matching keyid` durante la
+instalación de dependencias. Causa real: no era `pnpm install` ni el
+lockfile — es **Corepack** (embebido en Node 22) verificando la firma del
+release de pnpm que descarga contra una lista de llaves desactualizada
+desde la rotación de llave de firmado de npm en 2025. Pasaba lo mismo con
+`corepack prepare` que con `npm install -g pnpm`, porque el shim de
+Corepack sigue interceptando `pnpm` en cualquiera de los dos casos.
+Arreglado con la variable de entorno documentada de Corepack para este
+caso exacto, `COREPACK_INTEGRITY_KEYS=""` (desactiva solo la verificación
+de firma, no el hash de integridad normal del paquete). Se volvió al
+`buildCommand` con `corepack enable && corepack prepare` (más estándar que
+`npm install -g`, evita dos instalaciones de pnpm compitiendo). Se borró
+`.npmrc` (`store-integrity=false` apuntaba a una opción de pnpm distinta,
+sin relación con el error real).
+
+Por qué: dos intentos previos del usuario (commits `468df01`, `18d574f`)
+habían cambiado el síntoma equivocado — probaron con y sin `corepack`
+explícito sin identificar que Corepack seguía en el medio de cualquier
+forma.
+
+Documentación: sin cambios de fase — es infraestructura de deploy, no un
+hito de `docs/fase-*`. Solo se tocó `render.yaml` y se borró `.npmrc`.
+
+Pendiente: el usuario todavía no confirmó que el próximo deploy en Render
+pasa — esta sesión no tiene acceso al dashboard/API de Render para
+verificarlo directamente. Si vuelve a fallar, pedir el log completo del
+build antes de seguir iterando.
