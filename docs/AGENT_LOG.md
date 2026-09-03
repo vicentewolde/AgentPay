@@ -108,3 +108,47 @@ Pendiente: T18, la memoria de gastos para `perDay`. Verificar en la próxima
 tarea real de Devin que el checklist nuevo de `CLAUDE.md` no le agrega fricción
 innecesaria — está pensado para sesiones de Claude Code, Devin sigue
 gobernado por `P-2` directamente.
+
+## 2026-09-03 — website/ (carpeta separada)
+
+Agente: Devin
+
+Qué: sitio web oficial del proyecto en Next.js (carpeta `website/` separada del
+código principal), con generación automática de contenido desde `docs/fase-*/evidencia/`.
+
+Por qué: el usuario solicitó un sitio web para publicar demos visuales en lugar
+de artefactos de Claude Code. Se decidió hacerlo como tarea complementaria de
+Devin que no interfiera con el código principal Stellar/AgentPay.
+
+Pendiente: decidir despliegue (Vercel, Netlify, GitHub Pages) y dominio. El sitio
+está listo para desplegar, build funciona correctamente, y se integra
+automáticamente con la documentación del proyecto vía el script
+`generate:evidence`.
+
+## 2026-09-03 (3) — cc/t18-spend-ledger
+
+Agente: Claude Code
+
+Qué: T18 de la Fase 3 — `SpendLedger` (puerto + implementación en memoria) y
+`checkDailyLimit()`, la función pura que cierra el hueco que `B-16` dejó
+explícito para `scope.limits.perDay` y que T17 dejó anotado para
+`grant.limits.perDay`. 22 tests nuevos, 7 mutaciones, las siete cayeron.
+
+Por qué: seguía en el desglose de T16/T17 — la memoria de gastos es lo último
+que no depende de la pregunta 6 del embajador antes de T19 (PolicyRail).
+
+Pendiente: mergear `cc/t18-spend-ledger` a `main` y pushear. Siguiente hito:
+T19, componer `checkScope` + `checkMandate` + `checkDailyLimit` en un solo
+punto de autorización.
+
+**Nota de coordinación, importante para la próxima sesión de cualquiera de
+los dos agentes:** al empezar este hito, `website/` (el sitio Next.js de
+Devin, ver la entrada anterior) y la entrada de `AGENT_LOG.md` que lo describe
+estaban **sin commitear** en la carpeta compartida — ni en `main` ni en una
+rama `devin/*`. Se preservó la entrada del log (es solo texto, se commitea acá
+junto con esta). **`website/` se dejó tal cual está en disco, sin commitear y
+sin tocar**: es demasiado código para revisar de pasada dentro de este hito, y
+toca la regla de alcance de `CLAUDE.md` ("cualquier UI web" está fuera). Antes
+de que cualquiera vuelva a tocar esta carpeta con un `git checkout`/`clean`/
+`reset`, hay que decidir con el usuario qué hacer con `website/` — commitearlo
+en una rama `devin/website` propia, o descartarlo si ya no aplica.

@@ -8,7 +8,7 @@
 > Decisiones con su motivo: [DECISIONES.md](DECISIONES.md) ·
 > Lo que la Fase 2 deja: [../fase-2-agente-compra/ARQUITECTURA.md](../fase-2-agente-compra/ARQUITECTURA.md)
 
-**Estado:** T17 cerrado. Las secciones marcadas *(pendiente)* describen el
+**Estado:** T18 cerrado. Las secciones marcadas *(pendiente)* describen el
 diseño acordado, no código que exista.
 
 ---
@@ -28,7 +28,7 @@ flowchart TB
     end
     subgraph "Fase 3, pendiente"
         check["checkMandate() — T17 ✅"]
-        ledger["SpendLedger + perDay — T18"]
+        ledger["SpendLedger + perDay — T18 ✅"]
         rail["PolicyRail.authorise() — T19"]
         anchor["anclaje y revocación — T20"]
     end
@@ -193,13 +193,44 @@ Los ocho códigos son propios de la fase, distintos de los `Scope*` de la Fase 2
 aunque `grant` y `scope` compartan forma (`M-9`): permite saber, sin ambigüedad,
 cuál de las dos autoridades rechazó una compra.
 
-## 7. `perDay` y el estado — T18 *(pendiente)*
+## 7. `perDay` y el estado — T18 ✅
 
 `B-16` dejó `scope.limits.perDay` sin aplicar y dijo por qué: un total diario
-necesita memoria de gastos pasados, que es *enforcement con estado*. Es el
-trabajo de este hito. Puerto `SpendLedger`, implementación en memoria primero,
-corte de día en UTC, idempotente por `intentId` — dos veces el mismo intent no
-puede gastar dos veces del presupuesto.
+necesita memoria de gastos pasados, que es *enforcement con estado*. T17 dejó
+la misma nota para `grant.limits.perDay` del mandato. Este hito cierra ambas.
+
+```ts
+interface SpendLedgerEntry {
+  readonly subject: string;    // opaco: T19 decide qué identidad es "el subject"
+  readonly intentId: string;    // deduplicación
+  readonly currency: string;
+  readonly amount: string;
+  readonly at: Date;
+}
+interface SpendLedger {
+  spentOn(subject: string, currency: string, at: Date): Promise<string>;
+  record(entry: SpendLedgerEntry): Promise<void>;
+}
+function checkDailyLimit(
+  perDay: string, spentToday: string, amount: string,
+  code: "ScopeDailyLimitExceeded" | "MandateDailyLimitExceeded",
+): DailyLimitDecision;
+```
+
+`createInMemorySpendLedger()` es la única implementación: `Map` anidado
+(`subject → currency → día UTC → total escalado`) más un `Set<intentId>` para
+la deduplicación. Corte de día con `utcDayKey()` — `YYYY-MM-DD` en UTC,
+siempre, sin importar el huso horario del proceso.
+
+`checkDailyLimit` es deliberadamente genérica sobre `scope.limits.perDay` y
+`grant.limits.perDay` — las dos son la misma forma (`M-4`) y la misma pregunta
+aritmética. Lo único que el llamador tiene que decidir es el código de error,
+por la misma razón que separó `Scope*` de `Mandate*` en T17 (`M-9`).
+
+**`spentOn()` y `record()` son dos pasos, no uno atómico** — la composición
+segura (consultar, decidir, recién entonces registrar) y la atomicidad entre
+esos pasos quedan para T19 (`M-10`, riesgo conocido y aceptado mientras todo
+corra en un solo proceso secuencial, como hasta ahora).
 
 ## 8. PolicyRail — T19 *(pendiente)*, y la pregunta 6
 
@@ -236,10 +267,10 @@ propio al mandato habría partido un concepto en dos.
 | `packages/mandate` | 27 | no |
 | `packages/sdk` | 16 | no / 3 sí (integración) |
 | `packages/cli` | 29 | no |
-| `apps/agent` | **282** (30 de `checkMandate`) | no |
+| `apps/agent` | **304** (30 de `checkMandate`, 22 de `ledger/`) | no |
 | `scripts/` | 32 | no |
 
-**455 tests rápidos, 0 fallando** (425 antes de T17). Los 5 tests que `sdk`
+**482 tests rápidos, 0 fallando** (455 antes de T18). Los 5 tests que `sdk`
 sumó frente a T16 no son de esta fase — ver la nota en `BITACORA.md`.
 
 Mutation testing deliberado en cada punto crítico, con las salidas en

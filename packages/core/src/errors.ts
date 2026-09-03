@@ -95,7 +95,11 @@ export type AgentPassErrorCode =
   /** An intent's `issuedAt` falls outside the mandate's validity window. */
   | "MandateWindowMismatch"
   /** The total would exceed `grant.limits.perTx`. */
-  | "MandateAmountExceeded";
+  | "MandateAmountExceeded"
+  /** Today's running total plus this purchase would exceed `scope.limits.perDay`. */
+  | "ScopeDailyLimitExceeded"
+  /** Today's running total plus this purchase would exceed `grant.limits.perDay`. */
+  | "MandateDailyLimitExceeded";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

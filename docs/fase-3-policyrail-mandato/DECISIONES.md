@@ -261,3 +261,41 @@ alternativa escondía información en el nombre del error en vez de mostrarla.
 `errors.ts`, pero movería la distinción del tipo del error a un campo de
 `details` que un llamador podría olvidar leer — el mismo motivo por el que el
 proyecto ya prefiere `code` sobre inspeccionar `message`.
+
+---
+
+### M-10 · `SpendLedger` separa consultar de registrar; la atomicidad entre las dos queda para T19 · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T18
+
+`SpendLedger` expone `spentOn()` (consulta) y `record()` (escritura) como dos
+operaciones separadas, no una sola que compare-y-registre atómicamente. Quien
+compone las dos —consultar, decidir con `checkDailyLimit()`, y solo si
+permite, registrar— es responsabilidad de quien orqueste el flujo completo:
+T19 (`PolicyRail`) y, más tarde, T21.
+
+**Motivo.** Es el mismo patrón de separación que ya rige `checkScope()` y
+`checkMandate()`: una función pura que decide, y un puerto de I/O aparte del
+que esa decisión depende, nunca los dos fundidos en una sola pieza. Fundir
+consulta y escritura en una operación atómica hoy —antes de saber si el
+enforcement real corre off-chain o on-chain (`M-1`)— fijaría una forma de
+concurrencia (una promesa que se resuelve una sola vez, en un solo proceso)
+que puede no ser la correcta para ninguno de los dos caminos: un middleware
+off-chain con más de una instancia necesita un lock o una transacción de base
+de datos; un *smart account* on-chain resuelve la atomicidad con la propia
+transacción de Soroban, gratis, sin que este código tenga que hacer nada.
+
+**Riesgo conocido y aceptado, explícitamente, hasta T19.** Dos llamadas
+concurrentes a `checkDailyLimit()` con la misma consulta desactualizada de
+`spentOn()` podrían las dos "ver" espacio para gastar y las dos aprobar, y
+juntas exceder `perDay` — un TOCTOU clásico. En esta fase, con un único
+proceso Node.js orquestando todo secuencialmente (igual que la Fase 2), el
+riesgo real es nulo; se vuelve real recién si T19 introduce paralelismo real,
+momento en el que hay que resolverlo ahí, no fingir haberlo resuelto acá.
+
+**Alternativa descartada:** un método único `tryRecord(entry, perDay):
+Promise<DailyLimitDecision>` en el propio `SpendLedger`, atómico por
+construcción. Se descartó porque mezclaría la decisión pura (`checkDailyLimit`,
+que no debería tener que conocer nada de almacenamiento) con el puerto de I/O
+dentro de la misma interfaz — exactamente la fusión que el resto del proyecto
+evita a propósito — y porque comprometería a una forma de atomicidad antes de
+que T19 decida dónde vive el enforcement real.

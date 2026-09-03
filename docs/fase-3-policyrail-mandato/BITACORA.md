@@ -13,16 +13,17 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T17 · **Siguiente:** T18
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T18 · **Siguiente:** T19
 
-El consentimiento del principal ya es un documento firmado y verificable (T16),
-y ahora también hay una función que decide si ese consentimiento cubre una
-compra concreta (T17). Falta la memoria de gastos que hace cumplir el límite
-diario (T18) y el lugar donde el enforcement corre de verdad (T19–T21).
+El consentimiento del principal ya es un documento firmado y verificable
+(T16), hay una función que decide si ese consentimiento cubre una compra
+concreta (T17), y ahora también hay memoria de cuánto se gastó hoy, con una
+función que hace cumplir el límite diario contra esa memoria (T18). Falta el
+lugar donde todo esto se compone y se aplica de verdad (T19–T21).
 
 | | |
 |---|---|
-| Tests TypeScript | **455** rápidos (core 74 · mandate 27 · sdk 16 · cli 29 · **agent 282** · scripts 32) |
+| Tests TypeScript | **482** rápidos (core 74 · mandate 27 · sdk 16 · cli 29 · **agent 304** · scripts 32) |
 | Tests de integración | 3 contra testnet real (sin cambios) |
 | Tests Rust | 22 en verde (sin cambios — el contrato no se tocó, `M-3`) |
 | Paquete nuevo | `@agentpay/mandate` |
@@ -31,8 +32,9 @@ diario (T18) y el lugar donde el enforcement corre de verdad (T19–T21).
 `sdk` pasó de 11 a 16 tests entre T16 y T17: no es trabajo de esta fase, es el
 [PR #1](https://github.com/vicentewolde/AgentPay/pull/1) de Devin (tests
 unitarios de `guards.ts`), coordinado y revisado según `P-2` en
-`docs/DECISIONES.md`. Este hito, en adelante, se trabaja en su propia rama
-(`cc/t17-check-mandate`), siguiendo esa misma convención.
+`docs/DECISIONES.md`. Cada hito desde T17 se trabaja en su propia rama
+(`cc/t17-check-mandate`, `cc/t18-spend-ledger`), siguiendo esa misma
+convención.
 
 ### Progreso
 
@@ -40,8 +42,8 @@ unitarios de `guards.ts`), coordinado y revisado según `P-2` en
 |---|---|---|
 | T16 | La forma firmada del Mandato | ✅ cerrado |
 | T17 | Comparar un mandato contra una compra concreta | ✅ cerrado |
-| T18 | La memoria de gastos, y el límite diario | ⏳ siguiente |
-| T19 | PolicyRail: dónde se autoriza o se bloquea | ⏳ |
+| T18 | La memoria de gastos, y el límite diario | ✅ cerrado |
+| T19 | PolicyRail: dónde se autoriza o se bloquea | ⏳ siguiente |
 | T20 | Anclar y revocar un mandato en cadena | ⏳ |
 | T21 | Cablearlo en el agente | ⏳ |
 | T22 | El límite hecho cumplir on-chain, como smart account | 🚧 depende del supuesto `M-1` |
@@ -197,3 +199,70 @@ la misma carpeta). Este hito es el primero en seguirla: se trabajó en
 
 **Lo que este hito deliberadamente no hizo:** aplicar `perDay` (T18), conectar
 `checkMandate` al agente real (T21), decidir dónde vive el enforcement (T19).
+
+---
+
+## T18 · La memoria de gastos, y el límite diario — cerrado 2026-09-03
+
+**Qué quedó funcionando.** Hasta este hito, el sistema solo sabía frenar una
+compra individual que fuera demasiado grande. No sabía frenar a alguien que
+hiciera muchas compras chicas el mismo día hasta juntar, entre todas, más de
+lo que su credencial o su mandato permiten en veinticuatro horas. Ahora sí:
+hay una memoria de cuánto se gastó hoy, y una regla que suma la compra nueva a
+eso y la rechaza si el total pasa el límite diario.
+
+Un ejemplo real: con un límite de 200 al día, una primera compra de 37 se
+registra sin problema; una segunda de 150 todavía entra (37 + 150 = 187); pero
+una tercera de 20 ya no —187 + 20 = 207, siete de más— y se rechaza con el
+motivo exacto: cuánto se había gastado, cuánto se pedía, cuánto habría dado,
+y cuál era el límite.
+
+Dos detalles que conviene entender:
+
+- **El día se corta a la medianoche UTC, siempre.** No importa en qué huso
+  horario corra el servidor: "hoy" significa lo mismo para todo el sistema, la
+  misma disciplina que ya usan todas las fechas del proyecto.
+- **Reenviar la misma compra no cuenta dos veces.** Si un intento se repite
+  —una red que falla y reintenta, un mensaje duplicado— el sistema lo nota por
+  el identificador único de la compra y no la resta dos veces del presupuesto.
+
+**Lo que este hito deliberadamente dejó para después:** que consultar cuánto
+se gastó y registrar una compra nueva pasen como una sola operación
+indivisible. Hoy son dos pasos separados, y en un solo proceso corriendo de a
+uno (como todo lo que existe hasta ahora en este proyecto) eso no es un
+problema real — se vuelve uno recién si más adelante dos compras pudieran
+autorizarse al mismo tiempo, y ahí se resuelve, no antes (`M-10`).
+
+### Evidencia técnica
+
+Salidas crudas completas en [evidencia/T18.md](evidencia/T18.md).
+
+**Qué se construyó**
+
+- `apps/agent/src/ledger/spend-ledger.ts` — el puerto `SpendLedger`
+  (`spentOn()`, `record()`) y `createInMemorySpendLedger()`, su única
+  implementación por ahora.
+- `apps/agent/src/ledger/check-daily-limit.ts` — `checkDailyLimit()`, la
+  función pura que decide si sumar una compra nueva a lo ya gastado se pasa
+  del límite diario. Genérica sobre cuál de las dos autoridades la usa
+  (credencial o mandato): el llamador elige el código de error.
+- Dos códigos de error nuevos en la misma unión de
+  `packages/core/src/errors.ts`: `ScopeDailyLimitExceeded`,
+  `MandateDailyLimitExceeded`.
+
+**Comandos**
+
+```
+pnpm typecheck     # limpio
+pnpm test          # 482 pasando, 0 fallando (455 antes de T18)
+```
+
+**Mutation testing** — siete mutaciones sobre las dos piezas nuevas, aplicadas
+al archivo real y restauradas. **Las siete cayeron en rojo**, incluida una que
+marcaba una compra como "ya vista" antes de validar su monto —lo que habría
+dejado sin reintento posible a una compra rechazada por un dato malformado.
+
+**Lo que este hito deliberadamente no hizo:** decidir dónde vive el
+enforcement real ni cómo se compone con `checkScope()`/`checkMandate()` (T19),
+ni cablear nada al agente (T21), ni resolver la atomicidad entre consultar y
+registrar (`M-10`, diferido a T19).
