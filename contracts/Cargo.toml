@@ -2,7 +2,7 @@
 # repo root: `contracts/` holds no package.json and is invisible to pnpm.
 [workspace]
 resolver = "2"
-members = ["agent-registry"]
+members = ["agent-registry", "policy-rail"]
 
 [workspace.dependencies]
 # Resolved, not assumed. Testnet runs protocol 28 (getVersionInfo, 2026-09-01)

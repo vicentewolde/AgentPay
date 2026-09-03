@@ -448,3 +448,44 @@ nuevo, superficie sensible) o si conviene primero T23 (demo de la fase
 completa con lo que ya existe) antes de abrir ese frente. Esta sesión no
 escribió ningún contrato todavía — solo la investigación, commiteada en
 `cc/t22-smart-account-spike`.
+
+## 2026-09-03 (11) — cc/t22-policy-rail-contract
+
+Agente: Claude Code
+
+Qué: se construyó y midió el spike de `policy_rail` — el paso que el usuario
+pidió explícitamente antes de comprometerse al contrato completo. Nuevo
+crate `contracts/policy-rail/`: implementa `CustomAccountInterface` con un
+`__check_auth` mínimo (verifica una firma Ed25519 contra una llave `owner`
+fijada al desplegar, exige exactamente un firmante, sin `perTx`/`perDay`
+todavía). 6 tests Rust, 5 mutaciones deliberadas sobre la lógica del chequeo
+—las cinco cayeron—, compila a un wasm de 2884 bytes.
+
+Después se lo desplegó en Stellar testnet real y se midió el costo real: un
+script de un solo uso (`scripts/t22-fee-probe.ts`, borrado tras capturar la
+evidencia) desplegó el contrato, lo fondeó con XLM nativo (sin faucet de
+USDC ni facilitator — el costo de `__check_auth` es el mismo sin importar el
+activo), y construyó una `SorobanAuthorizationEntry` custom para que el
+contrato pagara con su propia autorización. **Simulación: 29 890 de 50 000
+stroops de techo.** Se envió de verdad y **asentó**:
+`9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f`.
+
+Por qué: `M-12` (T19/T22) había quedado resuelta por lectura de código, pero
+con una pregunta que ningún código público podía contestar — cuánto cuesta,
+en fee real, un `__check_auth` propio. El usuario, ante la elección de seguir
+directo al contrato completo o medir primero con lo mínimo, eligió medir
+primero. Correcto: ahora T22 tiene un margen de fee conocido (20 110
+stroops) antes de invertir en la lógica de límites.
+
+Decisión nueva: `M-21` (por qué el spike no decide nada de diseño de
+PolicyRail todavía, y por qué la forma de `Signature` es la que es).
+Documentación tocada: `ROADMAP.md`, `BITACORA.md` y `DECISIONES.md` de la
+Fase 3, más `evidencia/T22-spike.md` §7-8 (reemplaza la sección de
+"conclusión, queda por verificar" por la medición real).
+
+Pendiente: mergear `cc/t22-policy-rail-contract` a `main` y pushear.
+Siguiente decisión, de nuevo del usuario: seguir con el enforcement de
+`perTx`/`perDay` dentro de `policy_rail` (usando el margen de fee ya medido),
+o hacer T23 (demo de la fase completa) primero. El contrato del spike queda
+en el repo tal cual —sin límites, documentado como spike— no como algo listo
+para producción.

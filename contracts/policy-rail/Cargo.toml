@@ -1,0 +1,22 @@
+[package]
+name = "policy-rail"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+# Same version soroban-sdk itself pins for its own testutils (Cargo.toml of
+# soroban-sdk 27.0.6, `[target.'cfg(not(target_family="wasm"))'.dependencies]`)
+# — signs the raw 32-byte auth payload directly, which is what __check_auth
+# actually verifies, rather than the ScVal-encoding wrapper soroban-sdk's own
+# `testutils::sign` trait is built for.
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
+rand = "0.8.5"

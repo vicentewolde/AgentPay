@@ -13,7 +13,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T21 · **En curso:** T22 — `M-12` resuelta (positiva), contrato sin construir
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T21 · **En curso:** T22 — spike de `policy_rail` construido y medido en testnet real, sin enforcement de límites todavía
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
@@ -66,7 +66,7 @@ convención — T19 en `cc/t19-policy-rail`, T20 en `cc/t20-anchor-mandate`.
 | T19 | PolicyRail: dónde se autoriza o se bloquea | ✅ cerrado |
 | T20 | Anclar y revocar un mandato en cadena | ✅ cerrado |
 | T21 | Cablearlo en el agente | ✅ cerrado |
-| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 `M-12` resuelta (positiva) 2026-09-03, contrato sin construir |
+| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 spike medido en testnet real (29 890/50 000 stroops), sin `perTx`/`perDay` todavía |
 | T23 | Demo de la fase completa | ⏳ |
 
 ---
@@ -486,7 +486,49 @@ restrinja al pagador a cuentas `G...` en todo el paquete).
 **Decisión actualizada:** `M-12` pasa de `Pendiente` a `Resuelta — positiva`,
 sin borrar el texto original — misma convención que `M-1`.
 
-**Qué sigue, sin construir todavía:** el contrato Soroban `policy_rail` con
-`__check_auth`, empezando por una versión mínima que solo verifique una firma
-(para medir el costo real de simulación contra el techo del facilitator)
-antes de agregarle el enforcement de `perTx`/`perDay`.
+---
+
+## T22 (continuación) · El spike se construyó y midió — 2026-09-03
+
+**Qué quedó funcionando, en lenguaje llano.** La lectura de código decía que
+un contrato inteligente podía pagar; lo único que no podía decir era cuánto
+costaría hacerlo cumplir. Se construyó la versión más simple posible de
+`policy_rail` —un contrato que solo verifica una firma, sin ningún límite de
+gasto todavía— se lo desplegó en Stellar testnet real, se lo fondeó, y se le
+pidió que pagara. **Pagó.** Y costó menos de lo que el facilitator permite
+gastar en verificar un pago.
+
+En números: verificar la firma de este contrato cuesta **29 890 stroops** de
+los **50 000** que el facilitator tolera antes de rechazar la transacción por
+cara. Queda un 40% de margen — el espacio que va a ocupar comparar el gasto
+del día contra un límite, cuando esa lógica se agregue.
+
+**Cómo se probó, sin depender de nadie más.** No hizo falta ni el facilitator
+de OpenZeppelin ni el faucet de USDC del bazaar: la medición se hizo con XLM
+nativo, que las llaves que ya existen en `.env.local` de este proyecto ya
+tienen, transferido hacia y desde el contrato como si fuera cualquier activo
+SEP-41 —el costo de verificar la firma es el mismo sin importar qué activo se
+mueva. La transacción final, la que paga *desde* el contrato con su propia
+autorización, quedó confirmada en cadena, no solo simulada:
+`9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f`.
+
+**Evidencia técnica.** [evidencia/T22-spike.md](evidencia/T22-spike.md), §8 —
+el experimento completo paso a paso, con la salida cruda del script y el hash
+de la transacción real. `contracts/policy-rail/` — el contrato: 6 tests Rust,
+5 mutaciones deliberadas sobre la lógica de `__check_auth` (el chequeo de
+identidad del firmante, el conteo de firmas, la verificación criptográfica
+misma), **las cinco cayeron**. Compila a un wasm de 2884 bytes.
+
+**Lo que este contrato deliberadamente no hace todavía.** No lleva `perTx` ni
+`perDay`, no lee ningún límite firmado, no sabe qué es un Mandato. Es
+exactamente lo que su nombre en el código dice que es: un spike, construido
+para responder una pregunta de costo, no para reemplazar a `LocalPolicyRail`
+(T19) todavía. Agregarle el enforcement real es el trabajo que sigue, y ya
+tiene margen de fee conocido contra el cual medirse.
+
+**Fuera de alcance, a propósito:** el enforcement de `perTx`/`perDay` on-chain
+(el próximo paso, ahora con el margen de fee ya medido), integrarlo con el
+Mandato (necesitaría que el contrato pueda leer o verificar la firma del
+principal, que hoy vive fuera de la cadena), y cualquier cosa con el
+facilitator real o USDC — esta medición deliberadamente los evitó, y lo que
+prueba (el costo de `__check_auth`) no depende de ninguno de los dos.

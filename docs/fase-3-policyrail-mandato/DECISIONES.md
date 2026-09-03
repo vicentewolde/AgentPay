@@ -399,20 +399,21 @@ es público y responde la pregunta mejor que un mail.
 >    cuenta o de contrato, ni la forma de la firma más allá de "no vacía". El
 >    settle reenvía la entrada de autorización del comprador **sin tocarla**.
 >
-> **El riesgo que sí queda, y que la lectura de código no puede descartar:**
-> `maxTransactionFeeStroops` (50 000 stroops por defecto) es un techo que el
-> facilitator aplica sobre la comisión que la propia simulación de Soroban
-> calcula — y un `__check_auth` con lógica propia (verificar una firma y
-> comparar un límite) consume más cómputo que la verificación nativa gratuita
-> de una cuenta clásica. Nada en el código dice si un `policy_rail` simple
-> entra bajo ese techo; eso solo se sabe simulando el contrato real, no
-> leyendo el SDK. Es la primera pregunta que el spike de construcción (más
-> abajo) tiene que contestar.
+> **El riesgo del fee, que la lectura de código no podía descartar, también
+> se midió — y también dio positivo.** Se construyó la versión mínima de
+> `policy_rail` (solo verifica una firma, sin `perTx`/`perDay`), se la
+> desplegó en testnet real, y se le pidió pagar con su propia autorización.
+> La simulación reportó **29 890 stroops** contra el techo de **50 000** del
+> facilitator, y la transacción real **asentó**
+> (`9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f`).
+> Detalle completo en
+> [evidencia/T22-spike.md §8](evidencia/T22-spike.md#8-medición-empírica-contrato-real-testnet-real-transacción-real).
 >
 > Con esto, T22 pasa de "bloqueado por una pregunta" a "una pieza de código
-> por construir, con un techo de fee por verificar en el camino". El texto
-> original de la decisión, tal como se escribió en T19, sigue abajo sin
-> editar, siguiendo la misma convención que `M-1`.
+> por construir, con el margen de fee ya conocido (20 110 stroops libres
+> para el enforcement de límites que todavía falta)". El texto original de
+> la decisión, tal como se escribió en T19, sigue abajo sin editar, siguiendo
+> la misma convención que `M-1`.
 
 `M-1` preguntaba si el **bazaar** acepta un comprador `C...`. La pregunta ya no
 es del bazaar. La cadena real tiene tres eslabones y solo el tercero decide:
@@ -787,4 +788,44 @@ mutación caiga. Se descartó porque simularía una capacidad —mandatos que
 cambian de contenido bajo el mismo agente sin reconfigurarlo— que el sistema
 no tiene y que documentar como si la tuviera sería más engañoso que dejar la
 mutación anotada como equivalente, igual que `M-5`.
+
+---
+
+### M-21 · El spike de `policy_rail` verifica una firma y nada más; ninguna decisión de diseño de PolicyRail se tomó todavía · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T22 (spike)
+
+`contracts/policy-rail/` implementa `CustomAccountInterface` con
+`__check_auth(signature_payload, signatures: Vec<Signature>, _auth_contexts)`
+que exige exactamente una firma, de una llave `owner` fijada al desplegar
+(`BytesN<32>`, no una `Address` de Stellar), verificada con
+`env.crypto().ed25519_verify()`. No hay `perTx`, no hay `perDay`, no hay
+Mandato, no hay ningún dato que este contrato entienda sobre una compra.
+
+**Motivo.** `M-12` dejó abierta una pregunta de costo, no de diseño: si
+`__check_auth` con *alguna* lógica propia entra bajo el techo de fee del
+facilitator. Contestarla necesitaba el `__check_auth` más barato posible que
+siguiera siendo real —ni un mock, ni una aprobación incondicional— para que
+el número medido significara algo. Diseñar ya el enforcement de límites
+antes de saber si el costo de la pieza más simple siquiera entraba habría
+sido apostar el trabajo de una fase entera a una pregunta de aritmética
+todavía sin responder.
+
+**Por qué `Signature` tiene la forma `{ public_key: BytesN<32>, signature: BytesN<64> }`.**
+No es arbitraria: es, campo por campo, lo que `@stellar/stellar-sdk`'s propio
+helper `authorizeEntry()` produce cuando un firmante devuelve
+`{ signature, publicKey }` en vez de un `ScVal` a mano (`evidencia/T22-spike.md`
+§4). Un cliente que ya sabe firmar para una cuenta clásica —incluido
+`@x402/stellar`, si algún día expone ese camino— no necesita código de firma
+nuevo para autorizar contra este contrato, solo una `address` distinta.
+
+**Qué prueba la medición, y qué no.** 29 890 de 50 000 stroops (`evidencia/T22-spike.md`
+§8) es el costo de verificar una firma, nada más. No dice nada sobre cuánto
+costará leer un `perDay` del storage y compararlo — eso se mide cuando esa
+lógica exista, no antes. El margen (20 110 stroops) es alentador, no una
+garantía.
+
+**Alternativa descartada:** escribir de una vez el `policy_rail` con
+`perTx`/`perDay`, saltándose el spike. Habría sido más rápido si el fee
+entraba, y trabajo tirado —Rust, tests, mutation testing, todo— si no
+entraba. El spike cuesta una tarde; el contrato completo, mucho más.
 

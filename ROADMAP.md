@@ -291,20 +291,22 @@ El desglose sale de esa decisión: **el corte no es "Mandato vs PolicyRail", es
 | T19 | `PolicyRail.authorise()` como puerto + `LocalPolicyRail` off-chain, con reconciliación de los términos del 402 | — | ✅ |
 | T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | — | ✅ |
 | T21 | Cableado en el agente + tests de inyección | — | ✅ |
-| T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | `M-12` resuelta (positiva) 2026-09-03 | 🚧 sin construir |
+| T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | `M-12` resuelta (positiva), spike medido en testnet real | 🚧 sin `perTx`/`perDay` todavía |
 | T23 | Demo de la fase completa | — | ⏳ |
 
 **Actualizado el 2026-09-03 (T19): `M-1` quedó `Superada`.** Al leerse el repo
 real del bazaar se confirmó que no hay contrato de compra desplegado, así que
 la pregunta que `M-1` asumía dejó de existir.
 
-**Actualizado el 2026-09-03 (T22): `M-12` quedó `Resuelta — positiva`.** El
-spike leyó el código fuente real de `@x402/stellar` y del facilitator de
-OpenZeppelin: ninguno de los dos restringe el tipo de cuenta que paga. Los
-ocho hitos de esta fase ya no dependen de nada externo — T22 pasa de
-"bloqueado por una pregunta" a "contrato por construir", con un techo de fee
-del facilitator que solo una simulación real puede medir (ver
-`docs/fase-3-policyrail-mandato/evidencia/T22-spike.md`).
+**Actualizado el 2026-09-03 (T22): `M-12` quedó `Resuelta — positiva`, y
+medida.** El spike leyó el código fuente real de `@x402/stellar` y del
+facilitator de OpenZeppelin (ninguno de los dos restringe el tipo de cuenta
+que paga), y después se construyó y midió: un `policy_rail` mínimo,
+desplegado en testnet real, pagó con su propia autorización por **29 890 de
+50 000 stroops** de techo, y la transacción **asentó**. Los ocho hitos de
+esta fase ya no dependen de nada externo — T22 pasa de "bloqueado por una
+pregunta" a "contrato con margen de fee conocido, falta el enforcement de
+`perTx`/`perDay`" (ver `docs/fase-3-policyrail-mandato/evidencia/T22-spike.md`).
 
 **Lo que sí se puede decir ahora, porque no depende de nada pendiente:**
 

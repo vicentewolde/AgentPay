@@ -177,7 +177,7 @@ El único regex de formato de cuenta en todo `@x402/stellar` (`STELLAR_DESTINATI
 acepta `G`, `C` y `M` por igual, y se aplica al **destinatario** (`payTo`) del
 lado cliente, no al pagador.
 
-## 7. Conclusión y lo que queda por verificar empíricamente
+## 7. Conclusión de la lectura de código
 
 **Respuesta a M-12: sí, un comprador `C...` (`policy_rail` como smart
 account) es viable con el stack real (`@x402/stellar` + facilitator de
@@ -188,18 +188,67 @@ idéntica hasta el punto en que el host de Soroban decide, él mismo, si
 verifica la firma nativamente (cuenta clásica) o invoca `__check_auth`
 (cuenta de contrato).
 
-**Lo que esta lectura de código no puede contestar, y solo un spike de
-construcción sí:**
+**Lo que esta lectura de código no podía contestar, y sí una medición real**
+(§8, más abajo): si el fee de un `__check_auth` propio entra bajo el techo
+que el facilitator aplica, y si el flujo completo efectivamente asienta en
+un ledger — no solo que el código no lo prohíba.
 
-- **El techo de fee del facilitator** (`maxTransactionFeeStroops`, 50 000
-  stroops por defecto) se compara contra la comisión que la simulación real
-  de Soroban calcula. Un `__check_auth` con lógica propia consume más cómputo
-  que la verificación nativa gratuita de una cuenta clásica — cuánto más,
-  solo se sabe simulando el contrato real.
-- Que el flujo completo (desplegar `policy_rail`, construir la
-  `SorobanAuthorizationEntry` con `signatureScVal` custom, pasarla por el
-  facilitator real de testnet) efectivamente asiente en un ledger, no solo
-  que el código no lo prohíba.
+## 8. Medición empírica: contrato real, testnet real, transacción real
 
-Estos dos puntos son el primer paso de construir T22, no una segunda ronda de
-lectura de código.
+Con la lectura de código dando luz verde, el siguiente paso no fue seguir
+leyendo — fue construirlo. `contracts/policy-rail/` (nuevo crate en el
+workspace de Rust) implementa `CustomAccountInterface` con un
+`__check_auth` mínimo: verifica una firma Ed25519 contra una llave `owner`
+fijada al desplegar, sin ningún enforcement de `perTx`/`perDay` todavía —
+exactamente lo necesario para medir el costo, ni una línea más. 6 tests
+Rust (`cargo test -p policy-rail`) y 5 mutaciones deliberadas, las cinco
+cayeron — detalle en `docs/fase-3-policyrail-mandato/BITACORA.md`, entrada
+de T22.
+
+**El experimento, contra Stellar testnet real, sin facilitator ni faucet de
+USDC** (`scripts/t22-fee-probe.ts`, script de un solo uso, borrado tras
+capturar esta evidencia):
+
+1. Se desplegó `policy_rail` con una llave Ed25519 nueva y descartable como
+   `owner` — `stellar contract deploy`, pagado por una cuenta ya fondeada de
+   este mismo repo (`ADMIN_SECRET_KEY`).
+2. Se lo fondeó con 1 XLM nativo, transferido desde esa misma cuenta admin al
+   contrato — el activo específico no importa para esta medición: el costo
+   de recursos de un `transfer` SEP-41 más un `__check_auth` es el mismo
+   contrato compilado sin importar qué activo mueva, y XLM no necesita ningún
+   faucet externo.
+3. Se construyó un segundo `transfer`, esta vez **desde** `policy_rail`
+   (el contrato como `from`), firmado con una `SorobanAuthorizationEntry`
+   custom: la llave `owner` firma el payload exacto que el host pide
+   verificar, empaquetado en el mismo formato `{public_key, signature}` que
+   el propio `__check_auth` espera.
+4. Se simuló, y **la simulación reportó `minResourceFee`: 29 890 stroops** —
+   contra el techo de 50 000 que el facilitator aplica. **Entra**, con margen.
+5. Se envió de verdad. **Asentó.** Hash de la transacción:
+   `9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f`,
+   status `SUCCESS`.
+
+```
+[5/5] Resultado de la simulación
+  minResourceFee         29890 stroops
+  techo del facilitator  50000 stroops
+  ¿entra bajo el techo?  SÍ
+
+[6/6] Enviar de verdad, para confirmar que asienta (no solo simula)
+  tx hash                9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f
+  status                 SUCCESS
+```
+
+**Lo que este número es, y lo que todavía no es.** 29 890 stroops es el costo
+de la versión más simple posible de `__check_auth` — una verificación de
+firma, nada más. El margen bajo el techo (20 110 stroops, un 40% del total)
+es lo que queda disponible para el enforcement real de `perTx`/`perDay`:
+leer el gasto del día desde el storage del contrato y comparar contra un
+límite. Ese costo adicional todavía no está medido — es lo primero que hay
+que volver a correr una vez que esa lógica exista, no algo que este número
+ya garantice.
+
+**Conclusión de M-12, completa:** un comprador `C...` no solo es viable en
+el papel — un `policy_rail` mínimo, desplegado y firmado de verdad,
+efectivamente paga con su propia autorización on-chain, dentro del
+presupuesto de fee que el facilitator real exige, en Stellar testnet real.
