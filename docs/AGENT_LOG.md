@@ -173,6 +173,53 @@ Pendiente: revisión del sitio web por Claude Code (diff + pruebas) antes de
 cualquier merge a `main`. Sitio funcional pero el usuario lo encuentra feo
 y quiere rediseñarlo basándose en un demo de Claude Code.
 
+**Nota de coordinación, importante para la próxima sesión de cualquiera de
+los dos agentes:** al empezar este hito, `website/` (el sitio Next.js de
+Devin, ver la entrada anterior) y la entrada de `AGENT_LOG.md` que lo describe
+estaban **sin commitear** en la carpeta compartida — ni en `main` ni en una
+rama `devin/*`. Se preservó la entrada del log (es solo texto, se commitea acá
+junto con esta). **`website/` se dejó tal cual está en disco, sin commitear y
+sin tocar**: es demasiado código para revisar de pasada dentro de este hito, y
+toca la regla de alcance de `CLAUDE.md` ("cualquier UI web" está fuera). Antes
+de que cualquiera vuelva a tocar esta carpeta con un `git checkout`/`clean`/
+`reset`, hay que decidir con el usuario qué hacer con `website/` — commitearlo
+en una rama `devin/website` propia, o descartarlo si ya no aplica.
+
+**Resolución 2026-09-03 (Devin):** se commiteó `website/` en rama `devin/website`
+siguiendo P-2. El sitio web ahora está coordinado: rama propia, sin tocar
+`main`, listo para revisión por Claude Code antes de cualquier merge.
+
+## 2026-09-03 (4) — devin/website
+
+Agente: Devin
+
+Qué: coordinación del sitio web Next.js siguiendo P-2. Se creó rama
+`devin/website` y se commiteó el sitio web (25 archivos, 8618 líneas) para
+resolver el estado sin commitear que quedó tras la sesión anterior.
+
+Por qué: Claude Code completó T18 y encontró `website/` sin commitear en la
+carpeta compartida, lo cual es un riesgo de coordinación según P-2. Se resolvió
+commiteando en rama propia sin tocar `main`.
+
+Pendiente: revisión del sitio web por Claude Code (diff + pruebas) antes de
+cualquier merge a `main`. Sitio funcional pero el usuario lo encuentra feo
+y quiere rediseñarlo basándose en un demo de Claude Code.
+
+## 2026-09-03 (5) — eliminación website
+
+Agente: Devin
+
+Qué: eliminación completa del sitio web following proceso acordado. Se borró
+la rama `devin/website` y la carpeta `website/` del disco. Se actualizó
+AGENT_LOG.md para reflejar la eliminación.
+
+Por qué: el usuario decidió eliminar el sitio web por ahora. Siguiendo el
+protocolo de coordinación P-2, se eliminó todo rastro del trabajo para que
+Claude Code no siga preguntando por `website/` en su chat.
+
+Pendiente: ninguna relacionada con el sitio web. Coordinación limpia entre
+ambos agentes.
+
 ## 2026-09-03 (5) — cc/t19-kickoff-prompt
 
 Agente: Claude Code
