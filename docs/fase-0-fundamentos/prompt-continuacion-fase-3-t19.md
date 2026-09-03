@@ -125,21 +125,6 @@ seguir de largo.
 
 ---
 
-PENDIENTE DE COORDINACIÓN, SIN RESOLVER
-
-`docs/AGENT_LOG.md` tiene una nota sin cerrar del todo: Devin dice haber
-commiteado `website/` en una rama `devin/website` para resolver un estado sin
-commitear que quedó en la carpeta compartida. Al cerrar la sesión anterior,
-`website/` seguía apareciendo como **sin trackear** en el `git status` de
-`main` (revisado, no solo asumido). Antes de cualquier `git checkout`,
-`clean` o `reset` en esta carpeta: correr `git status` y `git log
-devin/website` para entender qué pasó realmente, y no asumir que la nota del
-log ya cerró el tema. `website/` no es parte del alcance de esta fase de
-ninguna manera — es una tarea aparte de Devin, y las decisiones sobre ella
-son del usuario.
-
----
-
 REGLAS DE TRABAJO (las de siempre)
 
 1. Cerrá cada hito y mostrame el resultado antes de encadenar el siguiente.
