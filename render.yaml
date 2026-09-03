@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: agentpay-web
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @agentpay/web run start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.11.0
+      # Secrets — set these in the Render dashboard after the first deploy.
+      # Never committed, never filled in here.
+      - key: ISSUER_SECRET_KEY
+        sync: false
+      - key: AGENT_SECRET_KEY
+        sync: false
+      - key: AGENT_REGISTRY_CONTRACT_ID
+        sync: false
+      - key: BAZAAR_BASE_URL
+        value: https://stellar-bazaar-x402.vercel.app

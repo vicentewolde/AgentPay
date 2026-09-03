@@ -232,3 +232,46 @@ exacto que un futuro cambio de precio del producto rompería en silencio, y
 el punto donde efectivamente rechaza (la firma del pago, no la firma del
 intent) no es el que `pnpm demo` ya narra — hubiera sido una historia
 distinta contada como si fuera la misma.
+
+### G-9 · `apps/web` se despliega en Render, sin control de acceso · `Vigente`
+**Fecha:** 2026-09-03
+
+El usuario pidió, después de cerrar T25, que el demo sea mostrable a otros —
+no solo `localhost`. Dos decisiones explícitas, preguntadas y no asumidas:
+
+**Plataforma: Render, no Vercel.** `apps/web` es un servidor `node:http`
+con estado en memoria (una sesión de demo, un `Map` de sesión, colas de
+`PolicyRail` por sujeto) — necesita un proceso que viva entre pedidos, no
+funciones serverless aisladas que Vercel invocaría una por request sin
+garantizar que caigan en la misma instancia. Render (y Railway, la otra
+opción ofrecida) mantienen un proceso persistente; se eligió Render porque
+el usuario la prefirió entre las dos.
+
+**Sin contraseña ni ningún control de acceso, a propósito.** Cualquiera con
+el link puede hacer clic en "Comprar" y disparar un pago x402 real (~0.001
+USDC de testnet) sin autenticarse. Es la forma correcta de un demo público
+de este proyecto en concreto — mostrar el flujo completo abierto es el
+punto, y el costo real de cada clic es centavos de un activo de prueba.
+
+**Lo que este repo prepara, y lo que no.** `render.yaml` (Blueprint) fija el
+comando de build (`pnpm install --frozen-lockfile && pnpm build`) y el de
+arranque (`pnpm --filter @agentpay/web run start`) — ambos verificados
+localmente, corriendo exactamente esos comandos antes de escribir el
+archivo, no asumidos desde la documentación de Render. Las cuatro variables
+de entorno secretas (`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`,
+`AGENT_REGISTRY_CONTRACT_ID`) quedan marcadas `sync: false` — Render no las
+pide durante el Blueprint, y **nunca las escribe ni las ve esta sesión de
+Claude Code**: el usuario las copia de su propio `.env.local` al panel de
+Render, a mano. Entrar credenciales en un formulario de terceros es una de
+las acciones que este asistente tiene prohibido hacer por su cuenta.
+
+**Consecuencia operativa, anotada:** una cuenta de demo pública y sin
+traba eventualmente necesita que alguien la vuelva a fondear en USDC — no
+hay auto-refill. Una compra que se queda sin saldo falla como un
+`AgentPassError` visible en la UI, no como un crash silencioso.
+
+**Alternativa descartada:** Vercel. Es la plataforma que el propio bazaar
+usa, pero su modelo serverless no calza con el estado en memoria de
+`apps/web` sin reescribirlo para guardar sesión en algo externo (una base de
+datos, Redis) — trabajo real, no una opción de configuración, y fuera de lo
+que "front simple" pedía.

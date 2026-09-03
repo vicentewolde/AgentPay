@@ -156,3 +156,21 @@ el usuario). **Fase 4: T24 y T25 cerrados.** Ningún hito nuevo decidido
 todavía — candidatos anotados y no construidos: resolver `G-8` (el costo
 doble contra `perDay`), la lista de `payTo` permitidos que falta en el
 Mandato (`M-14`), y convertir el pago en una tool del agente (`G-4`).
+
+## Despliegue de `apps/web` en Render — preparado, no cerrado
+
+El usuario pidió, después de T25, que el demo sea mostrable a otros — no solo
+`localhost`. Se preparó todo lo que este repo puede hacer por su cuenta
+(`render.yaml`, script `start`, instrucciones en `apps/web/README.md`),
+verificado localmente corriendo exactamente el comando de build y de arranque
+que Render va a correr. Decisión de plataforma (Render, no Vercel — el
+estado en memoria del servidor no calza con serverless) y de acceso (sin
+contraseña, a propósito) en `DECISIONES.md` → `G-9`.
+
+**Lo que falta y no le corresponde a esta sesión:** conectar el repo a una
+cuenta de Render y cargar las tres variables secretas
+(`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`, `AGENT_REGISTRY_CONTRACT_ID`) en su
+panel — el usuario las copia de su propio `.env.local` a mano. Entrar
+credenciales en un formulario de terceros está fuera de lo que este asistente
+hace por su cuenta. Cuando el usuario complete esa parte y confirme la URL
+pública, se actualiza esta entrada con el link real.
