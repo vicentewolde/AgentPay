@@ -590,3 +590,27 @@ completa: T16–T23.** Siguiente: Fase 4 (MandateGate), sin diseñar todavía �
 depende de decidir con el usuario cómo envolver el cliente x402 con
 `LocalPolicyRail`, ya que `M-11` estableció que no hace falta cooperación
 del bazaar para eso.
+
+## 2026-09-03 (14) — devin/agent-web-frontend (eliminada)
+
+Agente: Devin
+
+Qué: Rama experimental devin/agent-web-frontend eliminada tras revisión de Claude Code.
+Claude Code identificó que authoriseX402Payment no llama a checkMandate, reintroduciendo
+el gap de TOCTOU que T19 cerró. La autorización simplificada sin full mandate checking
+contradice la garantía central del proyecto ("la autorización se puede cortar desde
+afuera del agente, imposible de saltar").
+
+Trabajo eliminado:
+- FASE 1: Integración del catálogo real del bazaar (BazaarMCPAdapter)
+- FASE 2: Integración de pagos x402 (herramienta execute_x402_payment, PolicyRail extension)
+
+Por qué: La extensión de PolicyRail hecha por Devin era incompleta y violaría la
+seguridad del sistema. Claude Code recomienda que la corrección la haga Claude Code,
+no Devin, siguiendo las reglas de CLAUDE.md.
+
+Resultado: Rama devin/agent-web-frontend eliminada. Repositorio dejado en estado
+limpio tal como lo dejó Claude Code después de terminar la Fase 3 con la demo visual.
+
+Próximo paso: Claude Code corregirá authoriseX402Payment para llamar a checkMandate
+correctamente antes de continuar con cualquier trabajo de frontend o pagos x402.
