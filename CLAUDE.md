@@ -18,6 +18,10 @@ imposible de saltar por prompt injection.
 | [docs/fase-2-agente-compra/ARQUITECTURA.md](docs/fase-2-agente-compra/ARQUITECTURA.md) | Mapa técnico de la Fase 2: catálogo, herramientas, verificación de credencial, scope, forma del `PurchaseIntent` |
 | [docs/fase-2-agente-compra/BITACORA.md](docs/fase-2-agente-compra/BITACORA.md) | **T9–T14 cerrados** (T15 bloqueado por el embajador). Estado actual y qué se hizo en cada hito |
 | [docs/fase-2-agente-compra/DECISIONES.md](docs/fase-2-agente-compra/DECISIONES.md) | Decisiones de la Fase 2 (prefijo `B-`) |
+| [docs/fase-3-policyrail-mandato/CONTEXTO.md](docs/fase-3-policyrail-mandato/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, el bloqueante externo y qué se decidió hacer con él |
+| [docs/fase-3-policyrail-mandato/ARQUITECTURA.md](docs/fase-3-policyrail-mandato/ARQUITECTURA.md) | Mapa técnico de la Fase 3: los tres documentos firmados, la forma del Mandato, dónde vive el enforcement |
+| [docs/fase-3-policyrail-mandato/BITACORA.md](docs/fase-3-policyrail-mandato/BITACORA.md) | **T16 cerrado.** Estado actual y qué sigue |
+| [docs/fase-3-policyrail-mandato/DECISIONES.md](docs/fase-3-policyrail-mandato/DECISIONES.md) | Decisiones de la Fase 3 (prefijo `M-`). `M-1` es un **supuesto**, no un hecho |
 | [README.md](README.md) | Cómo correr el proyecto |
 
 `ROADMAP.md` dice en qué fase estamos; dentro de una fase cerrada, su
@@ -36,10 +40,12 @@ imposible de saltar por prompt injection.
    evidencia técnica. Antes de empezar un hito, 3-4 líneas de qué vas a hacer.
 4. **Idioma:** documentación del proyecto (`docs/`) en español. Código,
    comentarios, mensajes de commit y `README.md` en inglés.
-5. **No construyas lo que está fuera de alcance.** PolicyRail, Mandato,
-   MandateGate, MandateVault, enforcement de límites de gasto, cualquier UI web,
-   cualquier cosa en mainnet o con rieles fiat. Si el trabajo actual parece
-   pedirlo: anótalo y déjalo sin construir.
+5. **No construyas lo que está fuera de alcance.** PolicyRail y Mandato
+   —incluido el enforcement de `scope.limits`— **entran en alcance con la Fase
+   3**, que es la fase en curso. Siguen fuera: MandateGate (Fase 4),
+   MandateVault (Fase 5), cualquier UI web, cualquier cosa en mainnet o con
+   rieles fiat. Si el trabajo actual parece pedir algo de lo que sigue fuera:
+   anótalo y déjalo sin construir.
 
 ## Al cerrar cada hito
 

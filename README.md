@@ -27,6 +27,7 @@ Testnet only. No mainnet, no fiat rails, no PSP — deliberately.
 | `packages/core` | Typed errors, `did:stellar` derivation, VC-JWT sign/verify. **No I/O.** |
 | `packages/sdk` | `issue()` / `verify()` / `revoke()` — core plus Soroban RPC. |
 | `packages/cli` | The `agentpass` binary. |
+| `packages/mandate` | Phase 3: `@agentpay/mandate` — the principal's signed consent. Depends on core, nothing depends on it. |
 | `contracts/agent-registry` | Soroban contract holding credential hashes, their status, and the issuer set. |
 | `deployments/testnet.json` | The only artefact shared between the TypeScript and Rust sides. |
 
@@ -210,3 +211,6 @@ built on top of AgentPass; from the repo root, after `bootstrap` and
 `deploy:registry`, `pnpm demo` runs its full walkthrough — issue a credential,
 a Spanish purchase instruction, a signed intent, a real revocation, a rejected
 retry — against live testnet in about twelve seconds.
+[`packages/mandate`](packages/mandate/README.md) is phase 3, in progress: the
+principal's signed consent, the document that says what the agent is actually
+allowed to spend.

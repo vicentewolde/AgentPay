@@ -64,3 +64,12 @@ export {
   type VerifiedCredential,
   type VerifyOptions,
 } from "./vc-jwt.js";
+
+export {
+  jwsDocumentHash,
+  signJwsDocument,
+  verifyJwsDocument,
+  type JwsDocumentProfile,
+  type SignedJwsDocument,
+  type VerifiedJwsDocument,
+} from "./jws-document.js";

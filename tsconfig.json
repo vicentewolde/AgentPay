@@ -4,6 +4,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/sdk" },
     { "path": "./packages/cli" },
+    { "path": "./packages/mandate" },
     { "path": "./apps/agent" }
   ]
 }

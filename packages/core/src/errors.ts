@@ -73,7 +73,13 @@ export type AgentPassErrorCode =
   /** The signing key is not the one the document's subject identifies. */
   | "SignerMismatch"
   /** A natural-language purchase instruction matched no catalogue product. */
-  | "InstructionNotUnderstood";
+  | "InstructionNotUnderstood"
+  /** A mandate's JWS is malformed, or its payload does not match the schema. */
+  | "InvalidMandate"
+  /** `now` is past the mandate's `validUntil`. */
+  | "MandateExpired"
+  /** `now` is before the mandate's `validFrom`. */
+  | "MandateNotYetValid";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;
