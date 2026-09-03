@@ -17,6 +17,7 @@
   "dependencies": {
     "@agentpass/core": "workspace:*",
     "@agentpass/sdk": "workspace:*",
+    "@agentpay/mandate": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1",
     "jose": "^6.2.10",
     "zod": "^4.5.4"

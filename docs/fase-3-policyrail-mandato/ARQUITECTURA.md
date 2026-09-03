@@ -8,7 +8,7 @@
 > Decisiones con su motivo: [DECISIONES.md](DECISIONES.md) ·
 > Lo que la Fase 2 deja: [../fase-2-agente-compra/ARQUITECTURA.md](../fase-2-agente-compra/ARQUITECTURA.md)
 
-**Estado:** T16 cerrado. Las secciones marcadas *(pendiente)* describen el
+**Estado:** T17 cerrado. Las secciones marcadas *(pendiente)* describen el
 diseño acordado, no código que exista.
 
 ---
@@ -27,7 +27,7 @@ flowchart TB
         msign["sign.ts<br/>signMandate · verifyMandate"]
     end
     subgraph "Fase 3, pendiente"
-        check["checkMandate() — T17"]
+        check["checkMandate() — T17 ✅"]
         ledger["SpendLedger + perDay — T18"]
         rail["PolicyRail.authorise() — T19"]
         anchor["anclaje y revocación — T20"]
@@ -158,22 +158,40 @@ qué registro confiar es del llamador — misma regla de `RegistryMismatch`), ni
 comparar el mandato contra ningún intent (eso es `checkMandate`, T17, y
 separarlo es lo que la deja ser una función pura).
 
-## 6. `checkMandate()` — T17 *(pendiente)*
+## 6. `checkMandate()` — T17 ✅
 
-Función pura, misma disciplina que `checkScope()` de la Fase 2:
+Vive en `apps/agent/src/mandate/check-mandate.ts` — no en `@agentpay/mandate`,
+a propósito: es un consumidor de dos documentos (`AgentPayMandate` del paquete
+de mandato, `PurchaseIntent` del propio `apps/agent`), y el mismo lugar donde
+ya vive `checkScope()`.
 
 ```ts
 function checkMandate(mandate: AgentPayMandate, intent: PurchaseIntent): MandateDecision;
 ```
 
 **Nunca recibe un `Product` ni texto de un tercero** — `B-13` aplicado a esta
-fase. Fail-closed en todo (`B-1`), aritmética en enteros escalados a 7 decimales
-(`B-14`), nunca `Number`.
+fase, y automático: `PurchaseIntent` no tiene ningún campo donde la prosa de un
+comercio pudiera viajar (`B-19`). Fail-closed en todo (`B-1`), aritmética en
+enteros escalados a 7 decimales (`B-14`), nunca `Number`.
+
+Ocho chequeos, broadest-first, igual que `checkScope()`:
+
+1. `mandate.credentialSubject.id === intent.agent` — **`MandateAgentMismatch`**
+2. `mandate.issuer === intent.principal` — **`MandatePrincipalMismatch`**
+3. `intent:create ∈ grant.actions` — **`MandateActionNotAllowed`**
+4. `intent.venue ∈ grant.venues`, fail-closed si vacía — **`MandateVenueNotAllowed`**
+5. `intent.purchase.asset ∈ grant.assets` — **`MandateAssetNotAllowed`**
+6. `grant.limits.currency` coincide con el código del asset — **`MandateCurrencyMismatch`**
+7. `intent.issuedAt ∈ [mandate.validFrom, mandate.validUntil]`, bordes inclusivos — **`MandateWindowMismatch`** (`M-8`, nuevo: no tiene equivalente en `checkScope()`, porque el mandato es el primer documento de la fase con ventana propia contra la que comparar otro documento)
+8. `unitAmount × quantity ≤ grant.limits.perTx`, aritmética exacta — **`MandateAmountExceeded`**
 
 Los ocho datos del `PurchaseIntent` (§7 de la arquitectura de la Fase 2) alcanzan
 para la comparación completa: agente, principal, venue, producto/cantidad/monto,
-asset, límite y ventana. **La forma del `PurchaseIntent` no cambia** — se
-verificó campo por campo antes de empezar la fase.
+asset, límite y ventana. **La forma del `PurchaseIntent` no cambió.**
+
+Los ocho códigos son propios de la fase, distintos de los `Scope*` de la Fase 2
+aunque `grant` y `scope` compartan forma (`M-9`): permite saber, sin ambigüedad,
+cuál de las dos autoridades rechazó una compra.
 
 ## 7. `perDay` y el estado — T18 *(pendiente)*
 
@@ -215,13 +233,14 @@ propio al mandato habría partido un concepto en dos.
 | suite | tests | toca red |
 |---|---|---|
 | `packages/core` | 74 (60 de la Fase 1 + **14 de `jws-document`**) | no |
-| `packages/mandate` | **27** | no |
-| `packages/sdk` | 11 | no / 3 sí (integración) |
+| `packages/mandate` | 27 | no |
+| `packages/sdk` | 16 | no / 3 sí (integración) |
 | `packages/cli` | 29 | no |
-| `apps/agent` | 252 | no |
+| `apps/agent` | **282** (30 de `checkMandate`) | no |
 | `scripts/` | 32 | no |
 
-**425 tests rápidos, 0 fallando** (384 antes de T16).
+**455 tests rápidos, 0 fallando** (425 antes de T17). Los 5 tests que `sdk`
+sumó frente a T16 no son de esta fase — ver la nota en `BITACORA.md`.
 
 Mutation testing deliberado en cada punto crítico, con las salidas en
 [evidencia/](evidencia/). En T16 pasó de nuevo lo que la Fase 2 anotó: la

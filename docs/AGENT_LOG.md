@@ -73,3 +73,18 @@ Pendiente: Devin respetó el prefijo `devin/` una vez indicado explícitamente
 cualquier cambio propio pendiente en `main` — un `checkout` de Devin en la
 carpeta compartida arrastra ediciones sin commitear a su branch (pasó en
 esta ronda, sin consecuencias porque se detectó a tiempo).
+
+## 2026-09-03 — cc/t17-check-mandate
+
+Agente: Claude Code
+
+Qué: T17 de la Fase 3 — `checkMandate(mandate, intent)`, función pura que
+compara una intención de compra contra el mandato firmado del principal.
+Ocho chequeos, ocho códigos de error nuevos, 30 tests, 11 mutaciones y las
+once cayeron. Primer hito trabajado en su propia rama `cc/*`, siguiendo P-2.
+
+Por qué: seguía en el desglose de T16 — comparar un intent contra un mandato
+es lo primero que no depende de la pregunta 6 del embajador.
+
+Pendiente: mergear `cc/t17-check-mandate` a `main` (y pushear, a confirmar con
+el usuario). Siguiente hito: T18, la memoria de gastos para `perDay`.

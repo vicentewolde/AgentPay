@@ -79,7 +79,23 @@ export type AgentPassErrorCode =
   /** `now` is past the mandate's `validUntil`. */
   | "MandateExpired"
   /** `now` is before the mandate's `validFrom`. */
-  | "MandateNotYetValid";
+  | "MandateNotYetValid"
+  /** The mandate's `credentialSubject.id` does not name the intent's agent. */
+  | "MandateAgentMismatch"
+  /** The mandate's `issuer` does not name the intent's principal. */
+  | "MandatePrincipalMismatch"
+  /** `grant.actions` does not permit the action an intent requires. */
+  | "MandateActionNotAllowed"
+  /** `grant.venues` does not list the venue an intent would purchase at. */
+  | "MandateVenueNotAllowed"
+  /** `grant.assets` does not list the asset an intent would spend. */
+  | "MandateAssetNotAllowed"
+  /** The mandate's spending limit is denominated in a different asset than the price. */
+  | "MandateCurrencyMismatch"
+  /** An intent's `issuedAt` falls outside the mandate's validity window. */
+  | "MandateWindowMismatch"
+  /** The total would exceed `grant.limits.perTx`. */
+  | "MandateAmountExceeded";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

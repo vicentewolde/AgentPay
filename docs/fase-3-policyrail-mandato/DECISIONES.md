@@ -205,3 +205,59 @@ la única lectura razonable de su ausencia.
 intent (`B-20`). Un intent es una acción puntual y su TTL corto es una
 protección; un mandato es una autorización sostenida, y elegir por el principal
 cuánto dura su propio consentimiento no le corresponde al código.
+
+---
+
+### M-8 · `checkMandate()` compara el `issuedAt` del intent contra la ventana del mandato · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T17
+
+Además de los cinco chequeos que `checkMandate()` hereda casi al pie de la
+letra de `checkScope()` (acción, venue, asset, moneda, monto), se agregó uno
+que no tiene equivalente en la Fase 2: si `intent.issuedAt` cae fuera de
+`[mandate.validFrom, mandate.validUntil]`, la compra se rechaza con
+`MandateWindowMismatch`, aunque todo lo demás coincida.
+
+**Motivo.** `checkMandate` es una función pura, sin reloj inyectado — a
+diferencia de `verifyMandate()` (T16), que sí recibe un `now` porque su trabajo
+es decir si el documento es válido *en este instante*. Para comparar un
+documento contra otro, la instancia de tiempo correcta no es "ahora": es el
+momento que el propio intent declara como el suyo, `issuedAt`. Eso mantiene la
+función determinista (mismos dos documentos, siempre la misma decisión, sin
+importar cuándo se ejecute el código) y cierra un caso real: un mandato
+verificado como vigente por un llamador con un reloj mal puesto, o una
+reconstrucción posterior de la decisión con fines de auditoría, no puede
+autorizar retroactivamente una compra que en su momento cayó fuera de ventana.
+
+Ambos bordes son inclusivos, siguiendo la misma convención que `validUntil` en
+la Fase 1, el `expires_at` del contrato, y la propia ventana del mandato en
+`verifyMandate()`.
+
+**Alternativa descartada:** que `checkMandate` reciba `now` y compare contra
+eso, delegando en el llamador la responsabilidad de ya haber verificado ambos
+documentos por separado. Se descartó porque duplicaría una responsabilidad que
+`verifyMandate()` y `verifyIntent()` ya tienen cada uno la suya, y porque
+introduciría no-determinismo en una función que el resto del código —y
+cualquier auditoría futura de MandateVault, Fase 5— necesita que sea
+repetible.
+
+---
+
+### M-9 · Los códigos de error de `checkMandate()` son propios, no reutilizan los de `checkScope()` · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T17
+
+Aunque el `grant` del mandato y el `scope` de la credencial comparten forma
+(`M-4`), sus chequeos producen códigos distintos:
+`ScopeVenueNotAllowed`/`MandateVenueNotAllowed`, y así con cada uno.
+
+**Motivo.** Bajo `M-4` un intent tiene que satisfacer **dos** autoridades. Si
+las dos usaran el mismo código de error, un log o un test no podría distinguir
+cuál de las dos lo rechazó — una ambigüedad que le costaría exactamente a la
+persona que más la necesita: quien audite después por qué una compra no se
+autorizó. Ocho códigos nuevos son más verbosos que reutilizar cinco, pero la
+alternativa escondía información en el nombre del error en vez de mostrarla.
+
+**Alternativa descartada:** un único código genérico como `PolicyDenied` con
+`details.authority: "scope" | "mandate"`. Habría sido menos código en
+`errors.ts`, pero movería la distinción del tipo del error a un campo de
+`details` que un llamador podría olvidar leer — el mismo motivo por el que el
+proyecto ya prefiere `code` sobre inspeccionar `message`.
