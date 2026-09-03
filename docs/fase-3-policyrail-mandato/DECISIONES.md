@@ -363,8 +363,56 @@ es público y responde la pregunta mejor que un mail.
 
 ---
 
-### M-12 · La pregunta 6 se le corrió a `@x402/stellar` y al facilitator, y es verificable sin preguntarle a nadie · `Pendiente`
-**Fecha:** 2026-09-03 · **Hito:** T19 (la decisión) · T22 (lo que la necesita)
+### M-12 · La pregunta 6 se le corrió a `@x402/stellar` y al facilitator, y es verificable sin preguntarle a nadie · `Resuelta — positiva`
+**Fecha:** 2026-09-03 · **Hito:** T19 (la decisión) · **T22 (el spike, resuelto el mismo día)**
+
+> **Resuelto.** El spike que este párrafo pedía se corrió leyendo el código
+> fuente publicado en npm de `@x402/stellar@2.24.0` (no 2.20.0 — la versión
+> subió entre T19 y T22, sin cambiar nada de lo que sigue) y del propio
+> `stellar-sdk` del que depende. **Respuesta: sí, un comprador `C...` es
+> viable.** Ni el cliente x402 ni el facilitator de OpenZeppelin verifican, en
+> ningún punto, que la dirección que paga sea una cuenta clásica. El detalle
+> completo, con las líneas de código exactas, está en
+> [evidencia/T22-spike.md](evidencia/T22-spike.md). Resumen de los cuatro
+> hechos que lo sostienen:
+>
+> 1. **El tipo del signer del cliente ya lo dice, verbatim.** `ClientStellarSigner`
+>    en `@x402/stellar` trae en su propio docstring: *"Used by x402 clients to
+>    sign auth entries. **Supports both classic (G) and contract (C) accounts.**"*
+>    `createEd25519Signer()` es solo un constructor de conveniencia para el caso
+>    `G...` — no es la única forma de producir uno.
+> 2. **`ExactStellarScheme.createPaymentPayload()` (el cliente) es agnóstico al
+>    tipo de dirección.** Usa `signer.address` como `from` del `transfer()`
+>    SEP-41 vía `nativeToScVal(address, {type:"address"})` — Soroban no
+>    distingue `Address::Account` de `Address::Contract` ahí — y firma con
+>    `tx.signAuthEntries({address, signAuthEntry: signer.signAuthEntry, ...})`,
+>    el helper genérico del `stellar-sdk` que nunca inspecciona qué tipo de
+>    cuenta es la dirección que autoriza.
+> 3. **El helper de firma del propio `stellar-sdk` (`auth.js`, `authorizeEntry`)
+>    acepta una `signatureScVal` completamente arbitraria** cuando el signer
+>    devuelve `{signatureScVal}` en vez de `{signature, publicKey}` — exactamente
+>    lo que un `__check_auth` con reglas propias necesitaría poder recibir.
+> 4. **La verificación del facilitator (`ExactStellarScheme.verify()`/`settle()`
+>    del lado servidor) tampoco distingue.** `validateAuthEntries()` exige que
+>    las credenciales sean del tipo `Address` (no `SourceAccount`) y que la
+>    firma no sea `scvVoid`, pero nunca inspecciona si esa `Address` es de
+>    cuenta o de contrato, ni la forma de la firma más allá de "no vacía". El
+>    settle reenvía la entrada de autorización del comprador **sin tocarla**.
+>
+> **El riesgo que sí queda, y que la lectura de código no puede descartar:**
+> `maxTransactionFeeStroops` (50 000 stroops por defecto) es un techo que el
+> facilitator aplica sobre la comisión que la propia simulación de Soroban
+> calcula — y un `__check_auth` con lógica propia (verificar una firma y
+> comparar un límite) consume más cómputo que la verificación nativa gratuita
+> de una cuenta clásica. Nada en el código dice si un `policy_rail` simple
+> entra bajo ese techo; eso solo se sabe simulando el contrato real, no
+> leyendo el SDK. Es la primera pregunta que el spike de construcción (más
+> abajo) tiene que contestar.
+>
+> Con esto, T22 pasa de "bloqueado por una pregunta" a "una pieza de código
+> por construir, con un techo de fee por verificar en el camino". El texto
+> original de la decisión, tal como se escribió en T19, sigue abajo sin
+> editar, siguiendo la misma convención que `M-1`.
 
 `M-1` preguntaba si el **bazaar** acepta un comprador `C...`. La pregunta ya no
 es del bazaar. La cadena real tiene tres eslabones y solo el tercero decide:
@@ -611,6 +659,55 @@ ubicada en el paquete que gobierna la confianza del registro completo.
 
 ---
 
+### M-18 · Se agregó `anchor()` a la superficie pública de `AgentPass`; nada más de `@agentpass/sdk` cambió · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T20
+
+El único cambio a un paquete de la Fase 1 en todo T20: `AgentPass` ganó un
+método `anchor({ credentialHash, subject, expiresAt, issuer })` que reenvía
+directo a la llamada `anchor()` del contrato — exactamente lo que `issue()`
+ya hacía por dentro, sin el `signCredential` que `issue()` le antepone.
+
+**Motivo.** Anclar un mandato necesita esa llamada cruda, y no había forma de
+llegar a ella desde la superficie pública existente: `issue()` la tiene
+enterrada detrás de la firma de una credencial. Las alternativas para no tocar
+`@agentpass/sdk` en absoluto eran peores:
+
+1. **Exportar la clase `Registry` completa.** Habría expuesto de una vez
+   `registerIssuer`, `deactivateIssuer`, la conexión, el manejo de errores — mucha
+   más superficie de la que Mandato necesita, para un paquete de una fase
+   posterior. `anchor()` sola es la pieza mínima.
+2. **Reimplementar la llamada Soroban en `@agentpay/mandate`.** Habría
+   duplicado exactamente lo que el comentario de `registry.ts` dice que existe
+   para evitar: "reimplementar el mapeo que el spec del contrato ya describe,
+   que es peor lugar para estar equivocado."
+
+**Por qué esto no repite el problema que `M-2` evita.** `M-2` existe para que
+`@agentpass/core` no empiece a cargar documentos de fases posteriores.
+`anchor()` no sabe qué es un Mandato — su tipo entero son primitivas
+(`string`, `Date`, `Keypair`) en el vocabulario que el **contrato** ya usa
+(`cred_hash`, `subject`, `expires_at`, `issuer`), el mismo vocabulario que
+`status()` y `revoke()`, ya públicos, ya usan. Es una ampliación de lo que el
+SDK ya exponía genéricamente, no una que le enseña algo nuevo. `issue()` no se
+tocó — sigue llamando a `registry.anchor()` exactamente como antes; `anchor()`
+es un método hermano agregado al mismo objeto, sin riesgo para el camino ya
+probado de credenciales.
+
+**Códigos de error, y cuáles se reutilizan tal cual.** `MandateRevoked` y
+`MandateUnknown` son nuevos — `CredentialRevoked`/`CredentialUnknown` llevan
+"credential" en el propio identificador que un llamador usa para branchear
+(`error.code === "CredentialRevoked"`), no solo en un mensaje, y reusarlos
+para un mandato reportaría mal qué documento falló. En cambio
+`IssuerNotRegistered`, `IssuerInactive` y `RegistryMismatch` se reutilizan
+verbatim: el propio esquema del Mandato ya llama `issuer` a este rol
+(`mandate.issuer` *es* el principal, ver `mandate.ts`), así que nada en esos
+tres códigos describe mal a un mandato — solo el texto del mensaje cambia,
+igual que `SignerMismatch` en `M-9`. `MandateExpired` tampoco es nuevo: ya
+existía desde T16 para el chequeo offline, y se reutiliza para el mismo matiz
+que `CredentialExpired` cubre en `AgentPass.verify()` — el registro dice
+expirado aunque la ventana firmada diga lo contrario.
+
+---
+
 ### M-19 · `can_create_purchase_intent` se calcula en un único lugar; un valor hardcodeado ahí fue un bug real, no una mutación · `Vigente`
 **Fecha:** 2026-09-03 · **Hito:** T21
 
@@ -691,51 +788,3 @@ cambian de contenido bajo el mismo agente sin reconfigurarlo— que el sistema
 no tiene y que documentar como si la tuviera sería más engañoso que dejar la
 mutación anotada como equivalente, igual que `M-5`.
 
----
-
-### M-18 · Se agregó `anchor()` a la superficie pública de `AgentPass`; nada más de `@agentpass/sdk` cambió · `Vigente`
-**Fecha:** 2026-09-03 · **Hito:** T20
-
-El único cambio a un paquete de la Fase 1 en todo T20: `AgentPass` ganó un
-método `anchor({ credentialHash, subject, expiresAt, issuer })` que reenvía
-directo a la llamada `anchor()` del contrato — exactamente lo que `issue()`
-ya hacía por dentro, sin el `signCredential` que `issue()` le antepone.
-
-**Motivo.** Anclar un mandato necesita esa llamada cruda, y no había forma de
-llegar a ella desde la superficie pública existente: `issue()` la tiene
-enterrada detrás de la firma de una credencial. Las alternativas para no tocar
-`@agentpass/sdk` en absoluto eran peores:
-
-1. **Exportar la clase `Registry` completa.** Habría expuesto de una vez
-   `registerIssuer`, `deactivateIssuer`, la conexión, el manejo de errores — mucha
-   más superficie de la que Mandato necesita, para un paquete de una fase
-   posterior. `anchor()` sola es la pieza mínima.
-2. **Reimplementar la llamada Soroban en `@agentpay/mandate`.** Habría
-   duplicado exactamente lo que el comentario de `registry.ts` dice que existe
-   para evitar: "reimplementar el mapeo que el spec del contrato ya describe,
-   que es peor lugar para estar equivocado."
-
-**Por qué esto no repite el problema que `M-2` evita.** `M-2` existe para que
-`@agentpass/core` no empiece a cargar documentos de fases posteriores.
-`anchor()` no sabe qué es un Mandato — su tipo entero son primitivas
-(`string`, `Date`, `Keypair`) en el vocabulario que el **contrato** ya usa
-(`cred_hash`, `subject`, `expires_at`, `issuer`), el mismo vocabulario que
-`status()` y `revoke()`, ya públicos, ya usan. Es una ampliación de lo que el
-SDK ya exponía genéricamente, no una que le enseña algo nuevo. `issue()` no se
-tocó — sigue llamando a `registry.anchor()` exactamente como antes; `anchor()`
-es un método hermano agregado al mismo objeto, sin riesgo para el camino ya
-probado de credenciales.
-
-**Códigos de error, y cuáles se reutilizan tal cual.** `MandateRevoked` y
-`MandateUnknown` son nuevos — `CredentialRevoked`/`CredentialUnknown` llevan
-"credential" en el propio identificador que un llamador usa para branchear
-(`error.code === "CredentialRevoked"`), no solo en un mensaje, y reusarlos
-para un mandato reportaría mal qué documento falló. En cambio
-`IssuerNotRegistered`, `IssuerInactive` y `RegistryMismatch` se reutilizan
-verbatim: el propio esquema del Mandato ya llama `issuer` a este rol
-(`mandate.issuer` *es* el principal, ver `mandate.ts`), así que nada en esos
-tres códigos describe mal a un mandato — solo el texto del mensaje cambia,
-igual que `SignerMismatch` en `M-9`. `MandateExpired` tampoco es nuevo: ya
-existía desde T16 para el chequeo offline, y se reutiliza para el mismo matiz
-que `CredentialExpired` cubre en `AgentPass.verify()` — el registro dice
-expirado aunque la ventana firmada diga lo contrario.

@@ -399,3 +399,52 @@ T22 (contrato `policy_rail` como smart account) sigue condicionado a un
 spike de lectura de `@x402/stellar` y el facilitator (`M-12`) — no a nada
 del embajador. Antes de T22 probablemente convenga T23 (demo de la fase
 completa), que no depende de ese spike.
+
+## 2026-09-03 (10) — cc/t22-smart-account-spike
+
+Agente: Claude Code
+
+Qué: spike de `M-12` para T22 — la pregunta que llevaba abierta desde T16:
+¿acepta el facilitator de OpenZeppelin (y el paquete `@x402/stellar` que el
+bazaar usa) un comprador que sea una cuenta de contrato (`C...`), no solo una
+cuenta clásica (`G...`)? Se clonó de nuevo el repo del bazaar (para confirmar
+la versión exacta del paquete que declara) y se descargó `@x402/stellar@2.24.0`
+y `@x402/core@2.24.0` directo de npm (público, Apache-2.0) a un scratchpad
+fuera del repo, leyendo el `dist/cjs/` compilado línea por línea — cliente,
+facilitator, y el helper `authorizeEntry` del `@stellar/stellar-sdk` del que
+dependen (ya presente en `node_modules` de este proyecto).
+
+**Respuesta: sí, positiva.** Ni el cliente (`ExactStellarScheme.createPaymentPayload`),
+ni el helper de firma del SDK (`auth.js`), ni la verificación del facilitator
+(`validateAuthEntries`) inspeccionan o restringen el tipo de dirección que
+paga — tratan cuenta clásica y cuenta de contrato exactamente igual, y dejan
+que sea el host de Soroban quien decida cómo verificar la firma según el tipo
+de cuenta. El propio tipo `ClientStellarSigner` del paquete lo dice en su
+docstring: "Supports both classic (G) and contract (C) accounts." Detalle
+completo, con las líneas de código exactas, en
+`docs/fase-3-policyrail-mandato/evidencia/T22-spike.md`.
+
+Por qué: sin esta respuesta, T22 (el contrato `policy_rail` como smart
+account) no podía justificarse — sería escribir un contrato para un flujo que
+tal vez nunca lo aceptaría como pagador. Es la misma disciplina de T19: leer
+código público real antes de asumir o preguntarle a alguien.
+
+Decisión actualizada: `M-12` pasa de `Pendiente` a `Resuelta — positiva`, sin
+borrar el texto original (misma convención que `M-1`). Documentación tocada:
+`ROADMAP.md` (§3, §4.2 pregunta 6, §4.3, §4.4) y `BITACORA.md`/`DECISIONES.md`
+de la Fase 3, más `evidencia/T22-spike.md`.
+
+**Lo que el spike de lectura no pudo contestar, y queda anotado para el
+próximo paso:** el facilitator rechaza transacciones cuya comisión estimada
+por simulación supere un techo fijo (`maxTransactionFeeStroops`, 50 000
+stroops por defecto). Un `__check_auth` propio consume más cómputo que la
+verificación nativa gratuita de una cuenta clásica — cuánto más, solo se sabe
+simulando el contrato real. Es la primera pregunta que contestará empezar a
+construir el contrato, no algo que la lectura de código pudiera adelantar.
+
+Pendiente: con la vía libre confirmada, falta decidir con el usuario si se
+empieza ya a construir `policy_rail` en Rust/Soroban (un contrato de pagos
+nuevo, superficie sensible) o si conviene primero T23 (demo de la fase
+completa con lo que ya existe) antes de abrir ese frente. Esta sesión no
+escribió ningún contrato todavía — solo la investigación, commiteada en
+`cc/t22-smart-account-spike`.

@@ -13,7 +13,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T21 · **Siguiente:** T22 (depende de `M-12`)
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T21 · **En curso:** T22 — `M-12` resuelta (positiva), contrato sin construir
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
@@ -66,8 +66,8 @@ convención — T19 en `cc/t19-policy-rail`, T20 en `cc/t20-anchor-mandate`.
 | T19 | PolicyRail: dónde se autoriza o se bloquea | ✅ cerrado |
 | T20 | Anclar y revocar un mandato en cadena | ✅ cerrado |
 | T21 | Cablearlo en el agente | ✅ cerrado |
-| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 depende de un spike, `M-12` |
-| T23 | Demo de la fase completa | ⏳ siguiente |
+| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 `M-12` resuelta (positiva) 2026-09-03, contrato sin construir |
+| T23 | Demo de la fase completa | ⏳ |
 
 ---
 
@@ -446,3 +446,47 @@ del mandato fresco-vs-arranque es equivalente, y hasta cuándo).
 (T22, depende de `M-12`), el chequeo de `payTo` en el reto 402 (`M-14`, sigue
 sin nada firmado contra qué compararlo), y renovar un mandato sin reiniciar el
 agente (lo que haría dejar de ser equivalente a `M-20`).
+
+---
+
+## T22 · Spike de `M-12` — resuelto, positivo — 2026-09-03
+
+**Qué se investigó, en lenguaje llano.** Antes de escribir una sola línea de
+contrato, había que contestar una pregunta que llevaba abierta desde T16: si
+un agente compra a través del bazaar usando el paquete oficial `@x402/stellar`
+y el facilitator de OpenZeppelin, ¿podría el que paga ser un contrato
+inteligente en vez de una cuenta común? Eso es lo que necesitaría
+`policy_rail` para hacer cumplir un límite de gasto **dentro de la misma
+transacción** que mueve la plata, en vez de antes, como hace hoy
+`LocalPolicyRail`.
+
+**Respuesta: sí.** Se leyó el código fuente real y público de `@x402/stellar`
+(descargado de npm, no un resumen de su documentación) y de la librería de
+Stellar de la que depende. En ningún punto de esa cadena —ni el cliente que
+arma el pago, ni la librería que firma la autorización, ni el propio
+verificador del facilitator— se comprueba qué tipo de cuenta está pagando.
+Los tres tratan una cuenta común y un contrato exactamente igual, y dejan que
+sea la red misma la que decida cómo verificar la firma según el tipo de
+cuenta que sea. El detalle línea por línea está en
+[evidencia/T22-spike.md](evidencia/T22-spike.md).
+
+**Lo que la lectura de código no puede contestar.** El facilitator solo acepta
+transacciones cuya comisión estimada quede bajo un techo fijo. Un contrato
+propio que verifique una firma y compare un límite gasta más cómputo que la
+verificación gratuita que la red ya hace para una cuenta común — cuánto más,
+sólo se sabe simulando el contrato real, no leyendo el paquete. Es la primera
+pregunta que contestará construir el contrato, no algo que se pueda adelantar
+leyendo código de otro.
+
+**Evidencia técnica.** [evidencia/T22-spike.md](evidencia/T22-spike.md) —
+las líneas de código exactas de `@x402/stellar@2.24.0` y `@stellar/stellar-sdk@17.0.1`
+que sostienen la respuesta, más una búsqueda negativa (ningún patrón que
+restrinja al pagador a cuentas `G...` en todo el paquete).
+
+**Decisión actualizada:** `M-12` pasa de `Pendiente` a `Resuelta — positiva`,
+sin borrar el texto original — misma convención que `M-1`.
+
+**Qué sigue, sin construir todavía:** el contrato Soroban `policy_rail` con
+`__check_auth`, empezando por una versión mínima que solo verifique una firma
+(para medir el costo real de simulación contra el techo del facilitator)
+antes de agregarle el enforcement de `perTx`/`perDay`.
