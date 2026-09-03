@@ -288,3 +288,19 @@ Coordinación: el estado sin commitear que la sesión anterior dejó anotado sob
 rama `devin/website` no existe, y el commit `ecd538e` registró la eliminación.
 Se commiteó en `main` (`5da30fb`) una edición pendiente de Devin al prompt de
 T19 antes de crear la rama, siguiendo el punto 4 del checklist.
+
+---
+
+## 2026-09-03 (7) — main (limpieza de cambios T20)
+
+Agente: Claude Code
+
+Qué: se eliminaron todos los cambios de T20 que se comenzaron en esta sesión.
+Se borró la rama `cc/t20-anchor-mandate` y se restauraron todos los archivos a
+su estado en `main`.
+
+Por qué: el usuario solicitó que solo se lea sin hacer cambios, y que Claude
+Code pueda continuar con T20 desde el estado limpio de `main`.
+
+Pendiente: ninguna. El repo está en `main` con working tree clean, listo para
+que Claude Code continúe con T20 en una nueva sesión.
