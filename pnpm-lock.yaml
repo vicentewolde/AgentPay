@@ -54,6 +54,24 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  apps/web:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@agentpass/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@agentpay/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@agentpay/mandate':
+        specifier: workspace:*
+        version: link:../../packages/mandate
+      '@stellar/stellar-sdk':
+        specifier: ^17.0.1
+        version: 17.0.1(debug@4.4.3)
+
   packages/cli:
     dependencies:
       '@agentpass/core':

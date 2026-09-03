@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-03 · Fase actual: **Fase 4 en curso (T24 cerrado)** — Fases 2 y 3 completas (T9–T23)
+Última revisión: 2026-09-03 · Fase actual: **Fase 4 en curso (T24 y T25 cerrados)** — Fases 2 y 3 completas (T9–T23)
 
 ---
 
@@ -65,8 +65,8 @@ en su propia carpeta bajo `docs/`.
 | `docs/fase-3-policyrail-mandato/DECISIONES.md` | Fase 3 (PolicyRail + Mandato) | Decisiones de esta fase (`M-1` a `M-22`), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
 | `docs/fase-4-mandategate/CONTEXTO.md` | Fase 4 (MandateGate) | Qué prueba la fase, qué NO es, qué cambió respecto al alcance documentado | Vigente, en curso |
 | `docs/fase-4-mandategate/ARQUITECTURA.md` | Fase 4 (MandateGate) | Mapa técnico denso: el módulo de pago x402, identidades resueltas contra tráfico real, dependencias nuevas | Vigente, en curso |
-| `docs/fase-4-mandategate/BITACORA.md` | Fase 4 (MandateGate) | Bitácora hito a hito (T24…), en lenguaje llano, con evidencia | T24 cerrado |
-| `docs/fase-4-mandategate/DECISIONES.md` | Fase 4 (MandateGate) | Decisiones de esta fase (`G-1` a `G-7`), cada una con motivo y alternativa descartada | En curso |
+| `docs/fase-4-mandategate/BITACORA.md` | Fase 4 (MandateGate) | Bitácora hito a hito (T24, T25), en lenguaje llano, con evidencia | T24 y T25 cerrados |
+| `docs/fase-4-mandategate/DECISIONES.md` | Fase 4 (MandateGate) | Decisiones de esta fase (`G-1` a `G-8`), cada una con motivo y alternativa descartada | En curso |
 
 **Resuelto (2026-09-02): documentación separada por fase.** Cada fase recibe su
 propia carpeta `docs/fase-N-nombre/` con su `CONTEXTO`, `ARQUITECTURA`,
@@ -403,7 +403,18 @@ cuenta del agente confirmado bajando lo esperado. Detalle en
 | Hito | Qué construye | Estado |
 |---|---|---|
 | T24 | Ejecutar un pago x402 real contra el bazaar (sin frontend) | ✅ cerrado 2026-09-03 |
-| T25 | Frontend simple (`apps/web`) que dispara el mismo flujo desde un navegador | 🚧 siguiente |
+| T25 | Frontend simple (`apps/web`) que dispara el mismo flujo desde un navegador | ✅ cerrado 2026-09-03 |
+
+**T25 cerrado.** `pnpm run web` — página sin build step, servidor `node:http`
+sin framework nuevo, probada de punta a punta en un navegador real: catálogo
+real → sesión (credencial + Mandato anclados) → compra real (pago x402
+verificado en Horizon) → revocación real → reintento rechazado con
+`MandateRevoked`. Encontró y corrigió un hallazgo real sobre `perDay` en el
+camino de pago real (`docs/fase-4-mandategate/DECISIONES.md` → `G-8`): una
+compra cuenta el doble contra el límite diario porque `authorise()` se llama
+dos veces por compra (T19 estructural + T24 real) y el chequeo no distingue
+una re-verificación del mismo intent de una compra nueva — no corregido en
+el rail, documentado como decisión pendiente.
 
 ### 4.5 · Fase 5 — MandateVault + cierre del piloto ⏳ sin diseñar
 

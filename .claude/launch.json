@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "agentpay-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "web"],
+      "port": 8787
+    }
+  ]
+}

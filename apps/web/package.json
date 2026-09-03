@@ -1,0 +1,16 @@
+{
+  "name": "@agentpay/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@agentpass/core": "workspace:*",
+    "@agentpass/sdk": "workspace:*",
+    "@agentpay/agent": "workspace:*",
+    "@agentpay/mandate": "workspace:*",
+    "@stellar/stellar-sdk": "^17.0.1"
+  }
+}

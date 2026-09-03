@@ -722,3 +722,47 @@ Pendiente: mergear `cc/t24-x402-payment` a `main` y pushear (a confirmar con
 el usuario). Siguiente: T25, un frontend simple (`apps/web`) que dispara este
 mismo flujo desde un navegador — decidido explícitamente como un hito
 separado, después de probar el pago por script, no junto con él.
+
+## 2026-09-03 (17) — cc/t25-web-frontend
+
+Agente: Claude Code
+
+Qué: T25, segundo hito de la Fase 4 — `apps/web` (`pnpm run web`), un
+frontend simple sin build step: servidor `node:http` (sin framework nuevo)
+más una página HTML/CSS/JS que expone cuatro pasos clickeables — catálogo
+real del bazaar, iniciar sesión (credencial + Mandato anclados en testnet),
+comprar de verdad (`swap-risk-quote`, el mismo pago x402 que T24 probó por
+script), revocar el Mandato. Probado de punta a punta en un navegador real
+vía Claude Browser, no solo leído: compra real
+(`53a4be61713c3ce5f32b18754a194dbd0d7038064abab9c676e975fff4be62f6`, ledger
+4489237, confirmada en Horizon), revocación real
+(`7d8de04abb7f94669e5bdac898e9ea78b45aca680357122868edb95f629382eb`),
+reintento rechazado con `MandateRevoked`, credencial confirmada `Active` en
+vivo. Un producto sin pago conectado da un mensaje claro en vez de fallar
+oscuro. 589 tests (sin cambios — `apps/web` no tiene tests propios, mismo
+criterio que `scripts/`), typecheck/build limpios.
+
+**Un bug real, encontrado probando el botón "Comprar" en el navegador, no
+leyendo código.** El primer intento fijaba un `perDay` de Mandato ajustado
+(como hace `pnpm demo`) para poder demostrar un rechazo — pero la
+**primera** compra se rechazó, no la segunda. Causa: una compra real llama
+`PolicyRail.authorise()` dos veces (T19 estructural + T24 con los términos
+reales), y `checkDailyLimit` no sabe que la segunda llamada es del mismo
+`intentId` — cuenta el monto dos veces contra el límite, aunque el ledger
+solo guarde una (dedupe por `intentId`, `M-15`, protege el monto guardado,
+no el chequeo). Corregido usando el `perDay` sin ajustar del scope (igual
+que T24 ya hacía sin haberlo anotado), y documentado como `G-8` —
+deliberadamente no "arreglado" en `PolicyRail`, porque la respuesta correcta
+(¿una re-verificación del mismo intent debería contar, o no?) es una
+decisión de diseño de la Fase 3 que merece su propia conversación.
+
+Decisión nueva: `G-8` en `docs/fase-4-mandategate/DECISIONES.md`.
+Documentación tocada: `BITACORA.md` (T25 cerrado), `ROADMAP.md` §4.4,
+`CLAUDE.md`, más `evidencia/T25.md`. Archivos nuevos: `apps/web/` completo,
+`.claude/launch.json`.
+
+Pendiente: mergear `cc/t25-web-frontend` a `main` y pushear (a confirmar con
+el usuario). **Fase 4: T24 y T25 cerrados.** Nada decidido todavía para el
+próximo hito — candidatos anotados, no elegidos: resolver `G-8`, la lista de
+`payTo` permitidos que falta en el Mandato (`M-14`), convertir el pago en
+una tool del agente (`G-4`), o empezar a preparar Fase 5 (MandateVault).

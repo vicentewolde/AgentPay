@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentPay — demo en vivo</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #0b0d12;
+    --panel: #12151c;
+    --panel-border: #232838;
+    --text: #e7e9ee;
+    --muted: #8a91a3;
+    --accent: #5fe3b3;
+    --accent-dim: #2f7a5f;
+    --danger: #ff6b6b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 32px 20px 80px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  header { margin-bottom: 32px; }
+  header h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 640px; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+  section h2 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  section .lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  button {
+    background: var(--accent);
+    color: #06110d;
+    border: none;
+    border-radius: 7px;
+    padding: 9px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:disabled { background: var(--accent-dim); color: #0b0d12aa; cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--panel-border); }
+  button.danger { background: var(--danger); color: #2a0505; }
+  input[type="text"] {
+    width: 100%;
+    background: #0b0d12;
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 9px 12px;
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 4px; }
+  .card {
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: #0e1118;
+  }
+  .card.payable { border-color: var(--accent-dim); }
+  .card h3 { margin: 0 0 4px; font-size: 14px; }
+  .card p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+  .card .price { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--accent-dim);
+    color: #cffff0;
+    margin-bottom: 6px;
+  }
+  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 0; font-size: 13px; }
+  dl.facts dt { color: var(--muted); }
+  dl.facts dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+  .steps { margin: 12px 0 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 13px; }
+  .steps li { padding: 4px 0; border-top: 1px dashed var(--panel-border); }
+  .steps li:first-child { border-top: none; }
+  .steps li b { color: var(--muted); font-weight: 400; }
+  .status { margin-top: 12px; font-size: 13px; }
+  .status.ok { color: var(--accent); }
+  .status.err { color: var(--danger); }
+  a { color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>AgentPay</h1>
+    <p>
+      Un agente que prueba quién lo opera, qué puede gastar, y compra de
+      verdad en el bazaar de Stellar — testnet, dinero real dentro de ese
+      testnet, nada simulado.
+    </p>
+  </header>
+
+  <section>
+    <h2>1 · Catálogo real del bazaar</h2>
+    <p class="lead">Leído en vivo de <code>stellar-bazaar-x402.vercel.app</code>.</p>
+    <div id="products" class="products">Cargando…</div>
+  </section>
+
+  <section>
+    <h2>2 · Sesión</h2>
+    <p class="lead">
+      Emite una credencial AgentPass y un Mandato, ambos firmados y anclados
+      en Stellar testnet, y arranca el agente.
+    </p>
+    <div class="row">
+      <button id="start-btn">Iniciar sesión</button>
+    </div>
+    <dl class="facts" id="session-facts" hidden></dl>
+    <div id="session-status" class="status"></div>
+  </section>
+
+  <section>
+    <h2>3 · Comprar (pago real)</h2>
+    <p class="lead">
+      Solo <b>Swap Risk Quote</b> tiene un pago real conectado en esta demo —
+      el mismo que <code>pnpm run demo:pay-real</code> probó. El botón
+      "Comprar" firma la intención y ejecuta el pago x402 de verdad.
+    </p>
+    <input id="instruction" type="text" value="Comprame un Swap Risk Quote, por favor." />
+    <div class="row">
+      <button id="buy-btn" disabled>Comprar</button>
+      <span class="hint">Cada clic paga de verdad — 0.001 USDC por compra.</span>
+    </div>
+    <ul class="steps" id="buy-steps"></ul>
+    <div id="buy-status" class="status"></div>
+  </section>
+
+  <section>
+    <h2>4 · Revocar el Mandato</h2>
+    <p class="lead">
+      Corta el consentimiento del principal desde afuera del agente. La
+      credencial sigue activa — es una autoridad distinta la que se corta.
+    </p>
+    <div class="row">
+      <button id="revoke-btn" class="danger" disabled>Revocar Mandato</button>
+    </div>
+    <dl class="facts" id="revoke-facts" hidden></dl>
+    <div id="revoke-status" class="status"></div>
+  </section>
+</main>
+
+<script>
+async function api(path, options) {
+  const res = await fetch(path, options);
+  return { status: res.status, body: await res.json() };
+}
+
+function setFacts(el, entries) {
+  el.innerHTML = "";
+  for (const [label, value] of entries) {
+    const dt = document.createElement("dt");
+    dt.textContent = label;
+    const dd = document.createElement("dd");
+    dd.textContent = value;
+    el.append(dt, dd);
+  }
+  el.hidden = false;
+}
+
+function setStatus(el, ok, message) {
+  el.textContent = message;
+  el.className = "status " + (ok ? "ok" : "err");
+}
+
+async function loadProducts() {
+  const el = document.getElementById("products");
+  try {
+    const { body } = await api("/api/products");
+    if (!body.ok) throw new Error(body.message ?? "no se pudo leer el catálogo");
+    el.innerHTML = "";
+    for (const p of body.products) {
+      const card = document.createElement("div");
+      const payable = p.id === body.payableProductId;
+      card.className = "card" + (payable ? " payable" : "");
+      card.innerHTML =
+        (payable ? '<span class="badge">pago real</span>' : "") +
+        "<h3></h3><p></p><div class=\"price\"></div>";
+      card.querySelector("h3").textContent = p.name;
+      card.querySelector("p").textContent = p.description;
+      card.querySelector(".price").textContent = p.price.amount + " " + p.price.asset.split(":")[0];
+      el.append(card);
+    }
+  } catch (error) {
+    el.textContent = "No se pudo leer el catálogo: " + error.message;
+  }
+}
+
+document.getElementById("start-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("start-btn");
+  const status = document.getElementById("session-status");
+  btn.disabled = true;
+  setStatus(status, true, "Emitiendo credencial y mandato en testnet…");
+  try {
+    const { body } = await api("/api/session/start", { method: "POST" });
+    if (!body.ok) throw new Error(body.message ?? "fallo al iniciar sesión");
+    setFacts(document.getElementById("session-facts"), [
+      ["credencial", body.credentialHash],
+      ["mandato", body.mandateHash],
+      ["estado", body.agentStatus],
+      ["venue", body.venue],
+      ["perTx", body.perTx],
+      ["perDay", body.perDay],
+      ["tools", body.tools.join(", ")],
+    ]);
+    setStatus(status, true, "Sesión activa.");
+    document.getElementById("buy-btn").disabled = false;
+    document.getElementById("revoke-btn").disabled = false;
+  } catch (error) {
+    setStatus(status, false, error.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("buy-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("buy-btn");
+  const status = document.getElementById("buy-status");
+  const stepsEl = document.getElementById("buy-steps");
+  const instruction = document.getElementById("instruction").value;
+  btn.disabled = true;
+  stepsEl.innerHTML = "";
+  setStatus(status, true, "Comprando…");
+  try {
+    const { body } = await api("/api/session/buy", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instruction }),
+    });
+    for (const step of body.steps ?? []) {
+      const li = document.createElement("li");
+      const value =
+        step.label === "explorer" || step.label === "recurso"
+          ? (() => {
+              const a = document.createElement("a");
+              a.href = step.value;
+              a.textContent = step.value;
+              a.target = "_blank";
+              a.rel = "noopener";
+              return a;
+            })()
+          : document.createTextNode(step.value);
+      li.append(document.createElement("b"), " ");
+      li.querySelector("b").textContent = step.label + ": ";
+      li.append(value);
+      stepsEl.append(li);
+    }
+    if (body.ok) {
+      setStatus(status, true, "Pago real ejecutado.");
+    } else {
+      setStatus(status, false, body.code + ": " + body.message);
+    }
+  } catch (error) {
+    setStatus(status, false, error.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("revoke-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("revoke-btn");
+  const status = document.getElementById("revoke-status");
+  btn.disabled = true;
+  setStatus(status, true, "Revocando…");
+  try {
+    const { body } = await api("/api/session/revoke", { method: "POST" });
+    if (!body.ok) throw new Error((body.code ?? "error") + ": " + body.message);
+    setFacts(document.getElementById("revoke-facts"), [
+      ["mandato revocado", body.mandateHash],
+      ["tx", body.revokeTx],
+      ["credencial (en vivo)", body.credentialStatus],
+    ]);
+    setStatus(status, true, "Mandato revocado. La próxima compra debería rechazarse.");
+  } catch (error) {
+    setStatus(status, false, error.message);
+    btn.disabled = false;
+  }
+});
+
+loadProducts();
+</script>
+</body>
+</html>

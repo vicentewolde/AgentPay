@@ -24,7 +24,7 @@ imposible de saltar por prompt injection.
 | [docs/fase-3-policyrail-mandato/DECISIONES.md](docs/fase-3-policyrail-mandato/DECISIONES.md) | Decisiones de la Fase 3 (prefijo `M-`). `M-1` quedó **superada** en T19; `M-11` y `M-12` la reemplazan |
 | [docs/fase-4-mandategate/CONTEXTO.md](docs/fase-4-mandategate/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
 | [docs/fase-4-mandategate/ARQUITECTURA.md](docs/fase-4-mandategate/ARQUITECTURA.md) | Mapa técnico de la Fase 4: el módulo de pago x402, identidades resueltas contra tráfico real |
-| [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24 cerrado.** Estado actual y qué sigue |
+| [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24 y T25 cerrados.** Estado actual y qué sigue |
 | [docs/fase-4-mandategate/DECISIONES.md](docs/fase-4-mandategate/DECISIONES.md) | Decisiones de la Fase 4 (prefijo `G-`) |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Devin: qué se hizo, en qué branch, qué queda pendiente |
 | [README.md](README.md) | Cómo correr el proyecto |

@@ -174,3 +174,61 @@ encontró el error antes de que llegara a producción.
 **Alternativa descartada:** ninguna considerada — es la aplicación directa de
 una disciplina ya establecida en el proyecto, no una decisión con dos
 caminos.
+
+### G-8 · Una compra real cuesta el doble contra `perDay`, y por ahora se documenta en vez de arreglarse · `Vigente`
+**Fecha:** 2026-09-03 (T25)
+
+Probando `apps/web` con un `perDay` de Mandato ajustado a solo el doble del
+precio del producto (`"0.0015"` contra un producto de `0.001`), la **primera**
+compra se rechazó — no la segunda, como la intuición (y el patrón de `pnpm
+demo`) hacía esperar.
+
+**Causa, confirmada leyendo `checkDailyLimit` y `PolicyRail.authorise()`:**
+una compra real llama `authorise()` **dos veces** — una vez estructural
+dentro de `create_purchase_intent` (T19, sin `terms`), otra con los términos
+reales dentro de `executeBazaarPayment` (T24). `SpendLedger.record()`
+deduplica por `intentId` (`M-15`), así que el **monto guardado** en el
+ledger no se duplica — pero `checkDailyLimit(perDay, spentToday, amount)`
+no sabe nada de `intentId`: en la segunda llamada, `spentToday` ya incluye
+lo que la primera llamada acaba de registrar, y el chequeo vuelve a sumarle
+`amount` encima. El resultado: una sola compra real consume `2 × su monto`
+contra el límite diario en el momento de decidir, aunque el ledger termine
+guardando solo `1 ×`. Con un `perDay` ajustado a exactamente `2 × monto`,
+ese margen se agota en la primera compra, no en la segunda.
+
+**Qué se hizo en este hito:** `apps/web` usa el mismo `perDay` que ya trae
+`examples/scope-stellar-bazaar.json` (`5.00`, generoso) para el Mandato, en
+vez de uno ajustado como hace `pnpm demo` — la misma elección que
+`scripts/demo-real-payment.ts` (T24) ya había hecho, sin haber quedado
+anotada como decisión en ese momento. Con eso, comprar es confiable en cada
+clic; la demo de "el Mandato dice que no" queda a cargo exclusivo del botón
+de revocación (`MandateRevoked`), que no depende de esta aritmética.
+
+**Qué NO se hizo, a propósito.** No se tocó `checkDailyLimit` ni
+`PolicyRail.authorise()` — son diseño cerrado de la Fase 3, y "arreglar" esto
+implica una decisión real todavía no tomada: ¿`authorise()` debería saber
+que una segunda llamada con el mismo `intentId` es una re-verificación, no
+una compra nueva, y no debería sumar el monto dos veces al chequeo? ¿O es
+correcto que cueste el doble, como un margen de seguridad implícito contra
+un pago que se re-intenta? Ninguna de las dos respuestas es obvia, y
+tomarla apurado dentro de un hito de frontend habría sido exactamente el
+tipo de decisión que este proyecto prefiere parar y anotar en vez de
+resolver de pasada.
+
+**Consecuencia práctica, dicha en voz alta:** mientras `executeBazaarPayment`
+exista y se use, el `perDay` efectivamente utilizable por el camino de pago
+real es aproximadamente la mitad del `perDay` nominal del Mandato — un
+`perDay` de `5.00` deja margen real para `~2.50` en compras por este camino,
+no `5.00`. Para esta demo (compras de `0.001`) el margen sobra por completo;
+para un uso real con montos más grandes, esto necesita resolverse antes de
+confiar en el número nominal.
+
+**Alternativa descartada:** ajustar el `perDay` del Mandato de `apps/web` a
+un valor que sí alcance a mostrar un rechazo en la segunda compra (existe
+matemáticamente — hay que fijarlo entre `2×monto` y `3×monto`, y el
+rechazo cae dentro de `executeBazaarPayment`, no dentro de
+`create_purchase_intent`). Se descartó por frágil: depende de un cálculo
+exacto que un futuro cambio de precio del producto rompería en silencio, y
+el punto donde efectivamente rechaza (la firma del pago, no la firma del
+intent) no es el que `pnpm demo` ya narra — hubiera sido una historia
+distinta contada como si fuera la misma.
