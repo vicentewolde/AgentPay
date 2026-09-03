@@ -46,7 +46,10 @@ export {
   BAZAAR_VENUE_CONTRACT_ID,
   BAZAAR_VENUE_ID,
   createBazaarCatalog,
+  getBazaarServiceRoute,
+  mapAssetContract,
   type BazaarCatalogOptions,
+  type BazaarServiceRoute,
 } from "./catalog/bazaar.js";
 
 export {
@@ -190,3 +193,12 @@ export {
   type TermsDenied,
   type TermsRejectionCode,
 } from "./policy/terms.js";
+
+export {
+  executeBazaarPayment,
+  fillRouteTemplate,
+  toPaymentTerms,
+  type BazaarPaymentReceipt,
+  type ExecuteBazaarPaymentDeps,
+  type ExecuteBazaarPaymentInput,
+} from "./payment/x402.js";

@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-03 · Fase actual: **Fase 2 y Fase 3 completas (T9–T23)** — próxima: Fase 4
+Última revisión: 2026-09-03 · Fase actual: **Fase 4 en curso (T24 cerrado)** — Fases 2 y 3 completas (T9–T23)
 
 ---
 
@@ -57,9 +57,16 @@ en su propia carpeta bajo `docs/`.
 | `docs/fase-1-agentpass/ARQUITECTURA.md` | Fase 1 (AgentPass) | Mapa técnico denso: modelo de identidad, esquema de credencial, superficie del contrato, decisiones de seguridad | Cerrado, pensado para copiarse entero en un chat nuevo |
 | `docs/fase-1-agentpass/BITACORA.md` | Fase 1 (AgentPass) | Bitácora hito a hito (T1–T8), en lenguaje llano, con evidencia | Cerrado — "Estado actual: piloto completo" se refiere a **AgentPass**, no al proyecto AgentPay entero |
 | `docs/fase-1-agentpass/DECISIONES.md` | Fase 1 (AgentPass) | Las 7 decisiones del brief original (A-1 a A-7) + 41 decisiones de implementación (I-1 a I-41), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
-| `docs/fase-2-agente-compra/ARQUITECTURA.md` | Fase 2 (agente de compra) | Mapa técnico denso: catálogo, herramientas, verificación de credencial, chequeo de scope, forma exacta del `PurchaseIntent` | Cerrado, T9–T14 — pensado para copiarse entero en un chat nuevo |
-| `docs/fase-2-agente-compra/BITACORA.md` | Fase 2 (agente de compra) | Bitácora hito a hito (T9–T14), en lenguaje llano, con evidencia | T9–T14 cerrados; T15 bloqueado por el embajador |
-| `docs/fase-2-agente-compra/DECISIONES.md` | Fase 2 (agente de compra) | Decisiones de esta fase (`B-1` a `B-23`), cada una con motivo y alternativa descartada | T9–T14 cerrados, 0 pendientes |
+| `docs/fase-2-agente-compra/ARQUITECTURA.md` | Fase 2 (agente de compra) | Mapa técnico denso: catálogo, herramientas, verificación de credencial, chequeo de scope, forma exacta del `PurchaseIntent` | Cerrado, T9–T15 — pensado para copiarse entero en un chat nuevo |
+| `docs/fase-2-agente-compra/BITACORA.md` | Fase 2 (agente de compra) | Bitácora hito a hito (T9–T15), en lenguaje llano, con evidencia | Cerrado, T9–T15 |
+| `docs/fase-2-agente-compra/DECISIONES.md` | Fase 2 (agente de compra) | Decisiones de esta fase (`B-1` a `B-25`), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
+| `docs/fase-3-policyrail-mandato/ARQUITECTURA.md` | Fase 3 (PolicyRail + Mandato) | Mapa técnico denso: los tres documentos firmados, la forma del Mandato, dónde vive el enforcement | Cerrado, T16–T23 |
+| `docs/fase-3-policyrail-mandato/BITACORA.md` | Fase 3 (PolicyRail + Mandato) | Bitácora hito a hito (T16–T23), en lenguaje llano, con evidencia | Cerrado, T16–T23 |
+| `docs/fase-3-policyrail-mandato/DECISIONES.md` | Fase 3 (PolicyRail + Mandato) | Decisiones de esta fase (`M-1` a `M-22`), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
+| `docs/fase-4-mandategate/CONTEXTO.md` | Fase 4 (MandateGate) | Qué prueba la fase, qué NO es, qué cambió respecto al alcance documentado | Vigente, en curso |
+| `docs/fase-4-mandategate/ARQUITECTURA.md` | Fase 4 (MandateGate) | Mapa técnico denso: el módulo de pago x402, identidades resueltas contra tráfico real, dependencias nuevas | Vigente, en curso |
+| `docs/fase-4-mandategate/BITACORA.md` | Fase 4 (MandateGate) | Bitácora hito a hito (T24…), en lenguaje llano, con evidencia | T24 cerrado |
+| `docs/fase-4-mandategate/DECISIONES.md` | Fase 4 (MandateGate) | Decisiones de esta fase (`G-1` a `G-7`), cada una con motivo y alternativa descartada | En curso |
 
 **Resuelto (2026-09-02): documentación separada por fase.** Cada fase recibe su
 propia carpeta `docs/fase-N-nombre/` con su `CONTEXTO`, `ARQUITECTURA`,
@@ -352,7 +359,7 @@ tareas:** un `PurchaseIntent` de la Fase 2 no puede convertirse en una compra
 real si excede lo que el Mandato autoriza — y esa comprobación no depende de
 que el agente "decida" respetarlo.
 
-### 4.4 · Fase 4 — MandateGate ⏳ sin diseñar
+### 4.4 · Fase 4 — MandateGate 🚧 en curso
 
 **Qué prueba:** que toda la cadena —identidad, política, mandato— funciona
 dentro del checkout **real** del bazaar del embajador, no en un entorno de prueba
@@ -381,8 +388,22 @@ específicamente — es la única con ambigüedad arquitectónica genuina y
 dependencia de un tercero, a diferencia de las Fases 1–3, donde las
 decisiones de diseño ya están mayormente acotadas por lo que vino antes.
 
-**No hay desglose de tareas todavía** — depende enteramente de cómo resulte la
-Fase 3 y de la superficie real que el embajador exponga.
+**Arrancó — 2026-09-03 (T24).** A pedido explícito del usuario, adelantada
+respecto de lo que esta sección anticipaba ("depende de cómo resulte la Fase
+3"): con la Fase 3 cerrada, la ambigüedad arquitectónica que motivaba esperar
+ya estaba resuelta (`M-11`). T24 probó que un `PurchaseIntent` firmado se
+convierte en un pago real: reto `402` real del bazaar → `reconcileTerms`/
+`PolicyRail.authorise()` (Fase 3, sin cambios) → firma y envío con
+`@x402/stellar` → transacción real asentada en testnet, saldo de USDC de la
+cuenta del agente confirmado bajando lo esperado. Detalle en
+[`docs/fase-4-mandategate/`](docs/fase-4-mandategate/).
+
+**Desglose de tareas:**
+
+| Hito | Qué construye | Estado |
+|---|---|---|
+| T24 | Ejecutar un pago x402 real contra el bazaar (sin frontend) | ✅ cerrado 2026-09-03 |
+| T25 | Frontend simple (`apps/web`) que dispara el mismo flujo desde un navegador | 🚧 siguiente |
 
 ### 4.5 · Fase 5 — MandateVault + cierre del piloto ⏳ sin diseñar
 

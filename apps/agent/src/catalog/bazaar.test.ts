@@ -8,6 +8,7 @@ import {
   BAZAAR_VENUE_CONTRACT_ID,
   BAZAAR_VENUE_ID,
   createBazaarCatalog,
+  getBazaarServiceRoute,
 } from "./bazaar.js";
 
 const BASE_URL = "https://stellar-bazaar-x402.example";
@@ -25,6 +26,12 @@ const SEARCH_BODY = {
         description: "Estima impacto de ruta, profundidad y riesgo de ejecucion para un par.",
         kind: "http",
         payment: { scheme: "exact", asset: "USDC", amount: "0.001", destination: "GDVR2KDK5DSMNYZJKNISUIOBDC6FZK3XZOIQWSS7KL4BRMD5BMW6RMCQ" },
+        routeTemplate: "/api/x402/swap-risk?pair={pair}&amount={amount}&side={side}",
+        input: [
+          { name: "pair", type: "string", required: true },
+          { name: "amount", type: "number", required: true },
+          { name: "side", type: "string", required: true },
+        ],
       },
       score: 0,
     },
@@ -228,6 +235,46 @@ describe("getProduct", () => {
       expect.unreachable("expected getProduct to throw");
     } catch (error) {
       expect(hasErrorCode(error, "ProductNotFound")).toBe(true);
+    }
+  });
+});
+
+describe("getBazaarServiceRoute", () => {
+  it("returns the route template and inputs for a product that has one", async () => {
+    const route = await getBazaarServiceRoute(
+      { baseUrl: BASE_URL, fetchImpl: fetchReturning(SEARCH_BODY) },
+      "swap-risk-quote",
+    );
+
+    expect(route).toEqual({
+      id: "swap-risk-quote",
+      routeTemplate: "/api/x402/swap-risk?pair={pair}&amount={amount}&side={side}",
+      input: [
+        { name: "pair", type: "string", required: true },
+        { name: "amount", type: "number", required: true },
+        { name: "side", type: "string", required: true },
+      ],
+    });
+  });
+
+  it("throws ProductNotFound for an id the bazaar does not list", async () => {
+    try {
+      await getBazaarServiceRoute({ baseUrl: BASE_URL, fetchImpl: fetchReturning(SEARCH_BODY) }, "does-not-exist");
+      expect.unreachable("expected getBazaarServiceRoute to throw");
+    } catch (error) {
+      expect(hasErrorCode(error, "ProductNotFound")).toBe(true);
+    }
+  });
+
+  it("throws InvalidProduct for a card with no paid route", async () => {
+    try {
+      await getBazaarServiceRoute(
+        { baseUrl: BASE_URL, fetchImpl: fetchReturning(SEARCH_BODY) },
+        "stellar-ledger-brief",
+      );
+      expect.unreachable("expected getBazaarServiceRoute to throw");
+    } catch (error) {
+      expect(hasErrorCode(error, "InvalidProduct")).toBe(true);
     }
   });
 });

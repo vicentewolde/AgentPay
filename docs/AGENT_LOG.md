@@ -669,3 +669,56 @@ el usuario). **Fase 2 completa: T9–T15.** Siguiente: diseñar la Fase 4
 El endpoint MCP roto (`B-25`) no bloquea la Fase 4: el reto HTTP 402 real que
 la Fase 4 necesita consumir está documentado en `ROADMAP.md` §4.2 (pregunta 4)
 y no depende de MCP.
+
+## 2026-09-03 (16) — cc/t24-x402-payment
+
+Agente: Claude Code
+
+Qué: T24, primer hito de la Fase 4 (MandateGate) — `executeBazaarPayment`
+(`apps/agent/src/payment/x402.ts`) convierte un `PurchaseIntent` firmado en
+un pago real: golpea el reto `402` real de un endpoint pagado del bazaar, lo
+reconcilia contra lo firmado (`reconcileTerms`/`PolicyRail.authorise()` de la
+Fase 3, sin ningún cambio — solo la primera vez que se les pasa un `terms`
+real), y solo si el rail autoriza, firma y envía el pago con `@x402/stellar`.
+`pnpm run demo:pay-real` (script nuevo, separado de `pnpm demo`) lo prueba de
+punta a punta: transacción real asentada en testnet
+(`fda497c5fd6b9b402ab2839b632730b8710b65dae7aa08c873a19b5ac6db93c2`, ledger
+4488970, confirmada contra Horizon), saldo de USDC de la cuenta del agente
+bajando exactamente los 0.001 USDC del producto. 24 tests nuevos, suite
+completa en 589, sin regresiones.
+
+Antes de esto era necesario un pedido explícito del usuario: **MandateGate
+(pagos reales) y un frontend web entraban en conflicto directo con
+`CLAUDE.md`**, que marcaba las dos cosas fuera de alcance mientras la Fase 3
+estaba en curso. Se lo señalé explícitamente al usuario antes de escribir
+código (no se cambió la nota de alcance en silencio), usé `EnterPlanMode`
+para armar un plan concreto con el usuario, y recién con su aprobación
+explícita se actualizó `CLAUDE.md` — mismo patrón que `M-1` en la Fase 3.
+
+Hallazgos empíricos, verificados contra tráfico real antes de escribir
+código (misma disciplina que T15/T19/T22): el reto `402` real nombra el
+activo por la dirección **completa** del contrato SAC, no por código —
+verificado con `Asset.contractId()` del propio `@stellar/stellar-sdk` que ese
+contrato es exactamente el wrapper del mismo USDC clásico que el mock ya usa
+(confirma, con matemática, lo que `B-24` solo sospechaba). El punto de
+entrada público de `@x402/stellar`/`@x402/core` se leyó del paquete instalado
+real, no del spike de T22 (que solo había leído *internals*) — encontró que
+el reto `402` v2 viaja en un header `PAYMENT-REQUIRED` base64, no en el
+cuerpo, antes de que ese supuesto llegara a producción.
+
+Prerrequisito resuelto en dos partes: `pnpm run fund:usdc` (nuevo) abrió el
+trustline de USDC de la cuenta del agente con una transacción real; el
+usuario fondeó el saldo a mano en el faucet de Circle.
+
+Decisiones nuevas: `G-1` a `G-7` en
+`docs/fase-4-mandategate/DECISIONES.md`. Documentación nueva: toda la carpeta
+`docs/fase-4-mandategate/` (`CONTEXTO.md`, `ARQUITECTURA.md`, `BITACORA.md`,
+`DECISIONES.md`, `evidencia/T24.md`), siguiendo el mismo patrón que las
+fases 1–3. `ROADMAP.md` §4.4 pasa de "sin diseñar" a "en curso"; `CLAUDE.md`
+actualizado (nota de alcance + tabla de documentación, esta última estaba
+desactualizada desde antes de T21).
+
+Pendiente: mergear `cc/t24-x402-payment` a `main` y pushear (a confirmar con
+el usuario). Siguiente: T25, un frontend simple (`apps/web`) que dispara este
+mismo flujo desde un navegador — decidido explícitamente como un hito
+separado, después de probar el pago por script, no junto con él.

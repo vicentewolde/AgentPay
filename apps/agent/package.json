@@ -19,6 +19,8 @@
     "@agentpass/sdk": "workspace:*",
     "@agentpay/mandate": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1",
+    "@x402/core": "~2.24.0",
+    "@x402/stellar": "^2.24.0",
     "jose": "^6.2.10",
     "zod": "^4.5.4"
   }

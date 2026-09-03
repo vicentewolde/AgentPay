@@ -1,5 +1,5 @@
 import { AgentPassError } from "@agentpass/core";
-import { Networks } from "@stellar/stellar-sdk";
+import { Asset, BASE_FEE, Horizon, Keypair, Networks, Operation, TransactionBuilder } from "@stellar/stellar-sdk";
 import { z } from "zod";
 
 export const TESTNET = {
@@ -123,4 +123,83 @@ export async function fundWithFriendbot(friendbotUrl: string, address: string): 
   throw new AgentPassError("NetworkError", `Friendbot answered ${response.status}`, {
     details: { url, status: response.status, body: body.slice(0, 500) },
   });
+}
+
+const trustlineAccountSchema = z.object({
+  balances: z.array(
+    z.object({
+      asset_type: z.string(),
+      asset_code: z.string().optional(),
+      asset_issuer: z.string().optional(),
+      balance: z.string(),
+    }),
+  ),
+});
+
+export interface TrustlineState {
+  readonly exists: boolean;
+  readonly balance: string | undefined;
+}
+
+/** Whether `address` already trusts `code:issuer`. An unfunded account (404) reads as "no trustline". */
+export async function getTrustline(
+  horizonUrl: string,
+  address: string,
+  code: string,
+  issuer: string,
+): Promise<TrustlineState> {
+  const url = `${horizonUrl}/accounts/${address}`;
+  const response = await request(url);
+
+  if (response.status === 404) return { exists: false, balance: undefined };
+  if (!response.ok) {
+    throw new AgentPassError("NetworkError", `Horizon answered ${response.status}`, {
+      details: { url, status: response.status },
+    });
+  }
+
+  const account = await parseJson(response, trustlineAccountSchema, url);
+  const line = account.balances.find(
+    (balance) => balance.asset_code === code && balance.asset_issuer === issuer,
+  );
+  return { exists: line !== undefined, balance: line?.balance };
+}
+
+/**
+ * Opens a trustline for `code:issuer` on `source`'s account. `source` must
+ * already be a funded classic account — this only submits `change_trust`,
+ * it does not fund anything.
+ */
+export async function openTrustline(params: {
+  readonly horizonUrl: string;
+  readonly networkPassphrase: string;
+  readonly source: Keypair;
+  readonly code: string;
+  readonly issuer: string;
+}): Promise<string> {
+  const server = new Horizon.Server(params.horizonUrl);
+
+  const account = await server.loadAccount(params.source.publicKey()).catch((error: unknown) => {
+    throw new AgentPassError("NetworkError", "could not load the source account from Horizon", {
+      cause: error,
+      details: { horizonUrl: params.horizonUrl, address: params.source.publicKey() },
+    });
+  });
+
+  const transaction = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: params.networkPassphrase,
+  })
+    .addOperation(Operation.changeTrust({ asset: new Asset(params.code, params.issuer) }))
+    .setTimeout(30)
+    .build();
+  transaction.sign(params.source);
+
+  const result = await server.submitTransaction(transaction).catch((error: unknown) => {
+    throw new AgentPassError("NetworkError", "change_trust submission failed", {
+      cause: error,
+      details: { horizonUrl: params.horizonUrl, code: params.code, issuer: params.issuer },
+    });
+  });
+  return result.hash;
 }

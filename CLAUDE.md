@@ -16,12 +16,16 @@ imposible de saltar por prompt injection.
 | [docs/fase-1-agentpass/BITACORA.md](docs/fase-1-agentpass/BITACORA.md) | Estado actual, qué hito sigue, qué se hizo en cada uno |
 | [docs/fase-1-agentpass/DECISIONES.md](docs/fase-1-agentpass/DECISIONES.md) | Toda decisión importante, con su motivo y lo que se descartó |
 | [docs/fase-2-agente-compra/ARQUITECTURA.md](docs/fase-2-agente-compra/ARQUITECTURA.md) | Mapa técnico de la Fase 2: catálogo, herramientas, verificación de credencial, scope, forma del `PurchaseIntent` |
-| [docs/fase-2-agente-compra/BITACORA.md](docs/fase-2-agente-compra/BITACORA.md) | **T9–T14 cerrados** (T15 desbloqueado en T19, sin construir). Estado actual y qué se hizo en cada hito |
+| [docs/fase-2-agente-compra/BITACORA.md](docs/fase-2-agente-compra/BITACORA.md) | **Cerrada, T9–T15.** Estado actual y qué se hizo en cada hito |
 | [docs/fase-2-agente-compra/DECISIONES.md](docs/fase-2-agente-compra/DECISIONES.md) | Decisiones de la Fase 2 (prefijo `B-`) |
-| [docs/fase-3-policyrail-mandato/CONTEXTO.md](docs/fase-3-policyrail-mandato/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, el bloqueante externo y qué se decidió hacer con él |
+| [docs/fase-3-policyrail-mandato/CONTEXTO.md](docs/fase-3-policyrail-mandato/CONTEXTO.md) | **Cerrada.** Qué prueba, qué no es, el bloqueante externo y qué se decidió hacer con él |
 | [docs/fase-3-policyrail-mandato/ARQUITECTURA.md](docs/fase-3-policyrail-mandato/ARQUITECTURA.md) | Mapa técnico de la Fase 3: los tres documentos firmados, la forma del Mandato, dónde vive el enforcement |
-| [docs/fase-3-policyrail-mandato/BITACORA.md](docs/fase-3-policyrail-mandato/BITACORA.md) | **T16–T20 cerrados.** Estado actual y qué sigue |
+| [docs/fase-3-policyrail-mandato/BITACORA.md](docs/fase-3-policyrail-mandato/BITACORA.md) | **Cerrada, T16–T23.** Estado actual y qué sigue |
 | [docs/fase-3-policyrail-mandato/DECISIONES.md](docs/fase-3-policyrail-mandato/DECISIONES.md) | Decisiones de la Fase 3 (prefijo `M-`). `M-1` quedó **superada** en T19; `M-11` y `M-12` la reemplazan |
+| [docs/fase-4-mandategate/CONTEXTO.md](docs/fase-4-mandategate/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
+| [docs/fase-4-mandategate/ARQUITECTURA.md](docs/fase-4-mandategate/ARQUITECTURA.md) | Mapa técnico de la Fase 4: el módulo de pago x402, identidades resueltas contra tráfico real |
+| [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24 cerrado.** Estado actual y qué sigue |
+| [docs/fase-4-mandategate/DECISIONES.md](docs/fase-4-mandategate/DECISIONES.md) | Decisiones de la Fase 4 (prefijo `G-`) |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Devin: qué se hizo, en qué branch, qué queda pendiente |
 | [README.md](README.md) | Cómo correr el proyecto |
 
@@ -42,11 +46,14 @@ imposible de saltar por prompt injection.
 4. **Idioma:** documentación del proyecto (`docs/`) en español. Código,
    comentarios, mensajes de commit y `README.md` en inglés.
 5. **No construyas lo que está fuera de alcance.** PolicyRail y Mandato
-   —incluido el enforcement de `scope.limits`— **entran en alcance con la Fase
-   3**, que es la fase en curso. Siguen fuera: MandateGate (Fase 4),
-   MandateVault (Fase 5), cualquier UI web, cualquier cosa en mainnet o con
-   rieles fiat. Si el trabajo actual parece pedir algo de lo que sigue fuera:
-   anótalo y déjalo sin construir.
+   —incluido el enforcement de `scope.limits`— entraron en alcance con la Fase
+   3 (cerrada). **MandateGate (pagos x402 reales) y un frontend simple
+   entraron en alcance el 2026-09-03, a pedido explícito del usuario** — ver
+   `docs/fase-4-mandategate/CONTEXTO.md` §5. Siguen fuera: MandateVault (Fase
+   5), convertir la ejecución de un pago en una tool del agente invocable por
+   instrucción en español (ver `docs/fase-4-mandategate/DECISIONES.md` →
+   `G-4`), cualquier cosa en mainnet o con rieles fiat. Si el trabajo actual
+   parece pedir algo de lo que sigue fuera: anótalo y déjalo sin construir.
 
 ## Coordinación con Devin — protocolo obligatorio, no opcional
 

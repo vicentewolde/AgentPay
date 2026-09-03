@@ -8,8 +8,10 @@
   },
   "scripts": {
     "bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
+    "fund:usdc": "tsx --tsconfig tsconfig.scripts.json scripts/fund-usdc-trustline.ts",
     "deploy:registry": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-registry.ts",
     "demo": "tsx --tsconfig tsconfig.scripts.json scripts/demo.ts",
+    "demo:pay-real": "tsx --tsconfig tsconfig.scripts.json scripts/demo-real-payment.ts",
     "build": "tsc -b",
     "test": "pnpm -r --stream test && vitest run",
     "test:integration": "pnpm --filter @agentpass/sdk run test:integration && pnpm --filter @agentpay/mandate run test:integration",

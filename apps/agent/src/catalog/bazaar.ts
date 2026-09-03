@@ -73,6 +73,15 @@ const serviceCardSchema = z.object({
     amount: z.string(),
     destination: z.string(),
   }),
+  /**
+   * The paid route, with `{name}` placeholders — e.g. `/api/x402/swap-risk?pair={pair}`.
+   * Only read by {@link getBazaarServiceRoute} (T24); `CatalogAdapter`'s own
+   * `Product` never carries it, on purpose (T9).
+   */
+  routeTemplate: z.string().optional(),
+  input: z
+    .array(z.object({ name: z.string(), type: z.string(), required: z.boolean() }))
+    .optional(),
 });
 
 const discoverySearchResponseSchema = z.object({
@@ -117,6 +126,24 @@ function mapAsset(code: string, venueId: VenueId): AssetId {
   return BAZAAR_USDC;
 }
 
+/**
+ * The sibling of {@link mapAsset} for a real x402 payment challenge: a live
+ * `PaymentRequirements.asset` names the SAC contract address directly
+ * (`CBIELTK6...`), not the bare code the discovery `ServiceCard` uses —
+ * confirmed by hitting a real bazaar route (T24). Same fail-closed rule: an
+ * address this adapter does not recognise refuses rather than guesses.
+ */
+export function mapAssetContract(contractAddress: string, venueId: VenueId): AssetId {
+  if (contractAddress !== BAZAAR_USDC_ISSUER) {
+    throw new AgentPassError(
+      "InvalidProduct",
+      `the bazaar's payment challenge names an asset contract this adapter does not recognise: "${contractAddress}"`,
+      { details: { assetContract: contractAddress, venueId } },
+    );
+  }
+  return BAZAAR_USDC;
+}
+
 function toProduct(card: z.infer<typeof serviceCardSchema>, venueId: VenueId): Product {
   return parseProduct({
     id: card.id,
@@ -136,45 +163,61 @@ function toProduct(card: z.infer<typeof serviceCardSchema>, venueId: VenueId): P
  * @throws AgentPassError `InvalidProduct` when a row's price is in an asset
  * this adapter cannot map, or otherwise fails {@link parseProduct}.
  */
+async function fetchServiceCards(
+  baseUrl: string,
+  fetchImpl: typeof fetch,
+): Promise<readonly z.infer<typeof serviceCardSchema>[]> {
+  let response: Response;
+  try {
+    response = await fetchImpl(`${baseUrl}/api/discovery/search?query=*`);
+  } catch (error) {
+    throw networkError("could not reach the bazaar's discovery API", baseUrl, { cause: error });
+  }
+
+  if (!response.ok) {
+    throw networkError("the bazaar's discovery API answered with a non-2xx status", baseUrl, {
+      extra: { status: response.status },
+    });
+  }
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    throw networkError("the bazaar's discovery API did not answer with JSON", baseUrl, { cause: error });
+  }
+
+  const parsed = discoverySearchResponseSchema.safeParse(body);
+  if (!parsed.success) {
+    throw networkError("the bazaar's discovery API answered with an unexpected shape", baseUrl, {
+      extra: {
+        issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+      },
+    });
+  }
+  if (!parsed.data.ok) {
+    throw networkError("the bazaar's discovery API reported a failed search", baseUrl);
+  }
+
+  return parsed.data.results.map((row) => row.resource);
+}
+
+/**
+ * A {@link CatalogAdapter} over the real bazaar's REST discovery API.
+ *
+ * @throws AgentPassError `NetworkError` on an unreachable host, a non-2xx
+ * status, a non-JSON body, or a body that does not match the expected shape.
+ * @throws AgentPassError `InvalidProduct` when a row's price is in an asset
+ * this adapter cannot map, or otherwise fails {@link parseProduct}.
+ */
 export function createBazaarCatalog(options: BazaarCatalogOptions): CatalogAdapter {
   const venueId = options.venueId ?? BAZAAR_VENUE_ID;
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
   const fetchImpl = options.fetchImpl ?? fetch;
 
   async function fetchProducts(): Promise<readonly Product[]> {
-    let response: Response;
-    try {
-      response = await fetchImpl(`${baseUrl}/api/discovery/search?query=*`);
-    } catch (error) {
-      throw networkError("could not reach the bazaar's discovery API", baseUrl, { cause: error });
-    }
-
-    if (!response.ok) {
-      throw networkError("the bazaar's discovery API answered with a non-2xx status", baseUrl, {
-        extra: { status: response.status },
-      });
-    }
-
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch (error) {
-      throw networkError("the bazaar's discovery API did not answer with JSON", baseUrl, { cause: error });
-    }
-
-    const parsed = discoverySearchResponseSchema.safeParse(body);
-    if (!parsed.success) {
-      throw networkError("the bazaar's discovery API answered with an unexpected shape", baseUrl, {
-        extra: {
-          issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
-        },
-      });
-    }
-    if (!parsed.data.ok) {
-      throw networkError("the bazaar's discovery API reported a failed search", baseUrl);
-    }
-
-    return parsed.data.results.map((row) => toProduct(row.resource, venueId));
+    const cards = await fetchServiceCards(baseUrl, fetchImpl);
+    return cards.map((card) => toProduct(card, venueId));
   }
 
   return {
@@ -191,4 +234,41 @@ export function createBazaarCatalog(options: BazaarCatalogOptions): CatalogAdapt
       return product;
     },
   };
+}
+
+export interface BazaarServiceRoute {
+  readonly id: string;
+  /** e.g. `/api/x402/swap-risk?pair={pair}&amount={amount}&side={side}`. */
+  readonly routeTemplate: string;
+  readonly input: readonly { readonly name: string; readonly type: string; readonly required: boolean }[];
+}
+
+/**
+ * The paid route for one bazaar product — what {@link executeBazaarPayment}
+ * (T24) needs to actually hit the `402` challenge, and that `CatalogAdapter`
+ * has no field for (T9's `Product` is deliberately venue-agnostic).
+ *
+ * @throws AgentPassError `ProductNotFound` when the bazaar has no such id.
+ * @throws AgentPassError `InvalidProduct` when the card has no paid route —
+ * every card this bazaar has served so far does, but a future one might not.
+ */
+export async function getBazaarServiceRoute(
+  options: BazaarCatalogOptions,
+  productId: string,
+): Promise<BazaarServiceRoute> {
+  const venueId = options.venueId ?? BAZAAR_VENUE_ID;
+  const baseUrl = options.baseUrl.replace(/\/+$/, "");
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const cards = await fetchServiceCards(baseUrl, fetchImpl);
+  const card = cards.find((row) => row.id === productId);
+  if (card === undefined) throw productNotFound(productId, venueId);
+
+  if (card.routeTemplate === undefined) {
+    throw new AgentPassError("InvalidProduct", `"${productId}" has no paid route to pay for`, {
+      details: { productId, venueId },
+    });
+  }
+
+  return { id: card.id, routeTemplate: card.routeTemplate, input: card.input ?? [] };
 }
