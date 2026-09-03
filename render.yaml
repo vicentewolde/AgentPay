@@ -4,11 +4,19 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install -g pnpm@11.24.0 && pnpm install --frozen-lockfile && pnpm build
+    buildCommand: corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm --filter @agentpay/web run start
     envVars:
       - key: NODE_VERSION
         value: 22.11.0
+      # Corepack verifies the signature of the pnpm release it downloads
+      # against a hardcoded key list. npm rotated its package-signing key
+      # in 2025 and Render's build image ships a Corepack that predates
+      # the new key, so verification fails with "Cannot find matching
+      # keyid". This disables that signature check (does not affect
+      # pnpm's own package integrity hashes, which stay enforced).
+      - key: COREPACK_INTEGRITY_KEYS
+        value: ""
       # Secrets — set these in the Render dashboard after the first deploy.
       # Never committed, never filled in here.
       - key: ISSUER_SECRET_KEY
