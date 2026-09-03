@@ -560,3 +560,82 @@ solución más honesta a largo plazo, y probablemente la correcta — pero es un
 cambio de comportamiento sobre una decisión de un hito cerrado (T11), no algo
 que corresponda decidir en silencio mientras se arma una demo. Queda como
 candidato explícito para revisar, no como pendiente perdido.
+
+### B-24 · La identidad del bazaar real se sintetiza igual que la del mock, no ensancha `ids.ts` · `Vigente`
+**Fecha:** 2026-09-03 (T15)
+
+`BAZAAR_VENUE_ID` usa un contract id sintético —
+`sha256("agentpay:phase2:stellar-bazaar")` en forma StrKey,
+`CBDWMXZEE44NJ3RA6RS7K4EK36KDFW5S7KHP276HCMM4I52MIUUHEF5B`, no desplegado— con
+el mismo mecanismo que `MOCK_VENUE_CONTRACT_ID` ya usa. `BAZAAR_USDC` resuelve
+la otra pregunta que `ids.ts` dejó abierta desde T9 ("qué emisor quiere el
+bazaar real, cuenta o contrato"): el emisor es un contrato (`C…`), la Stellar
+Asset Contract de USDC que el propio `/llms.txt` del bazaar nombra
+(`CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`) — **distinto** del
+emisor clásico (`G…`) que usa `USDC_TESTNET` del mock. Es el mismo USDC de
+testnet visto desde dos espacios de direcciones distintos, y `ids.ts` compara
+byte a byte a propósito: una credencial autorizada para el USDC del mock no
+autoriza por eso el del bazaar real. `examples/scope-stellar-bazaar.json` es
+un archivo de scope nuevo, separado de `examples/scope-bazaar.json` (que,
+pese al nombre, sigue siendo el scope del *mock*), precisamente porque nombra
+un venue y un asset distintos.
+
+**Motivo.** El repo real del bazaar (T19) ya había confirmado que no despliega
+ningún contrato Soroban propio — lo desplegado es la aplicación Next.js. Sin
+un `C…` real, `VenueId` (que `ids.ts` valida con `StrKey.isValidContract`, sin
+excepción) no tiene qué nombrar. El criterio de aceptación de la fase pide que
+T15 no toque nada de T9–T14 — así que la salida no es ensanchar el tipo, es
+producir un valor que ya calza en el tipo que existe, documentado como lo que
+es: una identidad estable y no ambigua, no una prueba de despliegue.
+
+**Alternativa descartada:** ensanchar `VenueId`/`ids.ts` para aceptar un
+identificador sin contrato (p. ej. el propio `baseUrl` del bazaar). Se
+descartó porque toca T9, viola el criterio de aceptación de la fase, y
+reabriría T12 (que compara `scope.venues` byte a byte contra este tipo) sin
+necesidad — la identidad sintética resuelve el problema sin mover nada que ya
+esté cerrado.
+
+### B-25 · REST, no MCP, y sin recuperar el adaptador huérfano de la rama de Devin · `Vigente`
+**Fecha:** 2026-09-03 (T15)
+
+`BazaarMcpAdapter`... el nombre que traía el criterio de aceptación de la fase
+resultó equivocado: el transporte real que usa `createBazaarCatalog` es REST
+(`GET /api/discovery/search?query=*`), no MCP. Se probó `POST /api/mcp` contra
+el despliegue real dos veces —`tools/call` con `list_services`/`get_service`,
+y un `initialize` de protocolo MCP puro, sin sesión previa— y las dos veces
+respondió `500` con cuerpo vacío. No es una falla puntual: es el servidor
+fallando en el primer paso del protocolo, no en un método específico. El
+endpoint de recurso único que el propio `/llms.txt` del bazaar documenta
+(`GET /api/discovery/resources/{id}`) tampoco funciona contra el despliegue
+real — devuelve un 404 servido y cacheado desde el edge de Vercel, no un error
+transitorio — así que `getProduct(id)` se resuelve listando y filtrando, no
+con una petición dedicada.
+
+Antes de escribir código se encontró `apps/agent/dist/catalog/bazaar-adapter.js`
+compilado en disco, sin `.ts` fuente en ningún lado (ni en `src/`, ni en el
+historial de git, ni en ninguna rama local) — residuo de
+`devin/agent-web-frontend`, la rama que se borró por completo por un problema
+de seguridad no relacionado (saltarse `checkMandate`, ver `AGENT_LOG.md`
+2026-09-03 (14)). Con el visto bueno explícito del usuario, no se recuperó
+nada de ese artefacto: `bazaar.ts` se escribió desde cero, verificando cada
+forma contra tráfico real del despliegue en vivo en vez de confiar en el
+schema que ese adaptador asumía.
+
+**Motivo.** El propio `/llms.txt` del bazaar documenta MCP como el transporte
+principal, así que la intención original de T15 (nombrar el adaptador
+`BazaarMcpAdapter`) no estaba mal fundada — pero un adaptador que depende de
+un endpoint que responde `500` en el 100% de los intentos no es una base
+verificable, y la disciplina de este proyecto (T19, T22) es leer/probar
+tráfico real antes de construir sobre un supuesto. REST sí respondió,
+consistentemente, con la forma exacta que su propia documentación describe. Y
+un artefacto sin revisión, de una rama ya descartada por razones de
+seguridad, no es una base más confiable solo por existir en disco.
+
+**Alternativa descartada:** implementar el cliente MCP igual, asumiendo que el
+`500` es un problema temporal del despliegue. Se descartó porque no hay forma
+de verificarlo sin acceso al código fuente del bazaar desplegado, y un
+adaptador construido contra un endpoint que nunca respondió con éxito no se
+puede probar de verdad — quedaría sin ejercitar hasta que alguien lo intentara
+contra la red real y descubriera el mismo error. Si el transporte MCP empieza
+a funcionar, se puede agregar como una segunda opción dentro de
+`BazaarCatalogOptions` sin tocar `CatalogAdapter`.

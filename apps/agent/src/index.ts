@@ -41,6 +41,15 @@ export {
 } from "./catalog/mock.js";
 
 export {
+  BAZAAR_USDC,
+  BAZAAR_USDC_ISSUER,
+  BAZAAR_VENUE_CONTRACT_ID,
+  BAZAAR_VENUE_ID,
+  createBazaarCatalog,
+  type BazaarCatalogOptions,
+} from "./catalog/bazaar.js";
+
+export {
   TOOL_NAMES,
   createToolSet,
   defineTool,

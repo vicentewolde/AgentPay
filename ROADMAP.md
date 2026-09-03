@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-03 · Fase actual: **Fase 3 completa (T16–T23)** — próxima: Fase 4 (Fase 2: T9–T14 completos, T15 desbloqueado sin construir)
+Última revisión: 2026-09-03 · Fase actual: **Fase 2 y Fase 3 completas (T9–T23)** — próxima: Fase 4
 
 ---
 
@@ -167,7 +167,7 @@ ninguna compra. La decisión, con las dos alternativas descartadas, está en
 `credential-schema.md` de la Fase 1 lleva un puntero, sin reescribir su
 contenido cerrado.
 
-### 4.2 · Fase 2 — Agente mínimo de compra ⏳ próxima
+### 4.2 · Fase 2 — Agente mínimo de compra ✅ completa
 
 **Qué prueba:** que la identidad de la Fase 1 sirve para algo — un agente que
 lee el catálogo de un comercio on-chain real (el bazaar del embajador) y produce una
@@ -243,14 +243,18 @@ configuración cuando lleguen las respuestas.
 | T12 | Chequeo de `scope` antes de emitir: venue permitido, asset permitido, monto bajo `perTx`. Rechazo estructurado, no un intento silencioso | ✅ |
 | T13 | `PurchaseIntent` firmado (JWS del agente, referencia al hash de su credencial) — su forma debería sobrevivir sin cambios hasta convertirse en el Mandato de la Fase 3 | ✅ |
 | T14 | Demo end-to-end de un comando, grabable en menos de 90 segundos: emitir credencial → instrucción en español → intent firmado → revocar → reintento rechazado | ✅ — `pnpm demo`, ~12 s contra testnet real |
-| T15 | El adaptador real contra el bazaar en testnet. **Ya no es un `BazaarSorobanAdapter`**: el catálogo es una API MCP/REST pública, no un contrato — el nombre y la forma se corrigen cuando se retome | 🔓 desbloqueado el 2026-09-03, sin construir |
+| T15 | El adaptador real contra el bazaar en testnet. **No fue un `BazaarSorobanAdapter`**: el catálogo es una API REST pública (no MCP — ver abajo), no un contrato | ✅ cerrado 2026-09-03 |
 
-**Criterio de aceptación de la fase:** `pnpm demo` corre con el mock;
-`pnpm demo --adapter=bazaar` produce un intent
-con productos reales del bazaar, sin haber tenido que tocar T9–T14.
-**Primera mitad cumplida el 2026-09-02**: `pnpm demo` corre contra testnet real
-en ~12 segundos; `pnpm demo --adapter=bazaar` ya existe como seam y falla con
-un `NotImplemented` que nombra T15, sin tocar la red.
+**Criterio de aceptación de la fase — cumplido el 2026-09-03:** `pnpm demo`
+corre con el mock; `pnpm demo --adapter=bazaar` produce un intent con
+productos reales del bazaar, sin haber tenido que tocar T9–T14. `createBazaarCatalog`
+implementa `CatalogAdapter` contra el despliegue real
+(`stellar-bazaar-x402.vercel.app`) por REST — el endpoint MCP que su propia
+documentación (`/llms.txt`) nombra como transporte principal respondió `500`
+en cada intento probado contra ese despliegue, así que quedó fuera hasta que
+el bazaar lo arregle. Detalle en
+[`docs/fase-2-agente-compra/DECISIONES.md`](docs/fase-2-agente-compra/DECISIONES.md)
+(`B-24`, `B-25`) y evidencia cruda en `evidencia/T15.md`.
 
 **Riesgo técnico específico de esta fase, además de el embajador:** el chequeo de
 scope (T12) es el primer punto del proyecto donde el texto de un producto del

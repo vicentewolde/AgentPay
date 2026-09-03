@@ -9,18 +9,24 @@ import { AgentPassError } from "@agentpass/core";
 
 export const DEFAULT_INSTRUCTION = "Comprame un mate de calabaza curado, por favor.";
 
+/** Matches "Swap Risk Quote" — the cheapest real product the bazaar lists (0.001 USDC). */
+export const DEFAULT_BAZAAR_INSTRUCTION = "Comprame un Swap Risk Quote, por favor.";
+
+const ADAPTERS = ["mock", "bazaar"] as const;
+export type DemoAdapter = (typeof ADAPTERS)[number];
+
 export interface DemoArgs {
-  readonly adapter: "mock";
+  readonly adapter: DemoAdapter;
   readonly instruction: string;
+}
+
+function isDemoAdapter(value: string): value is DemoAdapter {
+  return (ADAPTERS as readonly string[]).includes(value);
 }
 
 /**
  * @throws AgentPassError `InvalidArguments` for anything `node:util`'s parser
- * itself rejects.
- * @throws AgentPassError `NotImplemented` for any `--adapter` other than
- * `mock` — `bazaar` is T15, blocked on the ambassador's answers, and this is
- * the seam the roadmap's acceptance criterion names: swapping adapters must
- * not require touching this file or anything upstream of it.
+ * itself rejects, or for an `--adapter` this demo does not know about.
  */
 export function parseDemoArgs(argv: readonly string[]): DemoArgs {
   let values: { adapter?: string };
@@ -36,20 +42,21 @@ export function parseDemoArgs(argv: readonly string[]): DemoArgs {
   } catch (error) {
     throw new AgentPassError("InvalidArguments", "could not parse arguments for demo", {
       cause: error,
-      details: { usage: 'pnpm demo [--adapter=mock] ["instruccion en espanol"]' },
+      details: { usage: 'pnpm demo [--adapter=mock|bazaar] ["instruccion en espanol"]' },
     });
   }
 
-  if (values.adapter !== "mock") {
-    throw new AgentPassError(
-      "NotImplemented",
-      `--adapter=${String(values.adapter)} lands in T15, against the ambassador's real bazaar`,
-      { details: { adapter: values.adapter, milestone: "T15" } },
-    );
+  const adapterValue = values.adapter ?? "mock";
+  if (!isDemoAdapter(adapterValue)) {
+    throw new AgentPassError("InvalidArguments", `unknown --adapter "${adapterValue}"`, {
+      details: { adapter: adapterValue, supported: ADAPTERS },
+    });
   }
 
+  const defaultInstruction = adapterValue === "bazaar" ? DEFAULT_BAZAAR_INSTRUCTION : DEFAULT_INSTRUCTION;
+
   return {
-    adapter: "mock",
-    instruction: positionals.length > 0 ? positionals.join(" ") : DEFAULT_INSTRUCTION,
+    adapter: adapterValue,
+    instruction: positionals.length > 0 ? positionals.join(" ") : defaultInstruction,
   };
 }

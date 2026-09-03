@@ -614,3 +614,58 @@ limpio tal como lo dejó Claude Code después de terminar la Fase 3 con la demo 
 
 Próximo paso: Claude Code corregirá authoriseX402Payment para llamar a checkMandate
 correctamente antes de continuar con cualquier trabajo de frontend o pagos x402.
+
+## 2026-09-03 (15) — cc/t15-bazaar-adapter
+
+Agente: Claude Code
+
+Qué: T15 de la Fase 2 — `createBazaarCatalog`, un `CatalogAdapter` (T9) contra
+el catálogo real del bazaar del embajador, en vivo
+(`stellar-bazaar-x402.vercel.app`). `pnpm demo --adapter=bazaar` corre de
+punta a punta contra testnet real y el bazaar real: instrucción en español →
+intento firmado sobre un producto real (`Swap Risk Quote`, 0.001 USDC) →
+segunda compra el mismo día rechazada por el Mandato → Mandato revocado →
+reintento rechazado. Cierra el criterio de aceptación de la Fase 2 completa
+(T9–T15). Trece tests nuevos (`bazaar.test.ts`), suite completa en 574, sin
+regresiones. `pnpm typecheck`/`pnpm build` limpios.
+
+Antes de escribir código: se verificó al inicio de la sesión que
+`authoriseX402Payment` (la entrada anterior del log) no existe en ningún lado
+del código actual — la rama `devin/agent-web-frontend` que lo introdujo ya
+había sido eliminada por completo en la sesión previa, sin dejar rastro
+committeado. Nada quedaba pendiente de corregir ahí.
+
+Sí quedaba un residuo sin commitear: `apps/agent/dist/catalog/bazaar-adapter.js`
+compilado en disco, sin `.ts` fuente en ningún lado (`dist/` está
+gitignorado) — de esa misma rama borrada. Con el visto bueno explícito del
+usuario, no se recuperó nada: `bazaar.ts` se escribió desde cero, verificando
+cada forma contra tráfico real del despliegue en vivo (`curl` directo, no
+supuestos) en vez de confiar en el schema de ese artefacto.
+
+Dos identidades que el bazaar no provee se sintetizaron sin tocar `ids.ts`
+(T9): un contract id no desplegado para el venue (misma técnica que ya usa el
+mock) y el emisor-contrato de USDC que el propio `/llms.txt` del bazaar
+publica — distinto del emisor clásico que usa el mock, por diseño (`ids.ts`
+compara byte a byte). El transporte real terminó siendo REST, no MCP: el
+endpoint MCP del despliegue respondió `500` en cada intento probado
+(`tools/call` y un `initialize` de protocolo puro), mientras que
+`GET /api/discovery/search` respondió consistentemente con la forma exacta
+que su propia documentación describe.
+
+Por qué: T15 era la entrada natural a la Fase 4 (según el propio ROADMAP) y
+el usuario confirmó acceso a la URL real del bazaar al arrancar la sesión.
+
+Decisiones nuevas: `B-24` (identidad sintética del venue y del emisor de
+USDC), `B-25` (REST sobre MCP, y por qué no se recuperó el adaptador
+huérfano). Documentación tocada: `ROADMAP.md` (§4.2, Fase 2 pasa a completa),
+`docs/fase-2-agente-compra/BITACORA.md` (T15 cerrado) y `DECISIONES.md`, más
+`evidencia/T15.md`. Archivos nuevos: `apps/agent/src/catalog/bazaar.ts`
+(+ test), `examples/scope-stellar-bazaar.json`.
+
+Pendiente: mergear `cc/t15-bazaar-adapter` a `main` y pushear (a confirmar con
+el usuario). **Fase 2 completa: T9–T15.** Siguiente: diseñar la Fase 4
+(MandateGate) — envolver el cliente x402 real del bazaar con `LocalPolicyRail`
+(`M-11`), algo que T15 no tocó a propósito (T15 es solo catálogo, no compra).
+El endpoint MCP roto (`B-25`) no bloquea la Fase 4: el reto HTTP 402 real que
+la Fase 4 necesita consumir está documentado en `ROADMAP.md` §4.2 (pregunta 4)
+y no depende de MCP.

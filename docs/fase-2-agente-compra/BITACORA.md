@@ -13,22 +13,23 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-02 · **Último hito cerrado:** T14 · **Siguiente:** T15 (bloqueado por el embajador)
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T15 · **Fase 2 completa: T9–T15**
 
-`pnpm demo` corre de punta a punta contra Stellar testnet real, en 12
-segundos: emite una credencial, entiende una instrucción en español, firma una
-intención de compra, revoca desde afuera y el mismo agente, en el mismo
-proceso, ve rechazado el reintento. T9–T14 están cerrados. Lo único que falta
-de la fase es T15 — el bazaar real — y depende de las respuestas del
-embajador, no de nada que este repo pueda resolver por su cuenta.
+`pnpm demo` (mock) y `pnpm demo --adapter=bazaar` (el bazaar real, en vivo)
+corren de punta a punta contra Stellar testnet real: emiten una credencial y
+un mandato, entienden una instrucción en español, firman una intención de
+compra, y — desde T19/T23 — muestran también el rechazo por `perDay` y la
+revocación del Mandato. T9–T15 están cerrados. Nota: entre T14 (2026-09-02) y
+T15 (2026-09-03) se construyó toda la Fase 3 (T16–T23, ver
+[../fase-3-policyrail-mandato/BITACORA.md](../fase-3-policyrail-mandato/BITACORA.md))
+— por eso el conteo de tests de esta tabla salta respecto al de T14.
 
 | | |
 |---|---|
-| Tests TypeScript | **384** rápidos (core 60 · sdk 11 · **agent 252** · cli 29 · **scripts 32**) |
+| Tests TypeScript | **574** rápidos (ver el detalle por paquete en la bitácora de la Fase 3) |
 | Tests de integración | 3 contra testnet real (sin cambios desde la Fase 1) |
-| Tests Rust | 22 en verde (sin cambios) |
-| Adaptador de catálogo | `MockCatalogAdapter`, 12 productos |
-| Bloqueado por el embajador | solo T15 |
+| Tests Rust | 43 en verde (Fase 3, `policy_rail`) |
+| Adaptadores de catálogo | `MockCatalogAdapter` (12 productos) y `createBazaarCatalog` (5 productos reales, en vivo) |
 
 ### Progreso
 
@@ -40,7 +41,40 @@ embajador, no de nada que este repo pueda resolver por su cuenta.
 | T12 | Chequeo de alcance antes de emitir una intención | ✅ cerrado |
 | T13 | La intención de compra firmada | ✅ cerrado |
 | T14 | Demo completa en un comando | ✅ cerrado |
-| T15 | El catálogo real del bazaar | 🚧 bloqueado por el embajador |
+| T15 | El catálogo real del bazaar | ✅ cerrado 2026-09-03 |
+
+---
+
+## T15 · El adaptador real contra el bazaar — cerrado 2026-09-03
+
+**Qué quedó funcionando.** `pnpm demo --adapter=bazaar` lee el catálogo real
+del bazaar del embajador (`stellar-bazaar-x402`, en vivo) en vez del mock, y
+produce una intención de compra firmada sobre un producto real —
+`Swap Risk Quote`, 0.001 USDC— verificada contra el registro real de la Fase
+1. `CatalogAdapter` (T9) no se tocó: `createBazaarCatalog` implementa la misma
+interfaz que `createMockCatalog`, y todo T9–T14 corre sin cambios sobre
+cualquiera de los dos.
+
+El bazaar no tiene contrato Soroban propio (confirmado en T19) ni un emisor
+Stellar para el activo que cotiza — solo el código `"USDC"`. Ambas identidades
+faltantes se resolvieron sin ensanchar `ids.ts`: un contract id sintético para
+el venue (misma técnica que ya usa el mock) y el emisor-contrato de USDC que
+el propio `/llms.txt` del bazaar publica. El transporte terminó siendo REST
+(`GET /api/discovery/search`), no MCP — el endpoint MCP del despliegue
+respondió `500` en cada intento probado, incluido un `initialize` de
+protocolo puro. El detalle completo, con motivo y alternativa descartada, está
+en [DECISIONES.md](DECISIONES.md) → `B-24`, `B-25`.
+
+**No es una simulación de ninguna parte del proceso.** La búsqueda del
+catálogo golpea el despliegue real (`stellar-bazaar-x402.vercel.app`); la
+credencial y el mandato se firman y anclan en testnet de verdad, igual que en
+`pnpm demo` con el mock.
+
+Trece tests nuevos (`bazaar.test.ts`): identidad, mapeo `ServiceCard →
+Product`, y seis formas de fallo de red — ninguna deja pasar un catálogo vacío
+o silencioso. Suite completa: 574 tests, sin regresiones. Evidencia cruda,
+incluidos los `curl` contra la API real, en
+[evidencia/T15.md](evidencia/T15.md).
 
 ---
 

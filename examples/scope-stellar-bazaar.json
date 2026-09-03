@@ -1,0 +1,17 @@
+{
+  "agent": {
+    "name": "compras-demo",
+    "model": "claude-opus-5",
+    "operator": "agentpay-pilot"
+  },
+  "scope": {
+    "actions": ["catalog:read", "intent:create"],
+    "venues": ["stellar-bazaar:CBDWMXZEE44NJ3RA6RS7K4EK36KDFW5S7KHP276HCMM4I52MIUUHEF5B"],
+    "assets": ["USDC:CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"],
+    "limits": {
+      "perTx": "1.00",
+      "perDay": "5.00",
+      "currency": "USDC"
+    }
+  }
+}

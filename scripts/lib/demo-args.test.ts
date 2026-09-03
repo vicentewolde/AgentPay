@@ -1,7 +1,7 @@
 import { hasErrorCode } from "@agentpass/core";
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_INSTRUCTION, parseDemoArgs } from "./demo-args.js";
+import { DEFAULT_BAZAAR_INSTRUCTION, DEFAULT_INSTRUCTION, parseDemoArgs } from "./demo-args.js";
 
 describe("parseDemoArgs", () => {
   it("defaults to the mock adapter and the default instruction", () => {
@@ -10,6 +10,13 @@ describe("parseDemoArgs", () => {
 
   it("accepts --adapter=mock explicitly", () => {
     expect(parseDemoArgs(["--adapter=mock"]).adapter).toBe("mock");
+  });
+
+  it("accepts --adapter=bazaar, with its own default instruction", () => {
+    expect(parseDemoArgs(["--adapter=bazaar"])).toEqual({
+      adapter: "bazaar",
+      instruction: DEFAULT_BAZAAR_INSTRUCTION,
+    });
   });
 
   it("joins multiple positional words into one instruction", () => {
@@ -22,13 +29,18 @@ describe("parseDemoArgs", () => {
     );
   });
 
-  it("refuses an unimplemented adapter, naming T15", () => {
+  it("an explicit positional overrides the bazaar adapter's own default instruction", () => {
+    expect(parseDemoArgs(["--adapter=bazaar", "Comprame", "un", "Ledger", "Brief"]).instruction).toBe(
+      "Comprame un Ledger Brief",
+    );
+  });
+
+  it("refuses an adapter it does not know about", () => {
     try {
-      parseDemoArgs(["--adapter=bazaar"]);
+      parseDemoArgs(["--adapter=soroban"]);
       expect.unreachable("expected parseDemoArgs to throw");
     } catch (error) {
-      expect(hasErrorCode(error, "NotImplemented")).toBe(true);
-      expect((error as { details: { milestone: string } }).details.milestone).toBe("T15");
+      expect(hasErrorCode(error, "InvalidArguments")).toBe(true);
     }
   });
 
@@ -37,7 +49,7 @@ describe("parseDemoArgs", () => {
       parseDemoArgs(["--adapter="]);
       expect.unreachable("expected parseDemoArgs to throw");
     } catch (error) {
-      expect(hasErrorCode(error, "NotImplemented")).toBe(true);
+      expect(hasErrorCode(error, "InvalidArguments")).toBe(true);
     }
   });
 

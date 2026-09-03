@@ -19,10 +19,12 @@
  * the credential, `anchorMandate()` anchors the Mandate, `revoke()` cuts the
  * Mandate at the end. That is what makes the revocation real rather than
  * illustrated — the same reason `deploy-registry.ts` and the CLI's full
- * walkthrough (T8) also touch the network. The catalogue stays mocked
- * (`--adapter=mock`, the default and, until T15 answers the ambassador's
- * questions, the only one implemented); the phase's acceptance criterion is
- * that swapping in `--adapter=bazaar` later needs no change here.
+ * walkthrough (T8) also touch the network. The catalogue defaults to the mock
+ * (`--adapter=mock`); `--adapter=bazaar` (T15) reads the real bazaar's live
+ * discovery API instead — the phase's acceptance criterion, kept: swapping
+ * adapters needed no change to T9–T14, only a scope naming the venue and
+ * asset each catalogue actually uses (`examples/scope-bazaar.json` vs.
+ * `examples/scope-stellar-bazaar.json`).
  *
  * Everything before the first network call — argument parsing, reading
  * `.env.local`, reading the interpreted instruction — fails fast and offline,
@@ -48,30 +50,49 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { anchorMandate, createMandate, revokeMandate } from "@agentpay/mandate";
 
 import type { CreatePurchaseIntentResult } from "@agentpay/agent";
-import { createAgent, createMockCatalog, createOnChainMandateVerifier, interpretPurchase } from "@agentpay/agent";
+import {
+  type CatalogAdapter,
+  createAgent,
+  createBazaarCatalog,
+  createMockCatalog,
+  createOnChainMandateVerifier,
+  interpretPurchase,
+} from "@agentpay/agent";
 
-import { parseDemoArgs } from "./lib/demo-args.js";
+import { parseDemoArgs, type DemoAdapter } from "./lib/demo-args.js";
 import { readEnvFile } from "./lib/env-file.js";
 import { TESTNET } from "./lib/network.js";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const ENV_PATH = resolve(REPO_ROOT, ".env.local");
-const SCOPE_PATH = resolve(REPO_ROOT, "examples/scope-bazaar.json");
+
+/** Each catalogue names a different venue and asset, so each needs its own scope. */
+const SCOPE_PATH: Readonly<Record<DemoAdapter, string>> = {
+  mock: resolve(REPO_ROOT, "examples/scope-bazaar.json"),
+  bazaar: resolve(REPO_ROOT, "examples/scope-stellar-bazaar.json"),
+};
+
+/** The live deployment this was verified against, 2026-09-03 — overridable via `.env.local`. */
+const DEFAULT_BAZAAR_BASE_URL = "https://stellar-bazaar-x402.vercel.app";
 
 /** The credential's own validity window is not what this demo tests — the
  * revocation is — so a short window is enough. */
 const CREDENTIAL_VALID_DAYS = 1;
 
 /**
- * Narrower than the credential's own `perDay` (200.00) on purpose: two
- * purchases of the demo's default product (18.50 each) fit comfortably
- * under the credential's scope but not under this — which is what makes the
- * Mandate, not the credential, the one that says no in step 5. `perTx` is
- * left untouched so it never interferes; this demo is about the daily
- * memory `B-16` deferred and T18/T19 built, not the per-transaction limit
- * T12 already demonstrated in phase 2.
+ * Narrower than each adapter's own scope `perDay` on purpose: two purchases
+ * of the demo's default product fit comfortably under the credential's scope
+ * but not under this — which is what makes the Mandate, not the credential,
+ * the one that says no in step 5. `perTx` is left untouched so it never
+ * interferes; this demo is about the daily memory `B-16` deferred and
+ * T18/T19 built, not the per-transaction limit T12 already demonstrated in
+ * phase 2. Sized per adapter because the two catalogues price at completely
+ * different scales — the mock's 18.50 vs. the real bazaar's 0.001.
  */
-const DEMO_MANDATE_PER_DAY = "30.00";
+const DEMO_MANDATE_PER_DAY: Readonly<Record<DemoAdapter, string>> = {
+  mock: "30.00",
+  bazaar: "0.0015",
+};
 
 function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
   const value = env.get(key);
@@ -90,18 +111,24 @@ function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
  * `id` and `principal` are missing, and only because they need a live keypair
  * to compute.
  */
-async function readDemoScope(): Promise<CredentialRequest> {
-  const raw = await readFile(SCOPE_PATH, "utf8").catch((error: unknown) => {
-    throw new AgentPassError("ConfigError", `could not read ${SCOPE_PATH}`, { cause: error });
+async function readDemoScope(scopePath: string): Promise<CredentialRequest> {
+  const raw = await readFile(scopePath, "utf8").catch((error: unknown) => {
+    throw new AgentPassError("ConfigError", `could not read ${scopePath}`, { cause: error });
   });
 
   const parsed = credentialRequestSchema.safeParse(JSON.parse(raw));
   if (!parsed.success) {
-    throw new AgentPassError("ConfigError", `${SCOPE_PATH} does not match the expected shape`, {
+    throw new AgentPassError("ConfigError", `${scopePath} does not match the expected shape`, {
       details: { issues: parsed.error.issues.map((issue) => issue.message) },
     });
   }
   return parsed.data;
+}
+
+function createCatalog(adapter: DemoAdapter, env: ReadonlyMap<string, string>): CatalogAdapter {
+  if (adapter === "mock") return createMockCatalog();
+  const baseUrl = env.get("BAZAAR_BASE_URL") ?? DEFAULT_BAZAAR_BASE_URL;
+  return createBazaarCatalog({ baseUrl });
 }
 
 function line(label: string, value: string): void {
@@ -115,16 +142,16 @@ function step(n: number, title: string): void {
 }
 
 async function main(): Promise<void> {
-  const { instruction } = parseDemoArgs(process.argv.slice(2));
+  const { adapter, instruction } = parseDemoArgs(process.argv.slice(2));
   const env = await readEnvFile(ENV_PATH);
 
   const issuer = Keypair.fromSecret(requireEnv(env, "ISSUER_SECRET_KEY"));
   const agentKeypair = Keypair.fromSecret(requireEnv(env, "AGENT_SECRET_KEY"));
   const contractId = requireEnv(env, "AGENT_REGISTRY_CONTRACT_ID");
 
-  const catalog = createMockCatalog();
+  const catalog = createCatalog(adapter, env);
 
-  process.stdout.write("\nAgentPay demo · Fase 2 + Fase 3 · Stellar testnet\n");
+  process.stdout.write(`\nAgentPay demo · Fase 2 + Fase 3 · Stellar testnet · catálogo: ${adapter}\n`);
 
   // 1. Read the Spanish instruction — deterministically, not via an LLM call.
   //    See src/interpret.ts for why, and injection.test.ts for the property
@@ -147,7 +174,7 @@ async function main(): Promise<void> {
       networkPassphrase: TESTNET.passphrase,
       network: TESTNET.network,
     }),
-    readDemoScope(),
+    readDemoScope(SCOPE_PATH[adapter]),
   ]);
 
   // 2. Issue — a real credential, signed and anchored on chain.
@@ -184,9 +211,10 @@ async function main(): Promise<void> {
   // asserted. Anchored on the same registry, through the same generic
   // `anchor()` the credential just used (`M-17`/`M-18`): no separate
   // registration step, no separate contract.
+  const mandatePerDay = DEMO_MANDATE_PER_DAY[adapter];
   const mandateGrant: Scope = {
     ...demoScope.scope,
-    limits: { ...demoScope.scope.limits, perDay: DEMO_MANDATE_PER_DAY },
+    limits: { ...demoScope.scope.limits, perDay: mandatePerDay },
   };
   const mandate = createMandate({
     principal: issuerDid,
@@ -201,7 +229,7 @@ async function main(): Promise<void> {
   const anchoredMandate = await anchorMandate(agentpass, { mandate, principal: issuer });
   line("mandato", anchoredMandate.hash);
   line("tx", anchoredMandate.transactionHash);
-  line("perDay (mandato)", `${DEMO_MANDATE_PER_DAY} ${demoScope.scope.limits.currency}`);
+  line("perDay (mandato)", `${mandatePerDay} ${demoScope.scope.limits.currency}`);
 
   // 3. Start the agent: it verifies that same credential — and now the
   //    mandate too (T21) — against the real registry (T11) before deciding
