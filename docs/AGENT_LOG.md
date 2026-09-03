@@ -489,3 +489,53 @@ Siguiente decisión, de nuevo del usuario: seguir con el enforcement de
 o hacer T23 (demo de la fase completa) primero. El contrato del spike queda
 en el repo tal cual —sin límites, documentado como spike— no como algo listo
 para producción.
+
+## 2026-09-03 (12) — cc/t22-policy-rail-contract (cierre)
+
+Agente: Claude Code
+
+Qué: se completó T22 — el usuario pidió explícitamente construir el
+enforcement real de `perTx`/`perDay` sobre el spike (solo firma) del mensaje
+anterior. Se agregó `Config` (owner/asset/per_tx/per_day/valid_until, una
+sola lectura de storage), lectura de `auth_contexts` para extraer qué
+transferencia se está autorizando (contrato, función, `from`, monto), y el
+contador de gasto diario. **Primer resultado real: 203 831 de 50 000
+stroops — 4× el techo.** Se investigó la causa en vez de aceptarla:
+consolidar cinco lecturas de storage en una casi no cambió nada (203 786);
+quitar las dos llamadas a `extend_ttl()` bajó el número a 48 886. La causa
+real: la entrada de gasto diario (`SpentOn(day)`), que nace en cada día
+nuevo, estaba pidiendo el mismo horizonte de TTL de 90 días que la
+configuración del contrato, que sí necesita vivir 90 días. Corregido —TTL
+propio y corto, y movida de `persistent()` a `temporary()` (el storage de
+Soroban sin renta, para datos que expiran solos)— el costo final: **38 888
+stroops, 22% de margen**, con el evento de auditoría intacto.
+
+Confirmado en testnet real con tres transacciones: una compra dentro de
+ambos límites paga; una segunda que excedería `perDay` se rechaza en la
+simulación misma con el código de error exacto del contrato
+(`Error::PerDayExceeded`); una tercera que sí cabía en lo que quedaba del
+día pasa, probando que el rechazo anterior no dejó nada mal contado. 21
+tests de Rust, 14 mutaciones deliberadas — las catorce cayeron, aunque el
+primer intento de correrlas reportó siete falsos "sobrevivió" porque el
+script de mutación tenía patrones de regex apuntando al código de antes del
+refactor (encontrado comparando si el archivo realmente cambiaba antes de
+correr los tests — no asumirlo por el resultado solo).
+
+Por qué: sin esto, T22 seguía siendo "viable en el papel" — la medición era
+exactamente lo que el usuario pidió antes de dar por cerrada la fase.
+
+Decisión nueva: `M-22` — por qué el costo de un `__check_auth` con lógica
+propia lo domina extender el TTL de una entrada de storage nueva a un
+horizonte que no necesita, no el cómputo ni las lecturas. Nota lateral:
+`agent-registry` (Fase 1) usa la misma constante de 90 días para toda su
+storage persistente — no es un bug ahí (sus datos sí necesitan vivir eso),
+pero es la primera vez que este proyecto mide con números reales que el
+horizonte de un `extend_ttl` importa tanto como la lógica que protege.
+
+Documentación tocada: `ROADMAP.md`, `BITACORA.md` (T22 cerrado) y
+`DECISIONES.md` de la Fase 3, `evidencia/T22-spike.md` §9 (el experimento
+completo, los tres números de fee, las tres transacciones).
+
+Pendiente: mergear `cc/t22-policy-rail-contract` a `main` y pushear. Fase 3
+tiene sus ocho hitos cerrados o construidos (T16–T22); queda T23, la demo
+de la fase completa — no depende de nada pendiente.

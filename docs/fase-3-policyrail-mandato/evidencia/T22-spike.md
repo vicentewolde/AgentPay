@@ -252,3 +252,169 @@ ya garantice.
 el papel — un `policy_rail` mínimo, desplegado y firmado de verdad,
 efectivamente paga con su propia autorización on-chain, dentro del
 presupuesto de fee que el facilitator real exige, en Stellar testnet real.
+
+## 9. El spike creció a lo que iba a ser: `perTx` y `perDay` de verdad
+
+El margen de la §8 (20 110 stroops) era, en teoría, espacio para el
+enforcement real. Se construyó, y **el primer intento lo gastó entero y
+sobró pedir más.**
+
+### 9.1 Primer intento: 203 831 stroops — el 4× del techo
+
+Se agregó a `contracts/policy-rail/` lo que la Fase 2/3 ya definía
+off-chain: leer `scope.limits.perTx` contra el monto de la transferencia,
+leer y acumular el gasto del día contra `perDay`, con el mismo criterio de
+`M-16` (el reloj es el del contrato, nunca un dato que la transacción
+traiga). Cinco valores de configuración (`owner`, `asset`, `per_tx`,
+`per_day`, `valid_until`) fijados al desplegar, y un contador por día
+(`SpentOn(day)`) que se lee, se compara y se escribe **dentro del mismo
+`__check_auth`** — sin la ventana entre consultar y registrar que `M-15`
+documentó como el costo conocido de `LocalPolicyRail`.
+
+Funcionalmente, perfecto: 21 tests de Rust, todos en verde. El fee real:
+
+```
+minResourceFee   203831 stroops
+techo            50000 stroops
+¿entra?          NO — lo excede por casi 4×
+```
+
+Un `__check_auth` que solo firma cuesta 29 890. Agregarle dos comparaciones
+de enteros y un contador lo llevó a 203 831. La diferencia no podía ser el
+cómputo — comparar dos `i128` es trivial. Tenía que ser el I/O de storage.
+
+### 9.2 Aislando la causa: no son las lecturas, es el TTL de una entrada nueva
+
+Primer sospechoso, descartado: consolidar `owner`/`asset`/`per_tx`/`per_day`/
+`valid_until` —cinco claves de instance storage separadas— en un solo
+`struct Config` leído de una vez. Resultado: 203 786. Prácticamente nada.
+
+Segundo experimento, decisivo: quitar temporalmente las dos llamadas a
+`extend_ttl()` (la del storage de instancia y la de la entrada de gasto del
+día) sin tocar nada más.
+
+```
+con las dos extend_ttl     203 786 stroops
+sin ninguna extend_ttl      48 886 stroops   <- toda la diferencia está acá
+```
+
+**Extender el TTL de una entrada de storage recién creada, hasta 90 días de
+una vez, es lo que cuesta caro** — no crearla, no leerla, no escribirla.
+Soroban cobra la extensión de TTL como renta: saltar de "recién nacida" a
+"vive 90 días" es un salto grande, y el salto es lo que se paga. La
+instancia (`Config`) no sufre esto en la práctica —ya estaba en 90 días
+desde el `__constructor`, así que extenderla de nuevo es casi gratis, un
+`extend_ttl` que no tiene que mover nada—; la entrada `SpentOn(day)`, en
+cambio, nace en cada transacción nueva del día y se le pedía el mismo salto
+de 90 días que a la configuración, que vive para siempre.
+
+Ese era el error real: **`SpentOn(day)` recibió, por copiar la constante sin
+pensarlo, el mismo horizonte de 90 días que algo que sí necesita vivir 90
+días.** Un contador que solo importa por el día que nombra no tenía ninguna
+razón para pedir ese horizonte.
+
+### 9.3 La corrección: el TTL que la entrada realmente necesita, y el tipo de storage correcto
+
+Dos cambios, no uno:
+
+1. **Un TTL corto y propio para `SpentOn(day)`** (`SPEND_ENTRY_TTL_THRESHOLD`/`_EXTEND_TO`,
+   medio día / dos días) en vez del horizonte de 90 días de la configuración.
+2. **`temporary()` en vez de `persistent()`.** Un contador que expira solo
+   —y a quien nadie le importa leer pasado ese punto— es exactamente lo que
+   el storage temporal de Soroban existe para modelar: sin renta, borrado
+   por el propio host cuando su TTL vence. Es, además, más correcto que
+   `persistent()`: nada en este sistema necesita que el gasto de un día
+   sobreviva más que ese día.
+
+Con los dos cambios, con el evento `SpendAuthorised` de vuelta (se había
+probado quitarlo también — ahorraba ~1 100 stroops, mucho menos que el TTL
+— y no hacía falta sacrificarlo):
+
+```
+minResourceFee   38888 stroops
+techo            50000 stroops
+¿entra?          SÍ — margen de 11 112 stroops (22%)
+```
+
+### 9.4 Confirmado en cadena, con los tres casos que importan
+
+Contrato desplegado en testnet real — `owner` descartable, `asset` = XLM
+nativo (mismo motivo que en §8: el costo no depende del activo),
+`perTx = 0.5 XLM`, `perDay = 0.8 XLM`:
+
+```
+[4/6] Primer transfer — 0.5 XLM, dentro de perTx y perDay
+  minResourceFee    38888 stroops
+  ¿entra?           SÍ (margen: 11112)
+  tx hash           16907491d8f83e0020d7e8f1d3d2525eebd26d4d370e385a293b1aa0a244b6e0
+  status            SUCCESS
+
+[5/6] Segundo transfer — otros 0.5 XLM (0.5+0.5=1.0 > 0.8 de perDay)
+  resultado         rechazado, como se esperaba
+  detalle           HostError: Error(Auth, InvalidAction) ...
+                    "failed account authentication with error",
+                    Error(Contract, #8)   <- PerDayExceeded, el código exacto
+
+[6/6] Tercer transfer — 0.3 XLM (0.5+0.3=0.8, exactamente el límite)
+  tx hash           ba11d8391ba8808c3d23d53365787bd28bfe7181b712cd5c7a65e48125b79f2d
+  status            SUCCESS
+```
+
+El segundo transfer se rechaza en la **simulación misma** — nunca llega a
+someterse a la red — con el código de error exacto del contrato
+(`Error::PerDayExceeded = 8`), no un error genérico. El tercero confirma que
+el rechazo del segundo no dejó nada mal registrado: el contador seguía en
+0.5 XLM gastados, y 0.5 + 0.3 = 0.8 — exactamente el límite, permitido
+porque el chequeo es `> per_day`, no `>=`.
+
+### 9.5 Mutation testing sobre la versión completa
+
+Catorce mutaciones deliberadas sobre `__check_auth` y el constructor —el
+chequeo de expiración, la identidad del firmante, la verificación
+criptográfica, la forma de la invocación autorizada, `perTx`, `perDay`, el
+registro del gasto, y la validación de los parámetros del constructor.
+**Las catorce cayeron.**
+
+```
+killed    expiry check removed
+killed    signatures.len() != 1 check removed
+killed    public_key == owner check removed
+killed    ed25519_verify skipped
+killed    auth_contexts.len() != 1 check removed
+killed    contract/fn_name/args-length match removed
+killed    from == current_contract_address() check removed
+killed    amount <= 0 check removed
+killed    perTx comparison off-by-one (>= instead of >)
+killed    perTx check removed
+killed    perDay check removed
+killed    spend recording skipped
+killed    constructor limit validation removed
+killed    constructor expiry validation removed
+```
+
+(Las primeras corridas de este mismo lote reportaron siete de estas catorce
+como `SURVIVED`. No eran huecos: el archivo había cambiado de forma —la
+consolidación en `Config`, el cambio a `temporary()`— y los patrones del
+script de mutación seguían buscando el código viejo. Al no encontrar nada
+que mutar, el archivo quedaba intacto y, por supuesto, pasaba todos los
+tests. Corregidos los patrones para que apuntaran al código real, las
+catorce cayeron. Vale la pena decirlo en voz alta: un mutation testing que
+reporta "sobrevivió" merece la misma desconfianza que uno que reporta
+"cayó" — hay que mirar si la mutación en verdad se aplicó antes de creerle
+cualquiera de los dos resultados.)
+
+### 9.6 Conclusión de T22
+
+`policy_rail` hace cumplir `perTx` y `perDay` dentro de la misma transacción
+que mueve la plata, sin la ventana entre consultar y registrar que
+`LocalPolicyRail` tiene off-chain (`M-15`), con margen real de fee bajo el
+techo del facilitator, verificado con transacciones reales —no solo
+simuladas— en Stellar testnet. El wasm final: 9528 bytes.
+
+**Lo que sigue fuera de alcance, a propósito, todavía:** el Mandato en sí
+—este contrato no sabe qué es un principal, ni una ventana de vigencia
+firmada por nadie más que quien lo desplegó, ni una lista de venues— y el
+chequeo de `payTo`, que sigue sin nada firmado contra qué compararlo
+(`M-14`). `policy_rail` prueba que el camino on-chain funciona y cabe en el
+presupuesto real; no reemplaza al Mandato ni a `LocalPolicyRail`, los
+complementa como una segunda implementación posible del mismo puerto.

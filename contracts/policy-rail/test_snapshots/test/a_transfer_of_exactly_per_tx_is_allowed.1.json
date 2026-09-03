@@ -25,6 +25,33 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "SpentOn"
+                  },
+                  {
+                    "u64": "20509"
+                  }
+                ]
+              },
+              "durability": "temporary",
+              "val": {
+                "i128": "5000000000"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 34560
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -56,7 +83,7 @@
                               "symbol": "owner"
                             },
                             "val": {
-                              "bytes": "a5ad11676ed8fbd6a128a1cc5d42280a3d6fda66a89524dcd1559b1c36c732e6"
+                              "bytes": "f4cc6b1329ad3a3461e143f8a300146aff3b3aba373db7a59e18e465d0d4fb96"
                             }
                           },
                           {
@@ -111,5 +138,49 @@
       }
     ]
   },
-  "events": []
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "policy_rail"
+              },
+              {
+                "symbol": "authorised"
+              },
+              {
+                "u64": "20509"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "amount"
+                  },
+                  "val": {
+                    "i128": "5000000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "spent_today"
+                  },
+                  "val": {
+                    "i128": "5000000000"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
 }

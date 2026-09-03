@@ -6,6 +6,7 @@
   },
   "auth": [
     [],
+    [],
     []
   ],
   "ledger": {
@@ -18,6 +19,33 @@
     "min_temp_entry_ttl": 16,
     "max_entry_ttl": 6312000,
     "ledger_entries": [
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "SpentOn"
+                  },
+                  {
+                    "u64": "20509"
+                  }
+                ]
+              },
+              "durability": "temporary",
+              "val": {
+                "i128": "1000000000"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 34560
+      },
       {
         "entry": {
           "last_modified_ledger_seq": 0,
@@ -56,7 +84,7 @@
                               "symbol": "owner"
                             },
                             "val": {
-                              "bytes": "a5ad11676ed8fbd6a128a1cc5d42280a3d6fda66a89524dcd1559b1c36c732e6"
+                              "bytes": "8e4b600d749cd62afbd61bfafc9c9cd8d4725723679b6c00ea059a8af8f76c15"
                             }
                           },
                           {

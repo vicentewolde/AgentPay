@@ -1,10 +1,15 @@
 {
   "generators": {
-    "address": 3,
+    "address": 2,
     "nonce": 0,
     "mux_id": 0
   },
   "auth": [
+    [],
+    [],
+    [],
+    [],
+    [],
     [],
     []
   ],
@@ -56,7 +61,7 @@
                               "symbol": "owner"
                             },
                             "val": {
-                              "bytes": "a5ad11676ed8fbd6a128a1cc5d42280a3d6fda66a89524dcd1559b1c36c732e6"
+                              "bytes": "86b646b9281467b0bd560745025a889590eaf42c0cc8829651c517ee3d05f54e"
                             }
                           },
                           {

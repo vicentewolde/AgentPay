@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 1,
+    "address": 3,
     "nonce": 0,
     "mux_id": 0
   },
@@ -11,7 +11,7 @@
   "ledger": {
     "protocol_version": 27,
     "sequence_number": 0,
-    "timestamp": 0,
+    "timestamp": 1772000000,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -24,7 +24,34 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "SpentOn"
+                  },
+                  {
+                    "u64": "20509"
+                  }
+                ]
+              },
+              "durability": "temporary",
+              "val": {
+                "i128": "100000000"
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 34560
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -37,12 +64,53 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Owner"
+                            "symbol": "Config"
                           }
                         ]
                       },
                       "val": {
-                        "bytes": "11df7fc95fb1a36a815cf2e61ff9ab7abdce408c269113d7b709fe1a180e8260"
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "asset"
+                            },
+                            "val": {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "owner"
+                            },
+                            "val": {
+                              "bytes": "34cbbaae6f5b292ceafdc670a87968f42ed5207437e7b60ec13461080b15f2a8"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "per_day"
+                            },
+                            "val": {
+                              "i128": "20000000000"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "per_tx"
+                            },
+                            "val": {
+                              "i128": "5000000000"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "valid_until"
+                            },
+                            "val": {
+                              "u64": "1774592000"
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
@@ -70,5 +138,49 @@
       }
     ]
   },
-  "events": []
+  "events": [
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "policy_rail"
+              },
+              {
+                "symbol": "authorised"
+              },
+              {
+                "u64": "20509"
+              }
+            ],
+            "data": {
+              "map": [
+                {
+                  "key": {
+                    "symbol": "amount"
+                  },
+                  "val": {
+                    "i128": "100000000"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "spent_today"
+                  },
+                  "val": {
+                    "i128": "100000000"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    }
+  ]
 }

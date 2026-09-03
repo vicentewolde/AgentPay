@@ -11,7 +11,7 @@
   "ledger": {
     "protocol_version": 27,
     "sequence_number": 0,
-    "timestamp": 1772000000,
+    "timestamp": 1774592001,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -56,7 +56,7 @@
                               "symbol": "owner"
                             },
                             "val": {
-                              "bytes": "a5ad11676ed8fbd6a128a1cc5d42280a3d6fda66a89524dcd1559b1c36c732e6"
+                              "bytes": "0c87a57e2e29b4924f2c6218b5fbc997598059e8cb8f713bc51d4e087ae8f4de"
                             }
                           },
                           {

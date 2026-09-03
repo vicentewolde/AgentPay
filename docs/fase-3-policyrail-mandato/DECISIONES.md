@@ -829,3 +829,60 @@ garantía.
 entraba, y trabajo tirado —Rust, tests, mutation testing, todo— si no
 entraba. El spike cuesta una tarde; el contrato completo, mucho más.
 
+---
+
+### M-22 · El costo de `__check_auth` no lo domina el cómputo ni las lecturas: lo domina extender el TTL de una entrada recién creada a un horizonte que no necesita · `Vigente`
+**Fecha:** 2026-09-03 · **Hito:** T22
+
+Agregarle `perTx`/`perDay` al spike de `M-21` —dos comparaciones de enteros
+y un contador— llevó el fee medido de 29 890 a **203 831 stroops**, muy por
+encima del techo de 50 000 del facilitator. Consolidar cinco lecturas de
+storage de instancia en una sola (`Config`, ver más abajo) casi no movió el
+número: 203 786. La causa real, aislada quitando cada pieza por separado:
+**las dos llamadas a `extend_ttl()` explicaban, juntas, 154 900 de los 203
+831 stroops** — quitarlas bajaba el fee a 48 886, ya bajo el techo, antes
+de tocar nada más.
+
+**Por qué extender el TTL es lo caro, y por qué no es parejo.** Soroban
+cobra `extend_ttl(threshold, extend_to)` como renta: si la entrada ya vive
+más que `threshold`, extenderla de nuevo es casi gratis; si es nueva —o su
+TTL cayó por debajo del umbral—, saltar hasta `extend_to` cuesta en
+proporción a cuánto hay que saltar. La configuración del contrato
+(`Config`, incluido en `M-21`) ya estaba en su horizonte de 90 días desde el
+`__constructor`, así que extenderla de nuevo en cada `__check_auth` es casi
+gratis. La entrada de gasto diario (`SpentOn(day)`), en cambio, **nace en
+cada llamada de cada día nuevo** y estaba pidiendo el mismo salto de 90
+días que la configuración — pagando, en cada primera transacción del día,
+la renta completa de un horizonte que un contador de un solo día no tenía
+ninguna razón para pedir.
+
+**La corrección, dos partes.** Un TTL propio y corto para `SpentOn(day)`
+(medio día de umbral, dos días de extensión — de sobra para que sobreviva
+lo que le queda al día en curso) en vez del horizonte de 90 días copiado sin
+pensar de la configuración; y, más de fondo, moverlo de `persistent()` a
+`temporary()` — el storage de Soroban que existe exactamente para datos que
+expiran solos y a los que nadie necesita leer después de esa fecha, sin
+cobrar renta. Con los dos cambios: **38 888 stroops, 22% de margen bajo el
+techo**, evento de observabilidad (`SpendAuthorised`) incluido — no hubo que
+sacrificarlo, costaba solo ~1 100 stroops.
+
+**Por qué esto importa más allá de este contrato.** `agent-registry`
+(Fase 1) usa exactamente el mismo patrón de 30 días de umbral / 90 días de
+extensión para *toda* su storage persistente, credenciales incluidas — y
+nadie lo había medido contra un techo de fee externo porque nada hasta
+ahora llamaba a ese contrato a través de un facilitator con límite fijo.
+No es un bug de `agent-registry` (sus entradas sí necesitan vivir 90 días:
+una credencial no expira en un día), pero es la primera vez que este
+proyecto mide, con números reales, que **el horizonte de un `extend_ttl`
+tiene que ser el que el dato realmente necesita, no una constante que se
+copia de un archivo a otro** — y que esa diferencia, sin tocar ni una línea
+de lógica de negocio, puede ser la que decide si algo cabe en un
+presupuesto de fee externo o no.
+
+**Alternativa descartada:** sacrificar el evento `SpendAuthorised` para
+ganar margen (~1 100 stroops) en vez de corregir el TTL. Se probó primero,
+por ser el cambio más chico; el resultado (~1 100 de ahorro, todavía por
+encima del techo antes de la corrección de TTL) mostró que no era ahí donde
+estaba el costo real, y habría cambiado observabilidad por un ahorro que no
+resolvía el problema.
+

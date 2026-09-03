@@ -13,7 +13,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T21 · **En curso:** T22 — spike de `policy_rail` construido y medido en testnet real, sin enforcement de límites todavía
+**Fecha:** 2026-09-03 · **Último hito cerrado:** T22 · **Siguiente:** T23 (demo de la fase completa)
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
@@ -27,10 +27,10 @@ firmarse.
 
 | | |
 |---|---|
-| Tests TypeScript | **559** rápidos (core 74 · mandate 44 · sdk 16 · cli 29 · **agent 364** · scripts 32) |
+| Tests TypeScript | 559 rápidos (core 74 · mandate 44 · sdk 16 · cli 29 · agent 364 · scripts 32) |
 | Tests de integración | 6 contra testnet real (3 credenciales + 3 mandatos) |
-| Tests Rust | 22 en verde (sin cambios — el contrato no se tocó, `M-3`) |
-| Paquete nuevo | `@agentpay/mandate` |
+| Tests Rust | **43** (22 `agent-registry`, sin cambios · **21 `policy-rail`, nuevo**) |
+| Paquete nuevo | `@agentpay/mandate` (T16) · contrato `policy-rail` (T22) |
 | Bloqueado por el embajador | **Nada.** Ver abajo |
 
 **Lo que cambió en T19, y es lo más importante de esta fase.** Se leyó el repo
@@ -66,7 +66,7 @@ convención — T19 en `cc/t19-policy-rail`, T20 en `cc/t20-anchor-mandate`.
 | T19 | PolicyRail: dónde se autoriza o se bloquea | ✅ cerrado |
 | T20 | Anclar y revocar un mandato en cadena | ✅ cerrado |
 | T21 | Cablearlo en el agente | ✅ cerrado |
-| T22 | El límite hecho cumplir on-chain, como smart account | 🚧 spike medido en testnet real (29 890/50 000 stroops), sin `perTx`/`perDay` todavía |
+| T22 | El límite hecho cumplir on-chain, como smart account | ✅ cerrado |
 | T23 | Demo de la fase completa | ⏳ |
 
 ---
@@ -488,7 +488,7 @@ sin borrar el texto original — misma convención que `M-1`.
 
 ---
 
-## T22 (continuación) · El spike se construyó y midió — 2026-09-03
+## T22 (continuación) · El spike de la firma se construyó y midió — 2026-09-03
 
 **Qué quedó funcionando, en lenguaje llano.** La lectura de código decía que
 un contrato inteligente podía pagar; lo único que no podía decir era cuánto
@@ -496,39 +496,71 @@ costaría hacerlo cumplir. Se construyó la versión más simple posible de
 `policy_rail` —un contrato que solo verifica una firma, sin ningún límite de
 gasto todavía— se lo desplegó en Stellar testnet real, se lo fondeó, y se le
 pidió que pagara. **Pagó.** Y costó menos de lo que el facilitator permite
-gastar en verificar un pago.
+gastar en verificar un pago: 29 890 de 50 000 stroops, transacción real
+confirmada en cadena
+(`9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f`).
 
-En números: verificar la firma de este contrato cuesta **29 890 stroops** de
-los **50 000** que el facilitator tolera antes de rechazar la transacción por
-cara. Queda un 40% de margen — el espacio que va a ocupar comparar el gasto
-del día contra un límite, cuando esa lógica se agregue.
+**Evidencia técnica.** [evidencia/T22-spike.md §8](evidencia/T22-spike.md) —
+el experimento paso a paso. 6 tests Rust, 5 mutaciones (las cinco cayeron).
+Wasm de 2884 bytes — solo la firma, sin `perTx`/`perDay` todavía.
 
-**Cómo se probó, sin depender de nadie más.** No hizo falta ni el facilitator
-de OpenZeppelin ni el faucet de USDC del bazaar: la medición se hizo con XLM
-nativo, que las llaves que ya existen en `.env.local` de este proyecto ya
-tienen, transferido hacia y desde el contrato como si fuera cualquier activo
-SEP-41 —el costo de verificar la firma es el mismo sin importar qué activo se
-mueva. La transacción final, la que paga *desde* el contrato con su propia
-autorización, quedó confirmada en cadena, no solo simulada:
-`9708b4d93ad8ba3a9726c66e49c3e4835e275297f2362912ef23226ebb8a2c0f`.
+---
 
-**Evidencia técnica.** [evidencia/T22-spike.md](evidencia/T22-spike.md), §8 —
-el experimento completo paso a paso, con la salida cruda del script y el hash
-de la transacción real. `contracts/policy-rail/` — el contrato: 6 tests Rust,
-5 mutaciones deliberadas sobre la lógica de `__check_auth` (el chequeo de
-identidad del firmante, el conteo de firmas, la verificación criptográfica
-misma), **las cinco cayeron**. Compila a un wasm de 2884 bytes.
+## T22 (cierre) · `perTx` y `perDay`, de verdad, dentro del presupuesto — 2026-09-03
 
-**Lo que este contrato deliberadamente no hace todavía.** No lleva `perTx` ni
-`perDay`, no lee ningún límite firmado, no sabe qué es un Mandato. Es
-exactamente lo que su nombre en el código dice que es: un spike, construido
-para responder una pregunta de costo, no para reemplazar a `LocalPolicyRail`
-(T19) todavía. Agregarle el enforcement real es el trabajo que sigue, y ya
-tiene margen de fee conocido contra el cual medirse.
+**Qué quedó funcionando, en lenguaje llano.** El margen que dejó la firma
+sola (20 110 stroops) era, en teoría, espacio de sobra para agregar los dos
+límites de gasto. El primer intento lo gastó entero **y pidió cuatro veces
+más**: 203 831 stroops, muy por encima de lo que el facilitator tolera. No
+era un problema de diseño del límite —las comparaciones son dos enteros—,
+era un problema de cómo se le pedía a la red que recordara el gasto del día.
 
-**Fuera de alcance, a propósito:** el enforcement de `perTx`/`perDay` on-chain
-(el próximo paso, ahora con el margen de fee ya medido), integrarlo con el
-Mandato (necesitaría que el contrato pueda leer o verificar la firma del
-principal, que hoy vive fuera de la cadena), y cualquier cosa con el
-facilitator real o USDC — esta medición deliberadamente los evitó, y lo que
-prueba (el costo de `__check_auth`) no depende de ninguno de los dos.
+**Lo que se encontró, en una frase.** El contador de gasto diario nace de
+cero en cada día nuevo, y el código le estaba pidiendo el mismo horizonte de
+vida —90 días— que la configuración del contrato, que sí necesita vivir
+todo ese tiempo. Extenderle el "tiempo de vida" a una entrada de storage
+recién creada de un salto tan grande es, en Soroban, lo que de verdad se
+paga como renta — no leerla, no escribirla, no compararla. Corregido —un
+horizonte de un par de días, no noventa, y guardado en el tipo de storage
+que Soroban reserva exactamente para datos que expiran solos— el costo bajó
+a **38 888 stroops: 22% de margen bajo el techo**, sin sacrificar nada de
+lógica ni el evento de auditoría.
+
+**Confirmado con los tres casos que importan, en Stellar testnet real, no
+solo en tests:**
+
+1. Una compra de 0.5 XLM, dentro de los dos límites: paga, cuesta 38 888
+   stroops, asienta.
+2. Una segunda compra de otros 0.5 XLM el mismo día (0.5+0.5 = 1.0, sobre un
+   límite diario de 0.8): se rechaza — y no en cadena después de gastar el
+   fee, sino en la simulación misma, con el código de error exacto del
+   contrato, no uno genérico.
+3. Una tercera compra de 0.3 XLM (0.5+0.3 = 0.8, exactamente el límite):
+   pasa — prueba de que el rechazo anterior no dejó nada mal contado.
+
+**Evidencia técnica.** [evidencia/T22-spike.md §9](evidencia/T22-spike.md) —
+la investigación completa de la causa (qué se probó, qué no cambió nada, qué
+sí), los tres experimentos de fee con sus números, y las tres transacciones
+reales. 21 tests de Rust, 14 mutaciones deliberadas sobre `__check_auth` y
+el constructor — las catorce cayeron, aunque no a la primera: una primera
+corrida del script de mutación reportó siete como sobrevivientes que
+resultaron ser el propio script buscando código que ya no existía después
+de la corrección del TTL, no huecos reales. Corregido el script, las catorce
+cayeron. Queda anotado en la evidencia como recordatorio: un mutation
+testing que dice "sobrevivió" hay que mirarlo con la misma desconfianza que
+uno que dice "cayó".
+
+**Decisión nueva:** `M-22` — por qué el costo de `__check_auth` no lo domina
+el cómputo ni las lecturas de storage, sino extender el TTL de una entrada
+nueva a un horizonte que no necesita, y por qué esto probablemente aplica a
+más de un contrato de este proyecto (`agent-registry` usa la misma
+constante de 90 días para *toda* su storage, con datos que sí la necesitan
+— pero nadie la había medido nunca contra un techo de fee externo).
+
+**Fuera de alcance, a propósito, todavía:** el Mandato en sí —este contrato
+no sabe qué es un principal, ni tiene una lista de venues, ni lee una
+ventana de vigencia firmada por nadie más que quien lo desplegó— y el
+chequeo de `payTo`, que sigue sin nada firmado contra qué compararlo
+(`M-14`). `policy_rail` prueba que el camino on-chain funciona y cabe en el
+presupuesto real; no reemplaza al Mandato ni a `LocalPolicyRail` (T19), los
+complementa como una segunda implementación posible del mismo puerto.

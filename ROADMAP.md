@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-03 · Fase actual: **Fase 3 — T21 cerrado** (Fase 2: T9–T14 completos, T15 desbloqueado sin construir)
+Última revisión: 2026-09-03 · Fase actual: **Fase 3 — T22 cerrado** (Fase 2: T9–T14 completos, T15 desbloqueado sin construir)
 
 ---
 
@@ -93,7 +93,7 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 | 0 | Fundamentos | Que hay una tesis técnica y una ventana regulatoria reales, no solo entusiasmo | ✅ Completa (pre-código) | — |
 | 1 | **AgentPass** | Identidad verificable del agente, revocable desde afuera | ✅ Completa (T1–T8) | — |
 | 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 T9–T14 completos, T15 desbloqueado (2026-09-03) sin construir | **Nada.** T15 dejó de depender del embajador — el catálogo es una API pública (ver Fase 2) |
-| 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | 🔄 En curso — T21 cerrado, spike de T22 resuelto | **Nada.** `M-12` respondió que sí se puede: falta construir el contrato de T22, no esperar a nadie |
+| 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | 🔄 En curso — T22 cerrado | **Nada.** Los ocho hitos de la fase están cerrados o construidos; falta T23 (demo) |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ⏳ Sin diseñar | Timeline de integración del embajador; es el hito de mayor riesgo del proyecto |
 | 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | ⏳ Sin diseñar | Fases 2–4 cerradas |
 | 6 | **Después: AgentGuard + comercialización** | Qué viene si SCF financia esto — no es parte del piloto | 🔲 Sin definir, a propósito | Todo lo anterior |
@@ -291,7 +291,7 @@ El desglose sale de esa decisión: **el corte no es "Mandato vs PolicyRail", es
 | T19 | `PolicyRail.authorise()` como puerto + `LocalPolicyRail` off-chain, con reconciliación de los términos del 402 | — | ✅ |
 | T20 | Anclaje y revocación del Mandato vía `agent_registry`, sin tocar el contrato | — | ✅ |
 | T21 | Cableado en el agente + tests de inyección | — | ✅ |
-| T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | `M-12` resuelta (positiva), spike medido en testnet real | 🚧 sin `perTx`/`perDay` todavía |
+| T22 | Contrato `policy_rail`: smart account con `__check_auth` que hace cumplir el límite on-chain | `M-12` resuelta (positiva), medido en testnet real | ✅ |
 | T23 | Demo de la fase completa | — | ⏳ |
 
 **Actualizado el 2026-09-03 (T19): `M-1` quedó `Superada`.** Al leerse el repo
@@ -299,14 +299,17 @@ real del bazaar se confirmó que no hay contrato de compra desplegado, así que
 la pregunta que `M-1` asumía dejó de existir.
 
 **Actualizado el 2026-09-03 (T22): `M-12` quedó `Resuelta — positiva`, y
-medida.** El spike leyó el código fuente real de `@x402/stellar` y del
-facilitator de OpenZeppelin (ninguno de los dos restringe el tipo de cuenta
-que paga), y después se construyó y midió: un `policy_rail` mínimo,
-desplegado en testnet real, pagó con su propia autorización por **29 890 de
-50 000 stroops** de techo, y la transacción **asentó**. Los ocho hitos de
-esta fase ya no dependen de nada externo — T22 pasa de "bloqueado por una
-pregunta" a "contrato con margen de fee conocido, falta el enforcement de
-`perTx`/`perDay`" (ver `docs/fase-3-policyrail-mandato/evidencia/T22-spike.md`).
+`policy_rail` está construido, medido y cerrado.** El spike leyó el código
+fuente real de `@x402/stellar` y del facilitator de OpenZeppelin (ninguno de
+los dos restringe el tipo de cuenta que paga); después se construyó el
+enforcement real de `perTx` y `perDay` dentro de `__check_auth`. El primer
+intento costó 4× el techo del facilitator — no por la lógica del límite,
+sino por extender a 90 días el TTL de una entrada de storage que solo
+necesitaba vivir un día (`M-22`). Corregido: **38 888 de 50 000 stroops**,
+22% de margen, con tres transacciones reales en testnet confirmando los tres
+casos (paga, se rechaza por `perDay` con el código de error exacto, y una
+tercera compra que sí cabía pasa). Los ocho hitos de esta fase están
+cerrados (ver `docs/fase-3-policyrail-mandato/evidencia/T22-spike.md`).
 
 **Lo que sí se puede decir ahora, porque no depende de nada pendiente:**
 
@@ -352,10 +355,12 @@ de firmar, y el repo es Apache-2.0. La Fase 4 pasa a ser envolver el cliente
 x402 con el rail que la Fase 3 ya construyó — trabajo de este repo, sin
 dependencia de terceros. Ver `M-11` en las decisiones de la Fase 3.
 
-**El riesgo del pagador quedó resuelto, positivo** (`M-12`, 2026-09-03): el
-facilitator acepta una cuenta de contrato. Lo que queda de riesgo en T22 es
-si el fee de un `__check_auth` propio entra bajo el techo que el facilitator
-aplica — eso no afecta a la Fase 4, que no depende de T22.
+**El riesgo del pagador quedó resuelto, positivo, y T22 ya está cerrado**
+(`M-12`, 2026-09-03): el facilitator acepta una cuenta de contrato, y
+`policy_rail` —con `perTx` y `perDay` de verdad, no solo la firma— cabe en
+el techo de fee con margen (38 888 de 50 000 stroops), verificado con
+transacciones reales en testnet. Nada de esto afecta a la Fase 4, que no
+depende de T22.
 
 **Asignación de modelo recomendada:** Opus 5 a esfuerzo alto para esta fase
 específicamente — es la única con ambigüedad arquitectónica genuina y

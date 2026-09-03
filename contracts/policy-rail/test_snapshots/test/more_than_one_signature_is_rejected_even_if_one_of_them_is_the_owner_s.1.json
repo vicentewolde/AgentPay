@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 1,
+    "address": 3,
     "nonce": 0,
     "mux_id": 0
   },
@@ -11,7 +11,7 @@
   "ledger": {
     "protocol_version": 27,
     "sequence_number": 0,
-    "timestamp": 0,
+    "timestamp": 1772000000,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
     "base_reserve": 0,
     "min_persistent_entry_ttl": 4096,
@@ -24,7 +24,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -37,12 +37,53 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Owner"
+                            "symbol": "Config"
                           }
                         ]
                       },
                       "val": {
-                        "bytes": "03dc49664bb3046902c783474073a12c667f147cc8774ff4f214182e427da4af"
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "asset"
+                            },
+                            "val": {
+                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "owner"
+                            },
+                            "val": {
+                              "bytes": "3c7720ecc3cb0bb6dc2e893f434917f63321cc5244241d7881381f764060d84d"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "per_day"
+                            },
+                            "val": {
+                              "i128": "20000000000"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "per_tx"
+                            },
+                            "val": {
+                              "i128": "5000000000"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "valid_until"
+                            },
+                            "val": {
+                              "u64": "1774592000"
+                            }
+                          }
+                        ]
                       }
                     }
                   ]
