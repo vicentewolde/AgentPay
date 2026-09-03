@@ -88,3 +88,23 @@ es lo primero que no depende de la pregunta 6 del embajador.
 
 Pendiente: mergear `cc/t17-check-mandate` a `main` (y pushear, a confirmar con
 el usuario). Siguiente hito: T18, la memoria de gastos para `perDay`.
+
+## 2026-09-03 (2) — main
+
+Agente: Claude Code
+
+Qué: se mergeó `cc/t17-check-mandate` a `main` (fast-forward, rama borrada) y
+se pusheó a `origin`. A pedido del usuario, el protocolo de coordinación de
+`P-2` pasó de estar solo en `docs/DECISIONES.md` a ser un checklist explícito
+en `CLAUDE.md` (sección "Coordinación con Devin") — el archivo que toda sesión
+nueva, de cualquiera de los dos agentes, lee primero.
+
+Por qué: el usuario pidió asegurar que ambas herramientas trabajen coordinadas
+sin perder información en cada cambio. `CLAUDE.md` no mencionaba nada de esto
+— una sesión fresca podía perderse la regla si no llegaba a leer `P-2` en
+`docs/DECISIONES.md` hasta el final.
+
+Pendiente: T18, la memoria de gastos para `perDay`. Verificar en la próxima
+tarea real de Devin que el checklist nuevo de `CLAUDE.md` no le agrega fricción
+innecesaria — está pensado para sesiones de Claude Code, Devin sigue
+gobernado por `P-2` directamente.
