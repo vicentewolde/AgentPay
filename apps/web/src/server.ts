@@ -133,8 +133,8 @@ let session: DemoSession | undefined;
 function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
   const value = env.get(key);
   if (value === undefined || value === "") {
-    throw new AgentPassError("ConfigError", `${key} is missing from .env.local`, {
-      details: { fix: "run `pnpm run bootstrap` and `pnpm run deploy:registry` first", key },
+    throw new AgentPassError("ConfigError", `${key} is missing from .env.local and process.env`, {
+      details: { fix: "run `pnpm run bootstrap` and `pnpm run deploy:registry` first, or set it as an env var", key },
     });
   }
   return value;
@@ -153,9 +153,25 @@ async function readScope(): Promise<CredentialRequest> {
   return parsed.data;
 }
 
+/**
+ * `.env.local` is how local dev sets secrets (per the project's own
+ * convention — see CLAUDE.md). Render, and any other host that injects
+ * config straight into the process, has no such file on disk: it sets
+ * `process.env` instead. Fall back to it for any key the file doesn't
+ * have, so the same code works in both places.
+ */
+async function readEnv(): Promise<Map<string, string>> {
+  const fromFile = await readEnvFile(ENV_PATH);
+  const env = new Map(fromFile);
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && !env.has(key)) env.set(key, value);
+  }
+  return env;
+}
+
 /** Mirrors `pnpm demo`'s step 2: issue a credential, then a Mandate with its own (tighter) perDay. */
 async function startSession(): Promise<DemoSession> {
-  const env = await readEnvFile(ENV_PATH);
+  const env = await readEnv();
   const issuerSecret = requireEnv(env, "ISSUER_SECRET_KEY");
   const issuer = Keypair.fromSecret(issuerSecret);
   const agentKeypair = Keypair.fromSecret(requireEnv(env, "AGENT_SECRET_KEY"));
@@ -383,7 +399,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   if (req.method === "GET" && pathname === "/api/products") {
-    const env = await readEnvFile(ENV_PATH);
+    const env = await readEnv();
     const baseUrl = env.get("BAZAAR_BASE_URL") ?? DEFAULT_BAZAAR_BASE_URL;
     const products = await createBazaarCatalog({ baseUrl }).listProducts();
     sendJson(res, 200, { ok: true, products, payableProductId: PAYABLE_PRODUCT_ID });
