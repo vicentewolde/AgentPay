@@ -56,3 +56,46 @@ documentación está cerrada y cuál está viva. Las decisiones que cruzan fases
 **Supersede a `I-13`** (`Repo privado en GitHub`, en el registro de la Fase 1),
 que queda desactualizada. Esa entrada no se edita: el registro de una fase
 cerrada no se reescribe hacia atrás, se supersede desde aquí.
+
+---
+
+### P-2 · Devin (plan free) como segundo agente sobre la misma carpeta raíz · `Vigente`
+**Fecha:** 2026-09-02
+
+Se suma Devin Desktop (plan free), apuntando a esta misma carpeta local, para
+delegar tareas mecánicas y acotadas — boilerplate, tests, scaffolding,
+documentación, refactors puntuales, scripts auxiliares — sin depender solo de
+los tokens de Claude Code. Reglas:
+
+1. **Git es la única fuente de verdad**, no la carpeta compartida en vivo.
+   Ningún cambio se asume "sincronizado" solo porque comparte disco; se
+   confirma con `git status` / `git log` antes de tocar algo que pudo haber
+   cambiado del otro lado.
+2. **Branches separadas por convención**: `cc/<feature>` para Claude Code,
+   `devin/<task>` para Devin. **No es el default de Devin** — por su cuenta
+   usa convención de conventional commits (`feature/`, `fix/`, `docs/`, etc.);
+   se le indicó explícitamente usar el prefijo `devin/` para que la branch
+   diga a simple vista qué agente la generó, que es lo que necesita la regla
+   de no tocar la misma branch/archivo en simultáneo. Nunca los dos agentes
+   trabajan sobre el mismo archivo o la misma branch en simultáneo.
+3. **Todo lo que toca los contratos (AgentPass, PolicyRail, Mandato),
+   MandateVault, la integración con el bazaar de Cabs, o cualquier decisión
+   que afecte la narrativa de la postulación a SCF, se queda en Claude
+   Code.** Devin no tiene el contexto de negocio de SCF ni de la Ley Fintech
+   21.521 — el visto bueno de scope y toda decisión de arquitectura los da el
+   usuario o Claude Code, nunca Devin solo. Cualquier PR o diff que venga de
+   Devin se revisa antes de mergear.
+4. **[docs/AGENT_LOG.md](AGENT_LOG.md)** es la bitácora corta compartida:
+   qué se hizo, en qué branch, por qué, y qué queda pendiente, para que
+   ninguna sesión nueva (de ningún agente) arranque sin contexto.
+
+**Motivo.** El plan free de Devin tiene cupo diario/semanal limitado, así que
+las tareas delegadas deben ser chicas y cerradas, no abiertas a mucha
+iteración — y no deben tocar ninguna decisión que dependa del contexto
+regulatorio o narrativo del proyecto, que Devin no tiene.
+
+**Alternativa descartada:** dejar que ambos agentes trabajen libremente sobre
+`main` y resolver conflictos según aparezcan. Se descartó porque el riesgo de
+que Devin toque sin saberlo una zona con una decisión de arquitectura
+pendiente (p. ej. el enforcement de `scope.limits` en Fase 3) es mayor que el
+costo de la disciplina de branches.
