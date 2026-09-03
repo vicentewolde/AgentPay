@@ -14,6 +14,15 @@ llevaron al código.
 | `prompt-chat-consulta-tecnica.md` | Prompt para el chat de consulta técnica |
 | `AgentPass-plan-tecnico-fase-0-1.md` | Plan técnico ejecutable de las semanas 2–3 (el brief que originó T1–T8) |
 | `claude-code-mensaje-inicial.md` | Mensaje inicial con el que arrancó la construcción de AgentPass |
+| `prompt-inicio-fase-2.md` | Prompt de arranque para la Fase 2, generado al cerrar la Fase 1 |
+| `prompt-inicio-fase-3.md` | Prompt de arranque para la Fase 3, generado al cerrar la Fase 2 |
+
+Los dos últimos no son documentos previos al código de la Fase 1 como el
+resto de esta carpeta — son prompts de transición generados al cerrar cada
+fase, para arrancar la siguiente en un chat limpio sin perder contexto.
+Quedan acá, junto a los demás prompts de arranque, en vez de en la carpeta de
+la fase que cierran, porque son insumo de la fase que *sigue*, no evidencia de
+la que termina.
 
 Estaban sueltos en la raíz, en carpetas llamadas `Informacion/`, `prompt 1/`,
 `Prompt 2/` y `Prompt 3/`. Se aplanaron aquí porque esos nombres eran del

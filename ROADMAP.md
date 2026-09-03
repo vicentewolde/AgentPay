@@ -57,6 +57,9 @@ en su propia carpeta bajo `docs/`.
 | `docs/fase-1-agentpass/ARQUITECTURA.md` | Fase 1 (AgentPass) | Mapa técnico denso: modelo de identidad, esquema de credencial, superficie del contrato, decisiones de seguridad | Cerrado, pensado para copiarse entero en un chat nuevo |
 | `docs/fase-1-agentpass/BITACORA.md` | Fase 1 (AgentPass) | Bitácora hito a hito (T1–T8), en lenguaje llano, con evidencia | Cerrado — "Estado actual: piloto completo" se refiere a **AgentPass**, no al proyecto AgentPay entero |
 | `docs/fase-1-agentpass/DECISIONES.md` | Fase 1 (AgentPass) | Las 7 decisiones del brief original (A-1 a A-7) + 41 decisiones de implementación (I-1 a I-41), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
+| `docs/fase-2-agente-compra/ARQUITECTURA.md` | Fase 2 (agente de compra) | Mapa técnico denso: catálogo, herramientas, verificación de credencial, chequeo de scope, forma exacta del `PurchaseIntent` | Cerrado, T9–T14 — pensado para copiarse entero en un chat nuevo |
+| `docs/fase-2-agente-compra/BITACORA.md` | Fase 2 (agente de compra) | Bitácora hito a hito (T9–T14), en lenguaje llano, con evidencia | T9–T14 cerrados; T15 bloqueado por el embajador |
+| `docs/fase-2-agente-compra/DECISIONES.md` | Fase 2 (agente de compra) | Decisiones de esta fase (`B-1` a `B-23`), cada una con motivo y alternativa descartada | T9–T14 cerrados, 0 pendientes |
 
 **Resuelto (2026-09-02): documentación separada por fase.** Cada fase recibe su
 propia carpeta `docs/fase-N-nombre/` con su `CONTEXTO`, `ARQUITECTURA`,
