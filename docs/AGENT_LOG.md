@@ -539,3 +539,54 @@ completo, los tres números de fee, las tres transacciones).
 Pendiente: mergear `cc/t22-policy-rail-contract` a `main` y pushear. Fase 3
 tiene sus ocho hitos cerrados o construidos (T16–T22); queda T23, la demo
 de la fase completa — no depende de nada pendiente.
+
+**Nota de proceso, para cualquier sesión futura.** Al cerrar este hito la
+sesión commiteó por error directo a `main` en vez de a la rama
+`cc/t22-policy-rail-contract` que había creado (se perdió el `checkout` a
+la rama en algún punto de una sesión larga). Se detectó antes de pushear:
+se creó la rama apuntando al commit ya hecho, se hizo `git reset --hard` de
+`main` al commit anterior (el que ya estaba en `origin`), y se mergeó la
+rama de vuelta con fast-forward — mismo resultado final, historia limpia,
+nada perdido porque nunca se había pusheado. Vale la pena que cualquier
+sesión larga, de cualquiera de los dos agentes, corra `git branch
+--show-current` antes de cada commit, no solo al empezar el hito.
+
+## 2026-09-03 (13) — cc/t23-phase3-demo
+
+Agente: Claude Code
+
+Qué: se cerró T23 y con eso la Fase 3 completa. `scripts/demo.ts` (`pnpm
+demo`) ya contaba la historia de la Fase 2 y, desde T21, emitía y anclaba el
+Mandato sin todavía usar nada que el Mandato aportara por sí solo. Se le
+agregaron las dos escenas específicas de esta fase: una segunda compra el
+mismo día que el Mandato rechaza por `perDay` (el límite que `B-16` dejó
+pendiente en la Fase 2), y la revocación del **Mandato** —no de la
+credencial— desde afuera del agente, con `agentpass.status()` confirmando en
+vivo que la credencial sigue activa. Para que el rechazo por `perDay` sea
+real sin necesitar muchas compras, el Mandato de la demo recibe su propio
+`perDay` (30.00 USDC) más estricto que el de la credencial (200.00 USDC) —
+`M-4` ("gana el más estricto") hecho concreto.
+
+Corrida completa contra testnet real, a la primera: compra dentro de los
+tres chequeos, segunda compra rechazada con `MandateDailyLimitExceeded` y el
+detalle exacto (`spentToday`, `amount`, `total`, `limit`), Mandato revocado,
+reintento rechazado con `MandateRevoked`, credencial confirmada `Active` en
+vivo. Sin tests nuevos ni cambios de diseño — reutiliza `revokeMandate`
+(T20), `checkDailyLimit`/`PolicyRail` (T18/T19) y el cableado de T21 tal
+cual. 559 tests TypeScript sin cambios, todos en verde.
+
+Por qué: era lo único que le faltaba a la fase para poder mostrarse de
+punta a punta en una sola corrida — el criterio de "listo" que todas las
+fases anteriores usaron (T14 en la Fase 2, el walkthrough completo del CLI
+en la Fase 1).
+
+Documentación tocada: `ROADMAP.md` (Fase 3 pasa a completa, §3 y §4.3) y
+`BITACORA.md` de la Fase 3, más `evidencia/T23.md`. Sin decisión nueva en
+`DECISIONES.md` — T23 no tomó ninguna decisión de diseño, solo combinó lo
+que ya existía.
+
+Pendiente: mergear `cc/t23-phase3-demo` a `main` y pushear. **Fase 3
+completa: T16–T23.** Siguiente: Fase 4 (MandateGate), sin diseñar todavía —
+depende de decidir con el usuario cómo envolver el cliente x402 con
+`LocalPolicyRail`, ya que `M-11` estableció que no hace falta cooperación
+del bazaar para eso.

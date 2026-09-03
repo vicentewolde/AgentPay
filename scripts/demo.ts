@@ -1,13 +1,23 @@
 #!/usr/bin/env node
 /**
- * `pnpm demo` — the phase-2 walkthrough in one command: issue a credential,
- * hand the agent a Spanish purchase instruction, get a signed intent back,
- * revoke the credential from outside the agent, and watch the identical
- * instruction fail the second time — without touching the agent, the
- * instruction, or the intent it already produced.
+ * `pnpm demo` — the phase-2 walkthrough, extended for phase 3 (T23): issue a
+ * credential and a Mandate, hand the agent a Spanish purchase instruction,
+ * get a signed intent back, ask for the identical purchase again the same
+ * day and watch the Mandate's own daily limit say no, then revoke the
+ * *Mandate* — not the credential — from outside the agent and watch the same
+ * instruction fail a third way, while `check_my_credential` still reports
+ * the credential itself as Active.
  *
- * Runs against real Stellar testnet for the credential: `issue()` anchors it,
- * `revoke()` cuts it. That is what makes the revocation real rather than
+ * That last step is phase 3's whole claim, staged: the principal's consent
+ * is a structure the agent cannot argue with and cannot see revoked from the
+ * inside, independent of whether its own credential is still good. Phase 2's
+ * `pnpm demo` already proved credential revocation (T14); this one proves
+ * the Mandate is a second, independent authority — not decoration on top of
+ * the first.
+ *
+ * Runs against real Stellar testnet for both documents: `issue()` anchors
+ * the credential, `anchorMandate()` anchors the Mandate, `revoke()` cuts the
+ * Mandate at the end. That is what makes the revocation real rather than
  * illustrated — the same reason `deploy-registry.ts` and the CLI's full
  * walkthrough (T8) also touch the network. The catalogue stays mocked
  * (`--adapter=mock`, the default and, until T15 answers the ambassador's
@@ -22,7 +32,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { AgentPassCredential, CredentialRequest } from "@agentpass/core";
+import type { AgentPassCredential, CredentialRequest, Scope } from "@agentpass/core";
 import {
   AGENTPASS_CREDENTIAL_TYPE,
   AGENTPASS_STATUS_TYPE,
@@ -35,7 +45,7 @@ import {
 import { createAgentPass } from "@agentpass/sdk";
 import { Keypair } from "@stellar/stellar-sdk";
 
-import { anchorMandate, createMandate } from "@agentpay/mandate";
+import { anchorMandate, createMandate, revokeMandate } from "@agentpay/mandate";
 
 import type { CreatePurchaseIntentResult } from "@agentpay/agent";
 import { createAgent, createMockCatalog, createOnChainMandateVerifier, interpretPurchase } from "@agentpay/agent";
@@ -51,6 +61,17 @@ const SCOPE_PATH = resolve(REPO_ROOT, "examples/scope-bazaar.json");
 /** The credential's own validity window is not what this demo tests — the
  * revocation is — so a short window is enough. */
 const CREDENTIAL_VALID_DAYS = 1;
+
+/**
+ * Narrower than the credential's own `perDay` (200.00) on purpose: two
+ * purchases of the demo's default product (18.50 each) fit comfortably
+ * under the credential's scope but not under this — which is what makes the
+ * Mandate, not the credential, the one that says no in step 5. `perTx` is
+ * left untouched so it never interferes; this demo is about the daily
+ * memory `B-16` deferred and T18/T19 built, not the per-transaction limit
+ * T12 already demonstrated in phase 2.
+ */
+const DEMO_MANDATE_PER_DAY = "30.00";
 
 function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
   const value = env.get(key);
@@ -87,8 +108,10 @@ function line(label: string, value: string): void {
   process.stdout.write(`  ${label.padEnd(15)} ${value}\n`);
 }
 
+const DEMO_STEPS = 6;
+
 function step(n: number, title: string): void {
-  process.stdout.write(`\n[${n}/5] ${title}\n`);
+  process.stdout.write(`\n[${n}/${DEMO_STEPS}] ${title}\n`);
 }
 
 async function main(): Promise<void> {
@@ -101,7 +124,7 @@ async function main(): Promise<void> {
 
   const catalog = createMockCatalog();
 
-  process.stdout.write("\nAgentPay demo · Fase 2 · Stellar testnet\n");
+  process.stdout.write("\nAgentPay demo · Fase 2 + Fase 3 · Stellar testnet\n");
 
   // 1. Read the Spanish instruction — deterministically, not via an LLM call.
   //    See src/interpret.ts for why, and injection.test.ts for the property
@@ -156,13 +179,19 @@ async function main(): Promise<void> {
   line("perTx", `${demoScope.scope.limits.perTx} ${demoScope.scope.limits.currency}`);
 
   // The principal's own consent (Fase 3, T16/T20) — same principal, same
-  // agent, same grant as the credential's scope. Anchored on the same
-  // registry, through the same generic `anchor()` the credential just used
-  // (`M-17`/`M-18`): no separate registration step, no separate contract.
+  // agent as the credential, but its own `perDay` (see `DEMO_MANDATE_PER_DAY`
+  // above) — `M-4`'s "two limits, the narrower wins" made concrete, not just
+  // asserted. Anchored on the same registry, through the same generic
+  // `anchor()` the credential just used (`M-17`/`M-18`): no separate
+  // registration step, no separate contract.
+  const mandateGrant: Scope = {
+    ...demoScope.scope,
+    limits: { ...demoScope.scope.limits, perDay: DEMO_MANDATE_PER_DAY },
+  };
   const mandate = createMandate({
     principal: issuerDid,
     agent: stellarAddressToDid(agentKeypair.publicKey(), "testnet"),
-    grant: demoScope.scope,
+    grant: mandateGrant,
     registry: agentpass.config.contractId,
     validFrom: now.toISOString(),
     validUntil: new Date(
@@ -172,6 +201,7 @@ async function main(): Promise<void> {
   const anchoredMandate = await anchorMandate(agentpass, { mandate, principal: issuer });
   line("mandato", anchoredMandate.hash);
   line("tx", anchoredMandate.transactionHash);
+  line("perDay (mandato)", `${DEMO_MANDATE_PER_DAY} ${demoScope.scope.limits.currency}`);
 
   // 3. Start the agent: it verifies that same credential — and now the
   //    mandate too (T21) — against the real registry (T11) before deciding
@@ -194,23 +224,45 @@ async function main(): Promise<void> {
       .join(", "),
   );
 
-  // 4. Ask for a signed purchase intent. T12's scope check and T13's signing
-  //    both run inside this one call.
-  step(4, "Intención de compra firmada");
-  const result = (await agent.tools.invoke("create_purchase_intent", {
+  // 4. Ask for a signed purchase intent. T12's scope check, T17's mandate
+  //    check and T19's PolicyRail all run inside this one call, and all
+  //    three currently agree: 18.50 fits under every limit in play.
+  step(4, "Primera compra del día — dentro de todos los límites");
+  const first = (await agent.tools.invoke("create_purchase_intent", {
     product_id: productId,
     quantity,
   })) as CreatePurchaseIntentResult;
-  line("intent_id", result.intent_id);
-  line("total", `${result.total_amount} ${result.asset.split(":")[0] ?? ""}`);
-  line("jws", `${result.jws.slice(0, 40)}… (${result.jws.length} caracteres)`);
-  line("expira", result.expires_at);
+  line("intent_id", first.intent_id);
+  line("total", `${first.total_amount} ${first.asset.split(":")[0] ?? ""}`);
+  line("jws", `${first.jws.slice(0, 40)}… (${first.jws.length} caracteres)`);
+  line("expira", first.expires_at);
 
-  // 5. Revoke from outside the agent — nothing about the agent process
-  //    changes — then ask for the identical purchase again.
-  step(5, "Revocar (desde fuera del agente) y reintentar");
-  const revokeTx = await agentpass.revoke({ credentialHash: issued.hash, issuer });
-  line("revocado", issued.hash);
+  // 5. The identical instruction, the same day: 18.50 + 18.50 = 37.00, still
+  //    comfortably under the credential's own perDay (200.00) but over the
+  //    Mandate's narrower one (30.00). This is `perDay` — the limit B-16
+  //    explicitly deferred in phase 2 and T18/T19 built — actually refusing
+  //    something, not just being present in a signed document nobody reads.
+  step(5, "Segunda compra el mismo día — el Mandato dice que no");
+  try {
+    await agent.tools.invoke("create_purchase_intent", { product_id: productId, quantity });
+    process.stderr.write("\n  segunda compra  NO FUE RECHAZADA — esto es un fallo del demo\n");
+    process.exitCode = 1;
+    return;
+  } catch (error) {
+    if (!isAgentPassError(error)) throw error;
+    line("rechazada", `${error.code}`);
+    line("detalle", JSON.stringify(error.details));
+  }
+
+  // 6. Revoke the Mandate — not the credential — from outside the agent,
+  //    then ask for the identical purchase a third time. Phase 3's claim,
+  //    staged: the principal's consent is a second, independent authority.
+  //    `agentpass.status()` reads the registry directly, live, to prove the
+  //    credential's own status never moved — nothing about the agent's
+  //    identity changed, only what its principal still consents to.
+  step(6, "Revocar el Mandato (no la credencial) desde afuera, y reintentar");
+  const revokeTx = await revokeMandate(agentpass, { mandateHash: anchoredMandate.hash, principal: issuer });
+  line("mandato revocado", anchoredMandate.hash);
   line("tx", revokeTx);
 
   try {
@@ -223,10 +275,16 @@ async function main(): Promise<void> {
     line("reintento", `rechazado — ${code}`);
   }
 
+  const credentialStatus = await agentpass.status(issued.hash);
+  line("credencial (en vivo)", credentialStatus);
+
   process.stdout.write(
-    "\nListo. La misma instrucción, el mismo agente en el mismo proceso: antes de\n" +
-      "revocar autorizaba la compra, después ya no. Nada del agente cambió — lo que\n" +
-      "cambió fue el registro, desde afuera.\n\n",
+    "\nListo. Dos rechazos, dos motivos distintos: el primero porque el gasto de\n" +
+      "hoy ya pasó lo que el Mandato consiente; el segundo porque ese consentimiento\n" +
+      "se cortó desde afuera. En ningún momento cambió la credencial del agente —\n" +
+      "sigue activa en el registro — ni el agente mismo. El límite de gasto y el\n" +
+      "consentimiento del principal viven en un lugar que el agente no puede\n" +
+      "reescribir, y eso es lo que esta fase existe para probar.\n\n",
   );
 }
 

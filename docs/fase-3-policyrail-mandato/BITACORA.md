@@ -13,17 +13,19 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T22 · **Siguiente:** T23 (demo de la fase completa)
+**Fecha:** 2026-09-03 · **Fase 3 completa** — T16 a T23 cerrados
 
 El consentimiento del principal ya es un documento firmado y verificable
 (T16), hay una función que decide si ese consentimiento cubre una compra
 concreta (T17), hay memoria de cuánto se gastó hoy (T18), existe el lugar
 donde todo eso se aplica junto (T19), ese consentimiento se puede anclar y
-cortar desde afuera del agente (T20), y ahora **todo eso corre dentro del
-agente real, no como piezas sueltas probadas por separado** (T21):
-`create_purchase_intent` solo existe cuando la credencial *y* el mandato
-verificaron al arrancar, y cada compra pasa por `PolicyRail` antes de
-firmarse.
+cortar desde afuera del agente (T20), todo eso corre dentro del agente real,
+no como piezas sueltas probadas por separado (T21), el mismo límite se hace
+cumplir on-chain como una segunda implementación posible del mismo puerto
+(T22), y **`pnpm demo` cuenta la historia completa en una sola corrida
+contra testnet real** (T23): una compra que pasa los tres chequeos, una
+segunda el mismo día que el Mandato rechaza por `perDay`, y la revocación
+del Mandato —no de la credencial— desde afuera del agente.
 
 | | |
 |---|---|
@@ -67,7 +69,7 @@ convención — T19 en `cc/t19-policy-rail`, T20 en `cc/t20-anchor-mandate`.
 | T20 | Anclar y revocar un mandato en cadena | ✅ cerrado |
 | T21 | Cablearlo en el agente | ✅ cerrado |
 | T22 | El límite hecho cumplir on-chain, como smart account | ✅ cerrado |
-| T23 | Demo de la fase completa | ⏳ |
+| T23 | Demo de la fase completa | ✅ cerrado |
 
 ---
 
@@ -564,3 +566,42 @@ chequeo de `payTo`, que sigue sin nada firmado contra qué compararlo
 (`M-14`). `policy_rail` prueba que el camino on-chain funciona y cabe en el
 presupuesto real; no reemplaza al Mandato ni a `LocalPolicyRail` (T19), los
 complementa como una segunda implementación posible del mismo puerto.
+
+---
+
+## T23 · Demo de la fase completa — cerrado 2026-09-03
+
+**Qué quedó funcionando, en lenguaje llano.** `pnpm demo` ya mostraba, desde
+la Fase 2, una compra firmada y una credencial revocada desde afuera. Le
+faltaban las dos escenas que son específicamente de esta fase: que el
+**límite diario** —el que la Fase 2 dejó pendiente a propósito (`B-16`) y
+esta fase construyó— efectivamente frene una segunda compra el mismo día; y
+que el **Mandato**, no la credencial, se pueda cortar desde afuera del
+agente, con la credencial verificada en vivo como prueba de que la
+identidad del agente no se tocó.
+
+Con eso agregado, una sola corrida de `pnpm demo` cuenta la historia entera:
+una compra que pasa los tres chequeos (`checkScope`, `checkMandate`,
+`PolicyRail`); una segunda idéntica el mismo día que el Mandato rechaza —
+`MandateDailyLimitExceeded`, con los números exactos en el detalle del
+error, no un mensaje genérico; la revocación del Mandato desde afuera; un
+tercer intento que falla con `MandateRevoked`; y una consulta en vivo al
+registro que confirma que la credencial del agente sigue `Active` —lo único
+que cambió fue el consentimiento del principal, no quién es el agente.
+
+**El detalle que hace que el segundo rechazo sea real y no de utilería.**
+El Mandato de la demo recibe su propio `perDay` (30.00 USDC), más estricto
+que el de la credencial (200.00 USDC) — `M-4` ("dos límites, gana el más
+estricto") convertido en algo que efectivamente pasa, no solo un enunciado.
+Sin esa diferencia, dos compras de 18.50 nunca habrían topado con nada
+antes de agotar la paciencia de quien mira la demo.
+
+**Evidencia técnica.** [evidencia/T23.md](evidencia/T23.md) — la salida
+completa contra Stellar testnet real, con los dos hashes de transacción de
+la revocación y el detalle exacto del rechazo por `perDay`. Sin tests
+nuevos ni cambios de diseño: T23 reutiliza `revokeMandate` (T20),
+`checkDailyLimit`/`PolicyRail` (T18/T19) y el cableado de T21 tal cual
+existían — 559 tests TypeScript, sin cambios, todos en verde.
+
+**Con esto, la Fase 3 queda completa: T16 a T23, los ocho hitos, cerrados.**
+`ROADMAP.md` pasa a la Fase 4 (MandateGate), todavía sin diseñar.
