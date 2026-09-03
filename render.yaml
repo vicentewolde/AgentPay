@@ -7,14 +7,21 @@ services:
     buildCommand: corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm --filter @agentpay/web run start
     envVars:
+      # pnpm@11.24.0 (pinned via packageManager in package.json) requires
+      # Node >=22.13 to run under Corepack — 22.11.0 makes Corepack crash
+      # with ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING instead of a clean
+      # error, and plain `npm install -g pnpm` refuses to run at all
+      # ("This version of pnpm requires at least Node.js v22.13").
       - key: NODE_VERSION
-        value: 22.11.0
+        value: 22.14.0
       # Corepack verifies the signature of the pnpm release it downloads
       # against a hardcoded key list. npm rotated its package-signing key
-      # in 2025 and Render's build image ships a Corepack that predates
-      # the new key, so verification fails with "Cannot find matching
-      # keyid". This disables that signature check (does not affect
-      # pnpm's own package integrity hashes, which stay enforced).
+      # in 2025 and older Corepack builds predate the new key, so
+      # verification can fail with "Cannot find matching keyid". This
+      # disables that signature check (does not affect pnpm's own package
+      # integrity hashes, which stay enforced). Kept as insurance even
+      # though the Node-version bump above was the actual fix for the
+      # last failure.
       - key: COREPACK_INTEGRITY_KEYS
         value: ""
       # Secrets — set these in the Render dashboard after the first deploy.
