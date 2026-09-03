@@ -818,3 +818,42 @@ partir del texto del error solo — pedir el log completo apenas esté
 disponible. El texto que el usuario pegó al abrir la sesión ("Cannot find
 matching keyid") era real pero de una corrida vieja/cacheada; los dos
 intentos frescos mostraban un error totalmente distinto.
+
+## 2026-09-03 (19) — main
+
+Agente: Claude Code
+
+Qué: con el build ya pasando (entrada anterior), el usuario probó "Iniciar
+sesión" en `https://agentpay-web.onrender.com/` y dio
+`ISSUER_SECRET_KEY is missing from .env.local`, pese a tener el secreto
+cargado en el dashboard de Render. Causa: `apps/web/src/server.ts` leía
+los tres secretos (`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`,
+`AGENT_REGISTRY_CONTRACT_ID`) **solo** de un archivo `.env.local` en
+disco — la convención de este proyecto para dev local — y nunca de
+`process.env`. Render inyecta las env vars del dashboard directo en
+`process.env` del proceso; no crea ningún archivo `.env.local`. Arreglado
+con `readEnv()`, que lee el archivo primero (dev local sigue igual) y
+completa cualquier clave faltante desde `process.env` (Render, o
+cualquier host que inyecte config sin archivo).
+
+Verificado localmente simulando el escenario exacto de Render: se movió
+`.env.local` a un backup, se exportaron sus valores como variables de
+entorno de shell, se levantó el servidor en un puerto separado (8799, el
+8787 lo tenía ocupado otra sesión de chat sobre esta misma carpeta) y
+`POST /api/session/start` devolvió `ok:true` con credencial y mandato
+emitidos. `.env.local` restaurado intacto después (mismo tamaño, mismo
+mtime). `pnpm typecheck` limpio.
+
+Por qué: el gap era invisible en local porque `.env.local` siempre existe
+ahí — solo se manifestaba en un host sin filesystem persistente de
+secretos, que es exactamente el caso de Render.
+
+Documentación: sin cambios de fase — es un bug de infraestructura del
+frontend (T25), no un hito nuevo. Solo se tocó
+`apps/web/src/server.ts`.
+
+Pendiente: confirmar en el navegador real contra Render (no solo
+localmente) que "Iniciar sesión" y "Comprar" funcionan de punta a punta
+ahora. Esta sesión no pudo pushear directamente (el `git push` queda
+bloqueado por el clasificador de modo automático) — cada commit lo
+pusheó el usuario a mano.
