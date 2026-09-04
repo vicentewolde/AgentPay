@@ -12,23 +12,22 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-04 · **Último hito cerrado:** T29 · **Fase 5: en curso**
+**Fecha:** 2026-09-04 · **Último hito cerrado:** T30 · **Fase 5: en curso — sin candidatos técnicos pendientes**
 
 Cada decisión de `PolicyRail.authorise()` — autorizada o rechazada — queda
 en un registro durable y encadenado por hash, que sobrevive un reinicio del
 proceso (T27). Cada pago real, además, queda vinculado criptográficamente a
 la decisión que lo autorizó mediante un hash anclado contra `agent_registry`
-— verificable por cualquiera, sin confiar en quien opera el vault (T28). Y
-ahora una persona puede verlo: `apps/web` tiene una sección de bitácora que
-muestra cada registro y el estado on-chain de cada anclaje, leído en vivo
-(T29).
+— verificable por cualquiera, sin confiar en quien opera el vault (T28). Una
+persona puede ver todo eso en `apps/web` (T29) — y ahora también la
+credencial y el Mandato mismos, con su estado on-chain leído en vivo (T30).
 
 | | |
 |---|---|
-| Tests TypeScript | **630** rápidos (604 en T26 + 17 de T27 + 7 de T28 + 2 de T29) |
+| Tests TypeScript | **630** rápidos (604 en T26 + 17 de T27 + 7 de T28 + 2 de T29; T30 no agrega tests rápidos, extiende la integración del SDK) |
 | Paquete nuevo | `@agentpay/vault` (T27) |
-| Código de fases cerradas tocado | Ninguno — `policy-rail.ts` (Fase 3) y `payment/x402.ts` (Fase 4) sin cambios; todo lo nuevo se cableó desde `apps/web`/seams opcionales |
-| Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` · pago T29: `a9e353df24...`, anclaje: `39510bcd60...` |
+| Código de fases cerradas tocado | `packages/sdk` (Fase 1) — un método nuevo, `getRecord()`, mismo precedente aditivo que `anchor()` en T20 (`V-11`). `policy-rail.ts` (Fase 3) y `payment/x402.ts` (Fase 4) siguen sin cambios |
+| Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` · pago T29/T30: `089d6ccce4...`, anclaje: `e6c34acb71...`, revocación: `5478e1e42b...` |
 
 ### Progreso
 
@@ -37,7 +36,11 @@ muestra cada registro y el estado on-chain de cada anclaje, leído en vivo
 | T27 | `@agentpay/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` | ✅ cerrado 2026-09-04 |
 | T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry` tras cada pago real | ✅ cerrado 2026-09-04 |
 | T29 | Superficie de consulta: sección "Bitácora" en `apps/web`, estado on-chain de cada anclaje en vivo | ✅ cerrado 2026-09-04 |
-| — | Indexar los eventos que `agent_registry` ya emite (`Anchored`/`Revoked`) | ⏳ pendiente, no elegido todavía |
+| T30 | `AgentPass.getRecord()`: credencial y Mandato, con su estado on-chain, en la misma bitácora | ✅ cerrado 2026-09-04 |
+
+Sin candidatos técnicos pendientes. Lo único que le falta a la Fase 5 es la
+ejecución de negocio del piloto (§4.5 del `ROADMAP.md`) — no es trabajo de
+código.
 
 ---
 
@@ -259,3 +262,66 @@ T28 y T29 cerrados.** Siguiente, sin elegir todavía: indexar los eventos que
 `agent_registry` ya emite para credencial y mandato (`Anchored`/`Revoked`)
 dentro de la misma bitácora. La ejecución de negocio del piloto sigue sin
 arrancar — no es trabajo de código.
+
+**Cierre, mismo día.** El usuario pidió cerrar este último tema técnico
+antes de pasar a la parte no-técnica del piloto.
+
+## T30 · `AgentPass.getRecord()`: la identidad, en la misma bitácora — cerrado 2026-09-04
+
+**Qué quedó funcionando, en palabras llanas.** La bitácora de T29 mostraba
+cada decisión y cada pago, pero no la credencial ni el Mandato que los
+hicieron posibles en primer lugar — para saber si seguían activos había que
+mirar la sección de sesión (un dato de cuando se inició, no necesariamente
+el estado ahora mismo) o revisar el registro a mano. Ahora la bitácora
+también dice, en el momento de pedirla, si la credencial y el Mandato siguen
+activos según el contrato — no según lo que el servidor recuerda.
+
+**Un método que el contrato siempre tuvo, nunca expuesto.** `status()`
+(desde la Fase 1) siempre resolvió su respuesta llamando internamente a
+`get_credential`, el método del contrato que devuelve el registro completo
+—`issuer`, `subject`, cuándo se ancló, hasta cuándo, si está revocado— y
+colapsándolo en una sola palabra (`Active`/`Revoked`/`Expired`/`Unknown`).
+Nadie había necesitado el registro completo hasta ahora. Se agregó
+`AgentPass.getRecord(hash)`, mismo precedente que `anchor()` sentó en T20:
+un método nuevo, aditivo, en un paquete de la Fase 1 — sin tocar ningún
+método existente.
+
+**Verificado contra el contrato real antes de escribir el schema de
+parseo** (mismo hábito que T19/T22/T24/T28): una llamada de una sola vez
+confirmó la forma exacta —`issued_at`/`expires_at` como enteros de 64 bits
+en segundos— antes de comprometerse a `credRecordSchema`.
+
+**Evidencia técnica.** Sin tests rápidos nuevos — no hay forma de simular
+`Registry` con un lector falso en la arquitectura actual (el mismo motivo
+por el que `status()`/`issuer()` tampoco tienen tests unitarios propios).
+Se extendió en cambio `agentpass.integration.test.ts`, contra testnet real:
+`getRecord()` recién emitida (`revoked: false`, `expiresAt` coincide con
+`validUntil` truncado al segundo — el contrato guarda segundos, no
+milisegundos), después de revocar (`revoked: true`), y `undefined` para un
+hash nunca anclado. `pnpm typecheck`/`pnpm build` limpios.
+
+**Verificado también clickeando el flujo completo en un navegador real.**
+Sesión → compra real → la bitácora mostró `credencial (en cadena): activa`
+y `mandato (en cadena): activa`. Después de revocar el Mandato, sin
+recargar la página, un segundo clic en "Ver bitácora" mostró
+`mandato (en cadena): revocada` — la credencial, nunca tocada, se mantuvo
+`activa`. Confirma que la lectura es en vivo, no un valor de cuando se
+inició la sesión.
+
+**Por qué.** Cierra el último candidato técnico que quedaba anotado:
+`ROADMAP.md §4.5` nombra los eventos on-chain de PolicyRail/Mandato/
+MandateGate como la materia prima de esta fase, y con esto los tres están
+en la misma bitácora — no solo las decisiones y los pagos (T27/T28), sino
+la identidad que los autorizó.
+
+Documentación tocada: `CONTEXTO.md` (`§3d` nueva), `ARQUITECTURA.md` (`§9`
+nueva), este `BITACORA.md`, `DECISIONES.md` (`V-11` nueva), más
+`evidencia/T30.md`. Archivos tocados: `packages/sdk/src/registry.ts`,
+`packages/sdk/src/index.ts`, `packages/sdk/src/agentpass.integration.test.ts`,
+`apps/web/src/server.ts`, `apps/web/public/index.html`.
+
+Pendiente: mergear `cc/t30-identity-record` a `main` y pushear. **Fase 5:
+T27–T30 cerrados, sin candidatos técnicos pendientes.** Lo único que falta
+para cerrar la fase completa es la ejecución de negocio del piloto —
+cohorte de alumnos, comunidad aliada, demo grabable, formulario de Build
+Award — que sigue sin arrancar y no es trabajo de código.

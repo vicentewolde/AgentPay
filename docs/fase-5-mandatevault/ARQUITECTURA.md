@@ -193,3 +193,37 @@ Browser, contra el servidor local): sesión → compra real → la sección 5
 mostró `"Cadena íntegra ✓ (2 registros)"`, el registro `granted` (monto y
 moneda) y el `anchored` con `on-chain: Active` — leído en vivo, no
 cacheado. Detalle en `evidencia/T29.md`.
+
+## 9. `AgentPass.getRecord()` — la identidad, en la misma bitácora (T30)
+
+Cierra el último candidato técnico pendiente: la credencial y el Mandato de
+la sesión activa, con lo que `agent_registry` dice de ellos **ahora mismo**.
+
+**`packages/sdk`, extendido (mismo precedente que `anchor()` en T20).**
+`Registry.getCredential(hash)` (`registry.ts`) llama al `get_credential` que
+el contrato siempre tuvo — usado internamente por `status()`, nunca expuesto
+— y lo parsea con `credRecordSchema`, verificado contra el contrato real
+antes de escribirse:
+
+```
+{ issuer: "G...", subject: "G...", issued_at: 1788536887n,
+  expires_at: 1788623260n, revoked: false }
+```
+
+`AgentPass.getRecord(hash): Promise<CredRecord | undefined>` lo expone en
+la superficie pública, con `issuedAt`/`expiresAt` ya como `Date`.
+
+**Cableado en `vaultReport()`** (`apps/web/src/server.ts`): junto a los
+registros del vault, pide `getRecord(credentialHash)` y
+`getRecord(mandate.hash)` — dos llamadas en vivo más, mismo patrón que ya
+usa para el estado de cada anclaje (`onChainStatus`, T29). El resultado
+(`identity: WireIdentityRecord[]`) se agrega a la respuesta de
+`GET /api/session/vault`, y el frontend lo renderiza como
+`<kind> (en cadena): activa|revocada` arriba de la lista de decisiones.
+
+**Verificado en testnet real, de dos formas.** La integración del SDK
+(`agentpass.integration.test.ts`) cubre `getRecord()` en el ciclo completo:
+recién emitida, después de revocar, y para un hash nunca anclado. Y en el
+navegador: revocar el Mandato cambió "mandato (en cadena)" de `activa` a
+`revocada` sin recargar la página, mientras la credencial —nunca
+revocada— se mantuvo `activa`. Detalle en `evidencia/T30.md`.

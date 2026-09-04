@@ -405,8 +405,24 @@ interface WireVaultRecord {
   readonly onChainStatus?: CredStatus;
 }
 
+interface WireIdentityRecord {
+  readonly kind: "credential" | "mandate";
+  readonly hash: string;
+  readonly issuer: string;
+  readonly subject: string;
+  readonly issuedAt: string;
+  readonly expiresAt: string;
+  readonly revoked: boolean;
+}
+
 interface VaultReport {
   readonly chain: { readonly ok: boolean; readonly brokenAtSeq?: number };
+  /**
+   * What `agent_registry` itself says about the credential and the Mandato
+   * — T30, indexed from the same on-chain source the vault's anchors already
+   * read, not from anything this server remembers locally.
+   */
+  readonly identity: readonly WireIdentityRecord[];
   readonly records: readonly WireVaultRecord[];
 }
 
@@ -415,12 +431,37 @@ interface VaultReport {
  * something a human can read — the "evidencia consultable" §4.5 asks for.
  * The anchored entries' `onChainStatus` is a live call to the registry, not
  * a cached value, so the page proves the anchor still holds rather than
- * repeating what the vault file merely claims.
+ * repeating what the vault file merely claims. T30 adds the credential's
+ * and the Mandato's own anchored records, from the same registry — the
+ * "eventos on-chain que PolicyRail/Mandato/MandateGate ya producen" the
+ * phase's own spec (`ROADMAP.md §4.5`) named as this fase's raw material.
  */
 async function vaultReport(current: DemoSession): Promise<VaultReport> {
   const agentDid = stellarAddressToDid(Keypair.fromSecret(current.agentSecret).publicKey(), "testnet");
   const records = current.vault.list(agentDid);
   const chain = current.vault.verify();
+
+  const identitySources: readonly ["credential" | "mandate", string][] = [
+    ["credential", current.credentialHash],
+    ["mandate", current.mandate.hash],
+  ];
+  const identity = (
+    await Promise.all(
+      identitySources.map(async ([kind, hash]): Promise<WireIdentityRecord | undefined> => {
+        const record = await current.agentpass.getRecord(hash);
+        if (record === undefined) return undefined;
+        return {
+          kind,
+          hash,
+          issuer: record.issuer,
+          subject: record.subject,
+          issuedAt: record.issuedAt.toISOString(),
+          expiresAt: record.expiresAt.toISOString(),
+          revoked: record.revoked,
+        };
+      }),
+    )
+  ).filter((r): r is WireIdentityRecord => r !== undefined);
 
   const wireRecords = await Promise.all(
     records.map(async (record): Promise<WireVaultRecord> => {
@@ -441,7 +482,7 @@ async function vaultReport(current: DemoSession): Promise<VaultReport> {
     }),
   );
 
-  return { chain, records: wireRecords };
+  return { chain, identity, records: wireRecords };
 }
 
 // ---- HTTP plumbing -------------------------------------------------------

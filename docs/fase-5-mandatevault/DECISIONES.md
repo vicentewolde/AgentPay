@@ -270,3 +270,49 @@ mezclaría un hecho inmutable (se ancló, con este hash, en esta transacción)
 con una lectura que solo tiene sentido en el momento en que se pide —
 guardar un estado que después no se vuelve a comprobar habría sido fingir
 una garantía de "sigue vigente" que el vault, por sí solo, no puede dar.
+
+### V-11 · `AgentPass.getRecord()`, un método nuevo en un paquete de la Fase 1 — extendido, no reescrito · `Vigente`
+**Fecha:** 2026-09-04 (T30)
+
+`get_credential` ya existía en el contrato `agent_registry` desde la Fase 1
+—`status()` siempre lo usó internamente para colapsar el registro completo
+en `Unknown`/`Active`/`Revoked`/`Expired`— pero ninguna capa pública de
+`@agentpass/sdk` lo exponía. Se agregó `Registry.getCredential(hash)`
+(`packages/sdk/src/registry.ts`) y `AgentPass.getRecord(hash)` (`index.ts`):
+el mismo registro, sin colapsar — `issuer`, `subject`, `issuedAt`,
+`expiresAt`, `revoked`.
+
+**Motivo.** La bitácora de T29 podía mostrar la decisión y el pago, pero no
+la identidad que los hizo posibles — la credencial y el Mandato quedaban
+fuera, aunque el contrato siempre tuvo esa información. Antes de escribir el
+schema de parseo se verificó la forma real contra el contrato desplegado
+(mismo hábito que T19/T22/T24/T28): `get_credential` devuelve
+`{ issuer, subject, issued_at, expires_at, revoked }`, `issued_at`/
+`expires_at` como enteros de 64 bits (segundos, no milisegundos) — confirmado
+con una llamada real antes de escribir `credRecordSchema`, no asumido de la
+firma Rust.
+
+**Por qué tocar `packages/sdk` (Fase 1, cerrada) es aceptable acá.** Mismo
+precedente que `M-3`/T20 ya sentó: `AgentPass.anchor()` se agregó a la
+superficie pública durante la Fase 3 porque el contrato ya lo hacía
+internamente y una fase posterior necesitaba la llamada cruda. `getRecord()`
+es exactamente ese patrón otra vez — aditivo, sin tocar ningún método
+existente, exponiendo una llamada que el contrato ya respondía.
+
+**Verificado en testnet real, dos veces.** La integración del SDK
+(`agentpass.integration.test.ts`) ahora cubre `getRecord()` dentro del ciclo
+completo: recién emitida (`revoked: false`, `expiresAt` coincide con
+`validUntil` truncado al segundo), después de revocar (`revoked: true`), y
+`undefined` para un hash nunca anclado. Y clickeando la bitácora en un
+navegador real: revocar el Mandato cambió "mandato (en cadena)" de `activa`
+a `revocada` sin recargar la página, mientras la credencial —nunca
+revocada— se mantuvo `activa`.
+
+**Alternativa descartada:** construir esto sobre eventos de Soroban
+(`getEvents` del RPC, filtrando por el topic `["agentpass", "anchored"]`)
+en vez de `get_credential`. Se descartó porque el evento `Anchored` no
+lleva `cred_hash` como topic —solo `issuer`/`subject` lo son, `cred_hash`
+va en el payload— así que responder "¿qué pasó con *este* hash puntual?"
+necesitaría traer *todos* los eventos de ese `subject` y filtrarlos del
+lado del cliente. `get_credential` responde la misma pregunta en una sola
+llamada, con el mismo costo que `status()` ya paga.

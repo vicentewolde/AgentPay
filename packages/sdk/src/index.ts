@@ -17,7 +17,7 @@ import type { Keypair } from "@stellar/stellar-sdk";
 
 import type { AgentPassConfig } from "./config.js";
 import { parseConfig } from "./config.js";
-import type { CredStatus } from "./registry.js";
+import type { CredRecord, CredStatus } from "./registry.js";
 import { assertTrustedRegistry } from "./guards.js";
 import { Registry } from "./registry.js";
 
@@ -85,6 +85,13 @@ export interface AgentPass {
   verify(jws: string, options?: VerifyOptions): Promise<FullyVerifiedCredential>;
   revoke(params: RevokeParams): Promise<string>;
   status(hash: string): Promise<CredStatus>;
+  /**
+   * The full anchored record for a hash — who anchored it, for whom, and
+   * when — not just the collapsed four-word `status()`. `undefined` when
+   * the hash was never anchored. Same registry call `status()` already
+   * makes, one layer less summarised (T30).
+   */
+  getRecord(hash: string): Promise<CredRecord | undefined>;
   /** Whether an issuer is registered, and whether it is still active. */
   issuerStatus(address: string): Promise<{ registered: boolean; active: boolean }>;
   /** Admin operation, outside the issue/verify/revoke surface. */
@@ -175,6 +182,10 @@ export async function createAgentPass(config: unknown): Promise<AgentPass> {
       return registry.status(hash);
     },
 
+    async getRecord(hash: string): Promise<CredRecord | undefined> {
+      return registry.getCredential(hash);
+    },
+
     async issuerStatus(address: string): Promise<{ registered: boolean; active: boolean }> {
       const record = await registry.issuer(address);
       return { registered: record !== undefined, active: record?.active ?? false };
@@ -201,7 +212,7 @@ export async function createAgentPass(config: unknown): Promise<AgentPass> {
 
 export { credentialHash };
 export { assertTrustedRegistry, credentialHashToBytes } from "./guards.js";
-export { CRED_STATUSES, type CredStatus } from "./registry.js";
+export { CRED_STATUSES, type CredRecord, type CredStatus } from "./registry.js";
 export {
   agentPassConfigSchema,
   configFromEnv,

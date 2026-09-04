@@ -81,14 +81,29 @@ anclaje se lee del registro en el momento de pedirlo, no de lo que el
 archivo local dice que pasó — verificado clickeando el flujo completo en un
 navegador real. Detalle en `V-10` y `evidencia/T29.md`.
 
-## 4. Qué NO es esta fase, todavía
+## 3d. Qué prueba T30 — el último candidato técnico, cerrado
 
-- **No indexa los eventos que `agent_registry` ya emite** (`Anchored`,
-  `Revoked` de credencial y mandato) — esos ya son consultables vía Horizon,
-  pero nada en este repo los correlaciona con el resto de la evidencia.
+Que la credencial y el Mandato de la sesión activa también aparecen en la
+misma bitácora, con lo que `agent_registry` dice de ellos **en este
+momento** — no un valor recordado localmente. `AgentPass.getRecord(hash)`
+(`@agentpass/sdk`, nuevo) expone `get_credential`, el método que el
+contrato ya tenía y que ninguna capa pública usaba: issuer, subject,
+`issued_at`, `expires_at` y `revoked`, el registro completo que `status()`
+colapsa en una sola palabra. Verificado en testnet real, dos veces: contra
+la integración del SDK (issue → `getRecord` → revoke → `getRecord` de
+nuevo, `revoked` pasa de `false` a `true`) y clickeando el flujo en un
+navegador real — revocar el Mandato cambió "mandato (en cadena)" de
+`activa` a `revocada` sin recargar la página, mientras la credencial se
+mantuvo `activa`. Con esto, los tres eventos que `ROADMAP.md §4.5` nombró
+como "materia prima" (credencial, Mandato, decisiones de PolicyRail) están
+todos en la misma bitácora. Detalle en `V-11` y `evidencia/T30.md`.
+
+## 4. Qué NO es esta fase
+
 - **No es el cierre del piloto.** Nada de la cohorte de alumnos, la
   comunidad aliada, la demo grabable o el formulario de Build Award — ver
-  `ROADMAP.md §4.5`, siguen sin arrancar.
+  `ROADMAP.md §4.5`, siguen sin arrancar. Es lo único que le falta a esta
+  fase, y no es trabajo de código.
 
 ## 5. Fuera de alcance, a propósito
 

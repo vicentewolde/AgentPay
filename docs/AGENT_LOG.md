@@ -1075,3 +1075,40 @@ T28 y T29 cerrados.** Siguiente, sin elegir todavía: indexar los eventos que
 `agent_registry` ya emite para credencial y mandato dentro de la misma
 bitácora. La ejecución de negocio del piloto sigue sin arrancar; no es
 trabajo de código.
+
+## 2026-09-04 (6) — main (T29 mergeado) / cc/t30-identity-record
+
+Agente: Claude Code
+
+Qué: el usuario pidió cerrar este último tema técnico antes de pasar a la
+parte no-técnica del piloto. T30: `AgentPass.getRecord(hash)`, un método
+nuevo en `@agentpass/sdk` (mismo precedente que `anchor()` en T20— aditivo,
+sin tocar nada existente) que expone `get_credential`, el método que el
+contrato ya tenía pero que `status()` solo usaba internamente para
+colapsarlo en una palabra. `apps/web`'s bitácora ahora también muestra el
+estado on-chain, en vivo, de la credencial y del Mandato de la sesión —
+antes de esto solo se veía en el momento de iniciar sesión, no si algo
+había cambiado desde entonces. Verificado contra el contrato real antes de
+escribir el schema de parseo (`issued_at`/`expires_at` en segundos, no
+milisegundos). Sin tests rápidos nuevos — se extendió la integración del
+SDK contra testnet real (issue → getRecord → revoke → getRecord de nuevo).
+
+Verificado también clickeando el flujo completo en un navegador real:
+revocar el Mandato cambió "mandato (en cadena)" de `activa` a `revocada`
+sin recargar la página, mientras la credencial se mantuvo `activa` — la
+lectura es en vivo, no un dato recordado de cuando arrancó la sesión.
+
+Por qué: cierra el último candidato técnico que quedaba anotado —
+`ROADMAP.md §4.5` nombra credencial, Mandato y decisiones de PolicyRail
+como la materia prima de esta fase, y ahora los tres están en la misma
+bitácora.
+
+Documentación tocada: `docs/fase-5-mandatevault/` completa (`CONTEXTO.md`
+§3d nueva, `ARQUITECTURA.md` §9 nueva, `BITACORA.md` T30, `DECISIONES.md`
+`V-11` nueva, `evidencia/T30.md`). `ROADMAP.md` actualizado.
+
+Pendiente: mergear `cc/t30-identity-record` a `main` y pushear. **Fase 5:
+T27–T30 cerrados, sin candidatos técnicos pendientes.** Lo único que falta
+para cerrar la fase completa es la ejecución de negocio del piloto —
+cohorte de alumnos, comunidad aliada, demo grabable, formulario de Build
+Award — que el usuario indicó que quiere hablar a continuación.

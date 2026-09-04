@@ -37,6 +37,23 @@ export interface IssuerRecord {
   readonly active: boolean;
 }
 
+/** Mirrors `CredRecord` in the contract — verified against a real deployment before writing this. */
+const credRecordSchema = z.strictObject({
+  issuer: z.string(),
+  subject: z.string(),
+  issued_at: z.bigint(),
+  expires_at: z.bigint(),
+  revoked: z.boolean(),
+});
+
+export interface CredRecord {
+  readonly issuer: string;
+  readonly subject: string;
+  readonly issuedAt: Date;
+  readonly expiresAt: Date;
+  readonly revoked: boolean;
+}
+
 /** A Rust `Result<T, E>` arrives wrapped; unwrapping an `Err` throws. */
 function unwrapResult(value: unknown): unknown {
   if (typeof value === "object" && value !== null && "unwrap" in value) {
@@ -111,6 +128,34 @@ export class Registry {
       });
     }
     return parsed.data;
+  }
+
+  /**
+   * The full anchored record for a hash — who anchored it, for whom, when,
+   * until when, and whether it has been revoked since. `status()` collapses
+   * all of that into one of four words; this is what it collapses.
+   *
+   * `undefined` when the hash was never anchored.
+   */
+  async getCredential(credentialHash: string): Promise<CredRecord | undefined> {
+    const raw = unwrapResult(
+      (await this.call(() => this.reader.get_credential({ cred_hash: hex(credentialHash) }))).result,
+    );
+    if (raw === undefined || raw === null) return undefined;
+
+    const parsed = credRecordSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new AgentPassError("NetworkError", "the registry returned an unreadable credential record", {
+        details: { credentialHash, issues: z.treeifyError(parsed.error) },
+      });
+    }
+    return {
+      issuer: parsed.data.issuer,
+      subject: parsed.data.subject,
+      issuedAt: new Date(Number(parsed.data.issued_at) * 1000),
+      expiresAt: new Date(Number(parsed.data.expires_at) * 1000),
+      revoked: parsed.data.revoked,
+    };
   }
 
   /** `undefined` when the issuer has never been registered. */

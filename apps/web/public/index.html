@@ -174,6 +174,7 @@
       <button id="vault-btn" class="secondary" disabled>Ver bitácora</button>
     </div>
     <div id="vault-chain" class="status"></div>
+    <ul class="steps" id="vault-identity"></ul>
     <ul class="steps" id="vault-records"></ul>
   </section>
 </main>
@@ -298,10 +299,13 @@ document.getElementById("buy-btn").addEventListener("click", async () => {
 });
 
 const VAULT_KIND_LABELS = { granted: "autorizada", refused: "rechazada", anchored: "anclada" };
+const IDENTITY_KIND_LABELS = { credential: "credencial", mandate: "mandato" };
 
 async function loadVault() {
   const chainEl = document.getElementById("vault-chain");
+  const identityEl = document.getElementById("vault-identity");
   const recordsEl = document.getElementById("vault-records");
+  identityEl.innerHTML = "";
   recordsEl.innerHTML = "";
   setStatus(chainEl, true, "Cargando…");
   try {
@@ -312,6 +316,14 @@ async function loadVault() {
       body.chain.ok,
       body.chain.ok ? "Cadena íntegra ✓ (" + body.records.length + " registros)" : "Cadena rota en seq " + body.chain.brokenAtSeq,
     );
+    for (const id of body.identity ?? []) {
+      const li = document.createElement("li");
+      const label = IDENTITY_KIND_LABELS[id.kind] ?? id.kind;
+      const b = document.createElement("b");
+      b.textContent = label + " (en cadena): ";
+      li.append(b, document.createTextNode(id.revoked ? "revocada" : "activa"));
+      identityEl.append(li);
+    }
     for (const r of body.records) {
       const li = document.createElement("li");
       const label = VAULT_KIND_LABELS[r.kind] ?? r.kind;

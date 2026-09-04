@@ -99,7 +99,8 @@ describe("the full cycle on live testnet", () => {
   it(
     "issues, verifies, revokes, and then refuses to verify",
     async () => {
-      const issued = await agentpass.issue({ credential: credential(), issuer });
+      const cred = credential();
+      const issued = await agentpass.issue({ credential: cred, issuer });
 
       expect(issued.jws.split(".")).toHaveLength(3);
       expect(issued.hash).toMatch(/^[0-9a-f]{64}$/);
@@ -107,6 +108,16 @@ describe("the full cycle on live testnet", () => {
 
       // Anchored and active on chain.
       await expect(agentpass.status(issued.hash)).resolves.toBe("Active");
+
+      // getRecord (T30) — the full record status() collapses into one word.
+      const record = await agentpass.getRecord(issued.hash);
+      expect(record?.issuer).toBe(issuer.publicKey());
+      expect(record?.subject).toBe(agent.publicKey());
+      expect(record?.revoked).toBe(false);
+      // The contract stores expires_at in whole seconds — truncated, not rounded.
+      expect(Math.floor((record?.expiresAt.getTime() ?? 0) / 1000)).toBe(
+        Math.floor(new Date(cred.validUntil).getTime() / 1000),
+      );
 
       // All three checks pass.
       const verified = await agentpass.verify(issued.jws);
@@ -118,6 +129,7 @@ describe("the full cycle on live testnet", () => {
       await agentpass.revoke({ credentialHash: issued.hash, issuer });
 
       await expect(agentpass.status(issued.hash)).resolves.toBe("Revoked");
+      await expect(agentpass.getRecord(issued.hash)).resolves.toMatchObject({ revoked: true });
 
       // The same JWS, byte for byte, no longer verifies.
       try {
@@ -137,6 +149,7 @@ describe("the full cycle on live testnet", () => {
       const signed = await signCredential(credential(), issuer);
 
       await expect(agentpass.status(signed.hash)).resolves.toBe("Unknown");
+      await expect(agentpass.getRecord(signed.hash)).resolves.toBeUndefined();
       await expect(agentpass.verify(signed.jws)).rejects.toSatisfy((error: unknown) =>
         hasErrorCode(error, "CredentialUnknown"),
       );
