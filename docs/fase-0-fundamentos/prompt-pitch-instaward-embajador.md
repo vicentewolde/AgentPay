@@ -93,9 +93,19 @@ reales en testnet, no simulado:**
   ya guarda la identidad — verificable por cualquiera, sin tener que
   confiar en quien opera el servidor. Hay una vista en vivo ("Bitácora")
   que lo muestra clickeando, sin scripts.
+- **T31, cerrado hoy mismo, horas antes de esta reunión:** `policy_rail`
+  —el smart account de Soroban construido y medido en la Fase 3, hasta hoy
+  nunca usado como pagador real— ahora paga de verdad. El límite `perTx`/
+  `perDay` lo garantiza la propia red de Stellar dentro de la misma
+  transacción que mueve la plata, no solo el código de este repo. Probado
+  contra el facilitator real: un pago dentro del límite asienta, uno que lo
+  excede lo rechaza la simulación misma con el código de error exacto del
+  contrato. Es probablemente el punto más fuerte para mostrarle a alguien
+  técnico de Stellar — enforcement on-chain de verdad, no una promesa.
+  Detalle en `docs/fase-5-mandatevault/evidencia/T31.md`.
 
-**Números para respaldar cualquier afirmación:** 630 tests automatizados,
-0 fallando. `pnpm typecheck`/`pnpm build` limpios. Cada fase tiene su
+**Números para respaldar cualquier afirmación:** 635 tests automatizados
+(TypeScript) + 21 tests Rust del contrato `policy_rail`, 0 fallando. `pnpm typecheck`/`pnpm build` limpios. Cada fase tiene su
 carpeta `docs/fase-N-*/evidencia/` con hashes de transacciones reales,
 verificables en Stellar Expert (testnet) por cualquiera en el momento,
 delante de la gente del Embajador si hace falta.
