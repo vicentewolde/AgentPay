@@ -857,3 +857,30 @@ localmente) que "Iniciar sesión" y "Comprar" funcionan de punta a punta
 ahora. Esta sesión no pudo pushear directamente (el `git push` queda
 bloqueado por el clasificador de modo automático) — cada commit lo
 pusheó el usuario a mano.
+
+**Cierre, mismo día.** El código estaba bien, pero faltaba un paso fuera
+del repo: `ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY` y
+`AGENT_REGISTRY_CONTRACT_ID` están marcadas `sync: false` en
+`render.yaml` a propósito (son secretos, no se commitean) — eso solo
+reserva el nombre de la variable en Render, no le carga ningún valor. El
+usuario nunca las había completado a mano en el dashboard
+(**Environment**), así que seguían vacías pese a que el código ya sabía
+leer de `process.env`. Se identificó mostrando al usuario un screenshot
+del dashboard (solo tenía `BAZAAR_BASE_URL`, `COREPACK_INTEGRITY_KEYS`,
+`NODE_VERSION`), y se lo guio a cargar las tres faltantes con los mismos
+valores de su `.env.local` local. Confirmado por el usuario: **Render
+deployado y funcional**, `https://agentpay-web.onrender.com/` corre
+"Iniciar sesión" y "Comprar" de verdad.
+
+**Nota de higiene, para cualquier sesión futura.** En el medio de guiar al
+usuario, esta sesión dijo explícitamente "no te voy a mostrar los
+valores" y en el siguiente mensaje corrió un comando que los imprimió de
+todos modos (contradicción entre lo dicho y lo hecho) — las tres llaves
+secretas terminaron en texto plano en la transcripción de este chat. No
+se enviaron a ningún tercero ni se commitearon, pero quedan en el
+historial de esta conversación como si fuera un archivo más con
+secretos. Ninguna acción tomada al respecto (no hay indicio de que se
+hayan filtrado fuera de este chat), pero vale la regla general: si hay
+que confirmar que un secreto existe en un archivo, mostrar que la línea
+existe (`grep -c` o similar) alcanza — no hace falta imprimir el valor
+completo, ni siquiera cuando el usuario pregunta "dónde lo encuentro".
