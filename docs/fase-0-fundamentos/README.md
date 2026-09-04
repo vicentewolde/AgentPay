@@ -16,6 +16,9 @@ llevaron al código.
 | `claude-code-mensaje-inicial.md` | Mensaje inicial con el que arrancó la construcción de AgentPass |
 | `prompt-inicio-fase-2.md` | Prompt de arranque para la Fase 2, generado al cerrar la Fase 1 |
 | `prompt-inicio-fase-3.md` | Prompt de arranque para la Fase 3, generado al cerrar la Fase 2 |
+| `prompt-continuacion-fase-3-t19.md` | Prompt de continuación para T19, generado con un hallazgo nuevo a mitad de la Fase 3 |
+| `prompt-inicio-fase-5.md` | Prompt de arranque para la Fase 5, generado al cerrar la Fase 4 |
+| `prompt-continuacion-fase-5-mejoras-tecnicas.md` | Prompt de continuación, generado al cerrar T30 (Fase 5 sin candidatos técnicos pendientes) para evaluar y construir mejoras técnicas mientras la ejecución del piloto no depende del usuario |
 
 Los dos últimos no son documentos previos al código de la Fase 1 como el
 resto de esta carpeta — son prompts de transición generados al cerrar cada
