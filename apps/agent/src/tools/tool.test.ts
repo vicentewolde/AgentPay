@@ -16,12 +16,13 @@ function stub(name: (typeof TOOL_NAMES)[number], run?: (input: unknown) => unkno
 }
 
 describe("TOOL_NAMES", () => {
-  it("is exactly the four the phase specifies, in order", () => {
+  it("is exactly the five the project specifies, in order", () => {
     expect([...TOOL_NAMES]).toEqual([
       "list_products",
       "get_product",
       "check_my_credential",
       "create_purchase_intent",
+      "execute_payment",
     ]);
   });
 

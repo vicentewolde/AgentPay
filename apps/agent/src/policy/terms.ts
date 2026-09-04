@@ -14,13 +14,13 @@
  * onto these three fields is an adapter's job (T15), so nothing in phase 3
  * ends up importing a third party's types into its policy layer.
  *
- * **What is deliberately not checked, said out loud:** `payTo` — the account
- * that collects the money, and probably the most sensitive field of the whole
- * challenge. There is nothing signed to compare it against: neither the
- * credential's `scope` nor the mandate's `grant` carries a list of permitted
- * payees. Comparing it against a value the same catalogue handed over would
- * look like a check without being one. It is named in `M-14` as the next field
- * the Mandate is missing, rather than faked here.
+ * **`payTo` — the account that collects the money, and the most sensitive
+ * field of the challenge.** `M-14` originally left it unchecked: neither the
+ * credential's `scope` nor the mandate's `grant` carried a list of permitted
+ * payees, so comparing it against anything would have been the illusion of a
+ * check. The mandate's `grant.payTo` (optional — see `mandate.ts`) closes
+ * that gap when a mandate sets it; a mandate that leaves it unset gets the
+ * old, honest behaviour back: `payTo` unchecked, not faked.
  */
 import { AgentPassError } from "@agentpass/core";
 
@@ -41,12 +41,19 @@ export interface PaymentTerms {
   readonly asset: string;
   /** The total it is asking for, as a decimal string. */
   readonly amount: string;
+  /**
+   * Who collects the payment, when the challenge names one. Checked only
+   * when the mandate's `grant.payTo` is also present (`M-14`) — see
+   * {@link reconcileTerms}.
+   */
+  readonly payTo?: string;
 }
 
 export type TermsRejectionCode =
   | "TermsVenueMismatch"
   | "TermsAssetMismatch"
-  | "TermsAmountMismatch";
+  | "TermsAmountMismatch"
+  | "TermsPayeeNotAllowed";
 
 export interface TermsAllowed {
   readonly allowed: true;
@@ -77,8 +84,20 @@ function deny(
  * `toScaledAmount` rather than comparing strings, so `"18.5"` and `"18.5000000"`
  * are the same amount — a venue that formats its numbers differently is not
  * asking for something different, and a string comparison would say it was.
+ *
+ * `allowedPayTo` is the mandate's `grant.payTo` (`M-14`), passed in rather
+ * than read from a `Mandate` here: this function does not otherwise know
+ * about mandates, and a fourth scalar keeps that true. `undefined` (no list
+ * on the mandate) or `terms.payTo` absent (a challenge this adapter maps
+ * without one) both mean "nothing signed to check against" — the check is
+ * skipped, not vacuously satisfied. A list that is present and empty follows
+ * `B-1`: it permits no payee.
  */
-export function reconcileTerms(intent: PurchaseIntent, terms: PaymentTerms): TermsDecision {
+export function reconcileTerms(
+  intent: PurchaseIntent,
+  terms: PaymentTerms,
+  allowedPayTo?: readonly string[],
+): TermsDecision {
   // 1. Is this even the venue the intent names? Byte-for-byte (B-3).
   if (terms.venue !== intent.venue) {
     return deny("TermsVenueMismatch", "the payment terms name a different venue than the intent", {
@@ -118,6 +137,18 @@ export function reconcileTerms(intent: PurchaseIntent, terms: PaymentTerms): Ter
       intentTotal: fromScaledAmount(authorised),
       asset: intent.purchase.asset,
     });
+  }
+
+  // 4. Is this a payee the mandate consented to? Only when there is
+  //    something signed to check it against (M-14) — see the doc comment.
+  if (allowedPayTo !== undefined && terms.payTo !== undefined) {
+    if (!allowedPayTo.includes(terms.payTo)) {
+      return deny("TermsPayeeNotAllowed", "the mandate does not permit paying this account", {
+        payTo: terms.payTo,
+        permitted: allowedPayTo,
+        permitsNothing: allowedPayTo.length === 0,
+      });
+    }
   }
 
   return { allowed: true };

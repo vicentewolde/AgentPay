@@ -112,6 +112,43 @@ describe("terms that describe a different purchase", () => {
   });
 });
 
+const PAYEE = "GDVR2KDK5DSMNYZJKNISUIOBDC6FZK3XZOIQWSS7KL4BRMD5BMW6RMCQ";
+const OTHER_PAYEE = "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ";
+
+describe("payTo (M-14)", () => {
+  it("is unchecked when the mandate carries no payTo list", () => {
+    expect(reconcileTerms(intentFor(), { ...MATCHING, payTo: PAYEE }, undefined).allowed).toBe(true);
+  });
+
+  it("is unchecked when the terms carry no payTo, even if the mandate has a list", () => {
+    expect(reconcileTerms(intentFor(), MATCHING, [PAYEE]).allowed).toBe(true);
+  });
+
+  it("allows a payee the mandate's list names", () => {
+    expect(reconcileTerms(intentFor(), { ...MATCHING, payTo: PAYEE }, [PAYEE, OTHER_PAYEE]).allowed).toBe(
+      true,
+    );
+  });
+
+  it("refuses a payee the mandate's list does not name", () => {
+    const decision = reconcileTerms(intentFor(), { ...MATCHING, payTo: OTHER_PAYEE }, [PAYEE]);
+
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) expect.unreachable("expected a refusal");
+    expect(decision.code).toBe("TermsPayeeNotAllowed");
+    expect(decision.details).toMatchObject({ payTo: OTHER_PAYEE, permitted: [PAYEE] });
+  });
+
+  it("an empty list permits no payee (B-1), it does not mean unchecked", () => {
+    const decision = reconcileTerms(intentFor(), { ...MATCHING, payTo: PAYEE }, []);
+
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) expect.unreachable("expected a refusal");
+    expect(decision.code).toBe("TermsPayeeNotAllowed");
+    expect(decision.details).toMatchObject({ permitsNothing: true });
+  });
+});
+
 describe("the total is derived, never read from what the intent claims", () => {
   // An intent whose `totalAmount` disagrees with its own price and quantity.
   // Nothing in the rail reads that field, so the lie is inert: the terms are

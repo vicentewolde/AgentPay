@@ -109,7 +109,9 @@ export type AgentPassErrorCode =
   /** The venue is asking to be paid in a different asset than the intent names. */
   | "TermsAssetMismatch"
   /** The venue is asking for a different amount than the intent's total. */
-  | "TermsAmountMismatch";
+  | "TermsAmountMismatch"
+  /** The mandate's `grant.payTo` does not list the account the venue asks to be paid. */
+  | "TermsPayeeNotAllowed";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

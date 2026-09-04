@@ -52,6 +52,15 @@ describe("recording", () => {
     expect(await ledger.spentOn("a", "USDC", DAY_1)).toBe("50.0000000");
   });
 
+  it("hasRecorded tells whether an intentId was already recorded", async () => {
+    const ledger = createInMemorySpendLedger();
+
+    expect(await ledger.hasRecorded("i1")).toBe(false);
+    await ledger.record({ subject: "a", intentId: "i1", currency: "USDC", amount: "10.00", at: DAY_1 });
+    expect(await ledger.hasRecorded("i1")).toBe(true);
+    expect(await ledger.hasRecorded("i2")).toBe(false);
+  });
+
   it("rejects an unusable amount, and the intentId stays retryable", async () => {
     const ledger = createInMemorySpendLedger();
 

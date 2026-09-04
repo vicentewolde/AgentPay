@@ -17,10 +17,12 @@
  */
 import type { AgentPassErrorCode } from "@agentpass/core";
 import { AgentPassError } from "@agentpass/core";
+import type { AgentPayMandate } from "@agentpay/mandate";
 import type { Keypair } from "@stellar/stellar-sdk/base";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
+import { getBazaarServiceRoute } from "../catalog/bazaar.js";
 import { productIdSchema, type CatalogAdapter, type Product } from "../catalog/catalog.js";
 import type {
   CredentialState,
@@ -39,6 +41,7 @@ import type { SpendLedger } from "../ledger/spend-ledger.js";
 import { checkMandate, mandateCheckError } from "../mandate/check-mandate.js";
 import type { MandateState, MandateVerifier, UsableMandate } from "../mandate/verifier.js";
 import { checkOwnMandate } from "../mandate/verifier.js";
+import { executeBazaarPayment, fillRouteTemplate } from "../payment/x402.js";
 import { createLocalPolicyRail, policyRailError } from "../policy/policy-rail.js";
 import { fromScaledAmount, multiplyAmount } from "../scope/amount.js";
 import { checkScope, scopeError } from "../scope/scope.js";
@@ -256,6 +259,113 @@ function checkMyCredentialTool(state: CredentialState, canCreatePurchaseIntent: 
   });
 }
 
+interface SignedPurchaseIntent {
+  readonly intent: PurchaseIntent;
+  readonly jws: string;
+  readonly hash: string;
+  /** Re-verified immediately before signing (B-17) — the mandate to reuse for a payment step, not the startup one. */
+  readonly freshMandate: AgentPayMandate;
+}
+
+/**
+ * Builds, authorises and signs one purchase intent — everything
+ * `create_purchase_intent` does, factored out so `execute_payment` (G-4) can
+ * reuse it exactly rather than re-deriving the same intent by a second path.
+ *
+ * Runs `PolicyRail.authorise()` once, with no payment terms (M-14): neither
+ * tool has a real `402` challenge yet at this point. `execute_payment` gets
+ * one from the venue afterwards and authorises a second time with it —
+ * `G-8` is what makes that re-verification of the same `intentId` count once,
+ * not twice, against the daily limit.
+ */
+async function buildSignedIntent(
+  deps: PurchaseIntentDeps,
+  productId: string,
+  quantity: number,
+): Promise<SignedPurchaseIntent> {
+  const { catalog, credential, mandate, signer, verifier, mandateVerifier, policyRail } = deps;
+  const ttlSeconds = deps.intentTtlSeconds ?? DEFAULT_INTENT_TTL_SECONDS;
+  const { scope, principal, id: subject } = credential.verified.credential.credentialSubject;
+  const { registry } = credential.verified.credential.credentialStatus;
+
+  const product = await catalog.getProduct(productId);
+  const now = deps.now ?? new Date();
+  // Derived, not read from anywhere a caller could have shaped: the same
+  // arithmetic PolicyRail's own checks use (M-14's rule, applied here too).
+  const total = fromScaledAmount(multiplyAmount(product.price.amount, quantity));
+
+  // `credential.hash` — not a fresh re-verification's hash — because it is
+  // the same value either way: sha256 of the exact JWS being re-checked
+  // below, deterministic regardless of the registry's answer. Building the
+  // intent does not need to wait on a network call.
+  const intent: PurchaseIntent = {
+    type: [AGENTPAY_INTENT_FAMILY, AGENTPAY_INTENT_TYPE],
+    intentId: randomUUID(),
+    issuedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
+    agent: subject,
+    principal,
+    credential: { hash: credential.hash, registry },
+    venue: catalog.venueId,
+    purchase: {
+      productId: product.id,
+      quantity,
+      unitAmount: product.price.amount,
+      totalAmount: total,
+      asset: product.price.asset,
+    },
+    authorisation: { perTx: scope.limits.perTx, currency: scope.limits.currency },
+  };
+
+  // Both authorities' structural rules, pure and free — the same check
+  // `PolicyRail.authorise()` runs below, run early on purpose. This is
+  // T12's own guarantee ("checks the scope first, so a refused purchase
+  // costs no network call"), extended to the mandate: a purchase this
+  // obviously wrong should not cost the two round trips below before
+  // saying so. Not the authoritative decision — a fast path to the exact
+  // same rejection PolicyRail would reach anyway.
+  const scopeCheck = checkScope(scope, {
+    venue: intent.venue,
+    asset: intent.purchase.asset,
+    unitAmount: intent.purchase.unitAmount,
+    quantity: intent.purchase.quantity,
+  });
+  if (!scopeCheck.allowed) throw scopeError(scopeCheck);
+
+  const mandateCheck = checkMandate(mandate.verified.mandate, intent);
+  if (!mandateCheck.allowed) throw mandateCheckError(mandateCheck);
+
+  // The startup check decided this tool exists at all; these decide
+  // whether each authority is still live at the instant of signing
+  // (B-17, extended to the mandate in T21). Signing against either one
+  // last confirmed minutes ago would put the agent's signature on
+  // authority — or consent — it may no longer hold.
+  const freshCredential = await checkOwnCredential(verifier, credential.verified.jws);
+  if (!freshCredential.usable) throw freshCredential.problem;
+
+  const freshMandate = await checkOwnMandate(mandateVerifier, mandate.verified.jws);
+  if (!freshMandate.usable) throw freshMandate.problem;
+
+  // One point, all four checks, no partial credit (T19). No payment
+  // terms yet: the mock catalogue has no 402 to reconcile against
+  // (M-14) — a real venue adapter (T15) is what would supply them.
+  const decision = await policyRail.authorise({
+    intent,
+    scope,
+    mandate: freshMandate.verified.mandate,
+  });
+  if (!decision.authorised) throw policyRailError(decision);
+
+  const signed = await signIntent(intent, signer);
+
+  return {
+    intent: signed.intent,
+    jws: signed.jws,
+    hash: signed.hash,
+    freshMandate: freshMandate.verified.mandate,
+  };
+}
+
 /**
  * Only constructible from a credential and a mandate that both verified: the
  * parameter types are `UsableCredential` and `UsableMandate`, never the wider
@@ -264,11 +374,6 @@ function checkMyCredentialTool(state: CredentialState, canCreatePurchaseIntent: 
  * someone has to remember.
  */
 function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
-  const { catalog, credential, mandate, signer, verifier, mandateVerifier, policyRail } = deps;
-  const ttlSeconds = deps.intentTtlSeconds ?? DEFAULT_INTENT_TTL_SECONDS;
-  const { scope, principal, id: subject } = credential.verified.credential.credentialSubject;
-  const { registry } = credential.verified.credential.credentialStatus;
-
   return defineTool({
     name: "create_purchase_intent",
     description:
@@ -284,76 +389,7 @@ function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
       quantity: z.int().min(1).max(10_000),
     }),
     async run({ product_id, quantity }): Promise<CreatePurchaseIntentResult> {
-      const product = await catalog.getProduct(product_id);
-      const now = deps.now ?? new Date();
-      // Derived, not read from anywhere a caller could have shaped: the same
-      // arithmetic PolicyRail's own checks use (M-14's rule, applied here too).
-      const total = fromScaledAmount(multiplyAmount(product.price.amount, quantity));
-
-      // `credential.hash` — not a fresh re-verification's hash — because it is
-      // the same value either way: sha256 of the exact JWS being re-checked
-      // below, deterministic regardless of the registry's answer. Building the
-      // intent does not need to wait on a network call.
-      const intent: PurchaseIntent = {
-        type: [AGENTPAY_INTENT_FAMILY, AGENTPAY_INTENT_TYPE],
-        intentId: randomUUID(),
-        issuedAt: now.toISOString(),
-        expiresAt: new Date(now.getTime() + ttlSeconds * 1000).toISOString(),
-        agent: subject,
-        principal,
-        credential: { hash: credential.hash, registry },
-        venue: catalog.venueId,
-        purchase: {
-          productId: product.id,
-          quantity,
-          unitAmount: product.price.amount,
-          totalAmount: total,
-          asset: product.price.asset,
-        },
-        authorisation: { perTx: scope.limits.perTx, currency: scope.limits.currency },
-      };
-
-      // Both authorities' structural rules, pure and free — the same check
-      // `PolicyRail.authorise()` runs below, run early on purpose. This is
-      // T12's own guarantee ("checks the scope first, so a refused purchase
-      // costs no network call"), extended to the mandate: a purchase this
-      // obviously wrong should not cost the two round trips below before
-      // saying so. Not the authoritative decision — a fast path to the exact
-      // same rejection PolicyRail would reach anyway.
-      const scopeCheck = checkScope(scope, {
-        venue: intent.venue,
-        asset: intent.purchase.asset,
-        unitAmount: intent.purchase.unitAmount,
-        quantity: intent.purchase.quantity,
-      });
-      if (!scopeCheck.allowed) throw scopeError(scopeCheck);
-
-      const mandateCheck = checkMandate(mandate.verified.mandate, intent);
-      if (!mandateCheck.allowed) throw mandateCheckError(mandateCheck);
-
-      // The startup check decided this tool exists at all; these decide
-      // whether each authority is still live at the instant of signing
-      // (B-17, extended to the mandate in T21). Signing against either one
-      // last confirmed minutes ago would put the agent's signature on
-      // authority — or consent — it may no longer hold.
-      const freshCredential = await checkOwnCredential(verifier, credential.verified.jws);
-      if (!freshCredential.usable) throw freshCredential.problem;
-
-      const freshMandate = await checkOwnMandate(mandateVerifier, mandate.verified.jws);
-      if (!freshMandate.usable) throw freshMandate.problem;
-
-      // One point, all four checks, no partial credit (T19). No payment
-      // terms yet: the mock catalogue has no 402 to reconcile against
-      // (M-14) — a real venue adapter (T15) is what would supply them.
-      const decision = await policyRail.authorise({
-        intent,
-        scope,
-        mandate: freshMandate.verified.mandate,
-      });
-      if (!decision.authorised) throw policyRailError(decision);
-
-      const signed = await signIntent(intent, signer);
-
+      const signed = await buildSignedIntent(deps, product_id, quantity);
       return {
         intent_id: signed.intent.intentId,
         jws: signed.jws,
@@ -370,6 +406,96 @@ function createPurchaseIntentTool(deps: PurchaseIntentDeps): ErasedTool {
   });
 }
 
+export interface ExecutePaymentResult {
+  readonly intent_id: string;
+  readonly intent_hash: string;
+  readonly resource_url: string;
+  readonly settled: boolean;
+  readonly transaction: string | undefined;
+  readonly payer: string | undefined;
+  readonly network: string;
+  readonly amount: string | undefined;
+}
+
+/**
+ * `execute_payment` (G-4) — the fifth tool, and the one that moves real
+ * money. Only built when `execute_payment_deps_of` returns something: a
+ * usable credential and mandate (same as `create_purchase_intent`) **and**
+ * `deps.payment` (a bazaar `baseUrl`), so the tool is simply absent for the
+ * mock catalogue or any venue this adapter has no paid route for — the same
+ * `B-6` discipline as every other tool here: a capability that cannot be
+ * exercised is not advertised, not refused at call time.
+ *
+ * It does exactly what `create_purchase_intent` does, plus what
+ * `executeBazaarPayment` (T24) already proved works from a script: fetch the
+ * venue's real `402` challenge for this product, reconcile it against the
+ * intent just signed (venue, asset, amount and — when the mandate's
+ * `grant.payTo` says so — the payee, `M-14`), and only if the rail still
+ * authorises, sign and send the payment. `PolicyRail.authorise()` runs a
+ * second time here with those real terms; `G-8` is why that does not double-
+ * count the purchase against today's limit.
+ *
+ * `params` fills the venue's own route placeholders (e.g. `pair`, `amount`,
+ * `side` for a swap quote) — declared by the venue's service card, not by
+ * this project, so a product this adapter has never seen params for is not
+ * silently guessed at.
+ */
+function executePaymentTool(deps: ExecutePaymentDeps): ErasedTool {
+  return defineTool({
+    name: "execute_payment",
+    description:
+      "Sign a purchase intent AND pay for it for real, in one call — this " +
+      "moves real money on Stellar testnet. Refused under the exact same " +
+      "rules as create_purchase_intent, plus: the venue's real payment " +
+      "challenge must ask for the same venue, asset and amount that was " +
+      "signed, and — when the mandate lists permitted payees — the venue " +
+      "must be one of them. `params` fills the venue's own route " +
+      "placeholders for this product (e.g. a trading pair or side); this " +
+      "tool does not guess values the venue did not ask for. " +
+      `${UNTRUSTED_TEXT_NOTE}`,
+    input: z.strictObject({
+      product_id: productIdSchema,
+      quantity: z.int().min(1).max(10_000),
+      params: z.record(z.string(), z.union([z.string(), z.number()])).default({}),
+    }),
+    async run({ product_id, quantity, params }): Promise<ExecutePaymentResult> {
+      const signed = await buildSignedIntent(deps, product_id, quantity);
+
+      const route = await getBazaarServiceRoute(
+        { baseUrl: deps.payment.baseUrl, fetchImpl: deps.payment.fetchImpl },
+        product_id,
+      );
+      const resourceUrl = fillRouteTemplate(deps.payment.baseUrl, route, params);
+
+      const receipt = await executeBazaarPayment(
+        {
+          policyRail: deps.policyRail,
+          signerSecret: deps.signer.secret(),
+          fetchImpl: deps.payment.fetchImpl,
+        },
+        {
+          resourceUrl,
+          intent: signed.intent,
+          scope: deps.credential.verified.credential.credentialSubject.scope,
+          mandate: signed.freshMandate,
+          venueId: deps.catalog.venueId,
+        },
+      );
+
+      return {
+        intent_id: signed.intent.intentId,
+        intent_hash: signed.hash,
+        resource_url: resourceUrl,
+        settled: receipt.settled,
+        transaction: receipt.transaction,
+        payer: receipt.payer,
+        network: receipt.network,
+        amount: receipt.amount,
+      };
+    },
+  });
+}
+
 interface PurchaseIntentDeps {
   readonly catalog: CatalogAdapter;
   readonly credential: UsableCredential;
@@ -380,6 +506,23 @@ interface PurchaseIntentDeps {
   readonly policyRail: ReturnType<typeof createLocalPolicyRail>;
   readonly intentTtlSeconds?: number;
   readonly now?: Date;
+}
+
+/**
+ * What `execute_payment` needs beyond `create_purchase_intent`: the venue's
+ * own base URL, to fetch its real `402` challenge and route metadata
+ * (`getBazaarServiceRoute`). Absence of this — not of the credential or the
+ * mandate — is what keeps `execute_payment` out of the tool set for the mock
+ * catalogue, which has no real payment route to speak of.
+ */
+export interface PaymentDeps {
+  readonly baseUrl: string;
+  /** Injected for tests; defaults to the global `fetch`. */
+  readonly fetchImpl?: typeof fetch;
+}
+
+interface ExecutePaymentDeps extends PurchaseIntentDeps {
+  readonly payment: PaymentDeps;
 }
 
 export interface AgentToolsDeps {
@@ -406,6 +549,8 @@ export interface AgentToolsDeps {
   readonly now?: Date;
   /** The agent's daily-spend memory, for `PolicyRail`'s `perDay` (T19). */
   readonly ledger: SpendLedger;
+  /** Enables `execute_payment` (G-4) when present, alongside everything `create_purchase_intent` needs. */
+  readonly payment?: PaymentDeps;
 }
 
 /**
@@ -438,13 +583,13 @@ function purchaseIntentDepsOf(deps: AgentToolsDeps): PurchaseIntentDeps | undefi
 }
 
 /**
- * The agent's tool set — four tools when both the credential and the mandate
- * verified, three when either did not.
+ * The agent's tool set — three to five tools, depending on what verified and
+ * what was configured.
  *
- * `create_purchase_intent` is left out rather than made to refuse. The agent is
- * not told it lacks permission; there is no tool by that name. `UnknownTool` is
- * what a caller gets, and no sentence in a product description can turn that
- * into a purchase.
+ * `create_purchase_intent` and `execute_payment` are left out rather than
+ * made to refuse. The agent is not told it lacks permission; there is no
+ * tool by that name. `UnknownTool` is what a caller gets, and no sentence in
+ * a product description can turn that into a purchase or a payment.
  *
  * `check_my_credential` stays in every case: it is the diagnostic path, and
  * withholding it would hide the reason without removing any capability.
@@ -460,6 +605,10 @@ export function createAgentTools(deps: AgentToolsDeps): ToolSet {
 
   if (purchaseIntentDeps !== undefined) {
     tools.push(createPurchaseIntentTool(purchaseIntentDeps));
+
+    if (deps.payment !== undefined) {
+      tools.push(executePaymentTool({ ...purchaseIntentDeps, payment: deps.payment }));
+    }
   }
 
   return createToolSet(tools);

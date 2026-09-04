@@ -12,18 +12,18 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-03 · **Último hito cerrado:** T25 · **Fase 4: T24 y T25 cerrados**
+**Fecha:** 2026-09-04 · **Último hito cerrado:** T26 · **Fase 4: T24–T26 cerrados**
 
-Un `PurchaseIntent` firmado se puede convertir en un pago real, y ahora
-también desde un navegador: `apps/web` (`pnpm run web`) es una página simple
-que emite credencial y Mandato, ejecuta un pago x402 real contra el bazaar, y
-revoca el Mandato — todo clickeable, todo verificado con transacciones reales
-en Stellar testnet.
+Un `PurchaseIntent` firmado se puede convertir en un pago real, desde un
+navegador (`apps/web`, desplegado en Render) y ahora también como una tool
+del propio agente (`execute_payment`, invocable por una instrucción en
+español, igual que `create_purchase_intent`). Tres huecos que habían quedado
+anotados y sin resolver (`G-4`, `G-8`, `M-14`) se cerraron en T26.
 
 | | |
 |---|---|
-| Tests TypeScript | **589** rápidos (sin cambios sobre T24 — `apps/web` es un servidor de demo, sin tests propios, mismo criterio que `scripts/`) |
-| Dependencias nuevas | `@x402/stellar@^2.24.0`, `@x402/core@~2.24.0` (T24, `apps/agent`); ninguna nueva en T25 (`apps/web` no agrega paquetes de terceros) |
+| Tests TypeScript | **604** rápidos (589 en T25 + 15 nuevos: `payTo`, la re-verificación de `perDay`, y `execute_payment`) |
+| Dependencias nuevas | Ninguna en T26 — todo compuesto sobre lo que T19–T24 ya traían |
 | Transacciones reales de la evidencia | pago T24: `fda497c5...`, ledger 4488970 · pago desde el navegador (T25): `53a4be61...`, ledger 4489237 · revocación (T25): `7d8de04a...` |
 
 ### Progreso
@@ -32,6 +32,7 @@ en Stellar testnet.
 |---|---|---|
 | T24 | Ejecutar un pago x402 real (sin frontend) | ✅ cerrado 2026-09-03 |
 | T25 | Frontend simple (`apps/web`) | ✅ cerrado 2026-09-03 |
+| T26 | `execute_payment` (quinta tool), `payTo` en el Mandato, `perDay` sin doble conteo | ✅ cerrado 2026-09-04 |
 
 ---
 
@@ -157,20 +158,80 @@ todavía — candidatos anotados y no construidos: resolver `G-8` (el costo
 doble contra `perDay`), la lista de `payTo` permitidos que falta en el
 Mandato (`M-14`), y convertir el pago en una tool del agente (`G-4`).
 
-## Despliegue de `apps/web` en Render — preparado, no cerrado
+## T26 · `execute_payment`, `payTo` en el Mandato, `perDay` sin doble conteo — cerrado 2026-09-04
+
+**Qué quedó funcionando.** Los tres candidatos que T25 había dejado
+anotados y sin construir, a pedido explícito del usuario:
+
+- **`execute_payment` — la quinta tool del agente (`G-4`).** Firma un
+  intent y, si `PolicyRail` autoriza, paga de verdad contra el reto `402`
+  real del venue — todo en una sola llamada, invocable desde una
+  instrucción en español igual que `create_purchase_intent` ya lo es. Solo
+  existe cuando el agente tiene credencial y mandato usables **y** se le
+  configuró el `baseUrl` de un venue real con pago — el catálogo simulado
+  sigue con cuatro tools, sin cambios.
+- **`payTo` en el Mandato (`M-14`).** `grant.payTo`, opcional, lista de
+  cuentas permitidas (clásicas o de contrato). `reconcileTerms` lo chequea
+  contra el `payTo` del reto real cuando ambos existen; ausente, se
+  comporta exactamente como antes (sin chequeo, no fingido).
+- **`perDay` sin doble conteo (`G-8` → `G-11`).** Una compra real ya no
+  cuenta el doble contra el límite diario por llamar `authorise()` dos
+  veces (una estructural, otra con los términos reales) — la segunda
+  llamada para el mismo `intentId` ahora suma `0`, no el monto de nuevo.
+
+**En palabras llanas:** antes, solo un script o el servidor del frontend
+podían ejecutar un pago real — el agente conversacional no. Ahora el agente
+mismo puede recibir la instrucción ("comprá X y pagalo") y ejecutar el pago,
+con las mismas protecciones de siempre (límite por compra, límite diario
+correcto por primera vez, y ahora también a quién se le puede pagar).
+
+**Evidencia técnica.** 15 tests nuevos (604 en total, de 589): `payTo`
+chequeado y sin chequear en `terms.test.ts` y `policy-rail.test.ts`; la
+re-verificación del mismo intent en `spend-ledger.test.ts` y
+`policy-rail.test.ts` (un caso deliberadamente ajustado para que el bug de
+`G-8` lo hubiera hecho fallar); presencia/ausencia de `execute_payment`
+según `payment` esté configurado, un camino de rechazo estructural sin
+tocar la red, reconciliación de un reto real con monto distinto, y una
+descripción de producto con una inyección explícita que no logra ensanchar
+lo que la tool hace, en `agent-tools.test.ts`. `pnpm typecheck` y
+`pnpm test` (monorepo completo) limpios.
+
+**Qué NO se tocó, a propósito.** `apps/web`'s `buy()` sigue llamando
+`executeBazaarPayment` directamente — no se migró a la tool nueva, porque
+el pedido era construir la tool, no reintegrar el frontend que ya funciona
+en producción (Render). Detalle completo, con las alternativas descartadas
+en cada punto, en `DECISIONES.md` → `G-10`, `G-11`, `G-12`.
+
+Pendiente: mergear `cc/g8-m14-g4` a `main` y pushear (a confirmar con el
+usuario). **Fase 4: T24, T25 y T26 cerrados.** `apps/web` sigue sin usar
+`execute_payment` — si en algún momento se quiere que el botón "Comprar" del
+frontend pase por el agente en vez de llamar `executeBazaarPayment` directo,
+es la migración natural que sigue, no decidida todavía.
+
+## Despliegue de `apps/web` en Render — cerrado, 2026-09-03/04
 
 El usuario pidió, después de T25, que el demo sea mostrable a otros — no solo
-`localhost`. Se preparó todo lo que este repo puede hacer por su cuenta
-(`render.yaml`, script `start`, instrucciones en `apps/web/README.md`),
-verificado localmente corriendo exactamente el comando de build y de arranque
-que Render va a correr. Decisión de plataforma (Render, no Vercel — el
-estado en memoria del servidor no calza con serverless) y de acceso (sin
-contraseña, a propósito) en `DECISIONES.md` → `G-9`.
+`localhost`. Decisión de plataforma (Render, no Vercel — el estado en
+memoria del servidor no calza con serverless) y de acceso (sin contraseña, a
+propósito) en `DECISIONES.md` → `G-9`.
 
-**Lo que falta y no le corresponde a esta sesión:** conectar el repo a una
-cuenta de Render y cargar las tres variables secretas
-(`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`, `AGENT_REGISTRY_CONTRACT_ID`) en su
-panel — el usuario las copia de su propio `.env.local` a mano. Entrar
-credenciales en un formulario de terceros está fuera de lo que este asistente
-hace por su cuenta. Cuando el usuario complete esa parte y confirme la URL
-pública, se actualiza esta entrada con el link real.
+**Público y funcionando:** [agentpay-web.onrender.com](https://agentpay-web.onrender.com/).
+El camino hasta ahí tuvo tres fallas de build/runtime reales, cada una
+diagnosticada contra el log real de Render, no supuesta:
+
+1. `Cannot find matching keyid` durante el build — no era la rotación de
+   llave de npm de 2025 (primer diagnóstico, incorrecto); era
+   `pnpm@11.24.0` exigiendo Node ≥22.13 mientras `NODE_VERSION` estaba en
+   `22.11.0`. Corregido subiendo a `22.14.0`.
+2. `ISSUER_SECRET_KEY is missing from .env.local` con el build ya pasando —
+   `apps/web/src/server.ts` solo leía secretos de un archivo `.env.local`
+   en disco, que no existe en Render (las env vars del dashboard van a
+   `process.env`, no a un archivo). Corregido con un fallback a
+   `process.env` cuando el archivo no trae la clave.
+3. El mismo error, ya con el fallback andando — las tres variables secretas
+   nunca se habían cargado en el dashboard de Render (`sync: false` solo
+   reserva el nombre, no el valor). El usuario las cargó a mano desde su
+   `.env.local`.
+
+Entrar esas credenciales en el panel de Render fue, en las tres, tarea del
+usuario — nunca de esta sesión.

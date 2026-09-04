@@ -150,9 +150,13 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
     async authorise(request: AuthorisationRequest): Promise<AuthorisationDecision> {
       const { intent, scope, mandate, terms } = request;
 
-      // 1. Which purchase is this? Before whether it is permitted (M-14).
+      // 1. Which purchase is this, and who collects it? Before whether it is
+      //    permitted (M-14). `grant.payTo` is read straight off the mandate
+      //    here, ahead of `checkMandate` below — it is a fact the mandate
+      //    declares, not a permission check that needs the others to have
+      //    run first.
       if (terms !== undefined) {
-        const reconciled = reconcileTerms(intent, terms);
+        const reconciled = reconcileTerms(intent, terms, mandate.credentialSubject.grant.payTo);
         if (!reconciled.allowed) {
           return refuse(reconciled.code, reconciled.reason, reconciled.details);
         }
@@ -186,12 +190,22 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
         const at = clock();
         const spentToday = await ledger.spentOn(subject, currency, at);
 
+        // A purchase can be authorised more than once for the same intentId
+        // — T19's structural check, then T24's real-terms check, are two
+        // `authorise()` calls for one purchase. The ledger already
+        // de-duplicates the *recording*; without this, the *check* still
+        // added `total` on top of a `spentToday` that, on the second call,
+        // already includes it — double-counting one purchase against the
+        // daily limit (G-8). A re-verification adds nothing new to check.
+        const alreadyRecorded = await ledger.hasRecorded(intent.intentId);
+        const addition = alreadyRecorded ? "0" : total;
+
         // Both limits, against the same running total, each with its own code
         // so a caller can tell which authority refused (M-9, M-16).
         const underScope = checkDailyLimit(
           scope.limits.perDay,
           spentToday,
-          total,
+          addition,
           "ScopeDailyLimitExceeded",
         );
         if (!underScope.allowed) {
@@ -201,7 +215,7 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
         const underMandate = checkDailyLimit(
           mandate.credentialSubject.grant.limits.perDay,
           spentToday,
-          total,
+          addition,
           "MandateDailyLimitExceeded",
         );
         if (!underMandate.allowed) {

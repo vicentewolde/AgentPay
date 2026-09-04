@@ -47,6 +47,13 @@ export interface SpendLedger {
    * subject or currency — this is a no-op: the first recording stands.
    */
   record(entry: SpendLedgerEntry): Promise<void>;
+  /**
+   * Whether `intentId` has already been recorded. Lets a caller distinguish
+   * "authorising this purchase for the first time" from "re-verifying a
+   * purchase already counted" — `spentOn` alone cannot, because a recorded
+   * amount is already folded into its total (`G-8`).
+   */
+  hasRecorded(intentId: string): Promise<boolean>;
 }
 
 /** `YYYY-MM-DD`, in UTC. The bucket a spend counts toward. */
@@ -91,6 +98,10 @@ export function createInMemorySpendLedger(): SpendLedger {
       // amount) must remain retryable under the same intentId, not silently
       // and permanently ignored.
       seenIntents.add(entry.intentId);
+    },
+
+    async hasRecorded(intentId: string): Promise<boolean> {
+      return seenIntents.has(intentId);
     },
   };
 }

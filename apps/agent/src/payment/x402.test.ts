@@ -124,6 +124,7 @@ describe("toPaymentTerms", () => {
       venue: BAZAAR_VENUE_ID,
       asset: BAZAAR_USDC,
       amount: "0.0010000",
+      payTo: "GDVR2KDK5DSMNYZJKNISUIOBDC6FZK3XZOIQWSS7KL4BRMD5BMW6RMCQ",
     });
   });
 
@@ -208,7 +209,12 @@ describe("executeBazaarPayment", () => {
 
     expect(authorise).toHaveBeenCalledWith(
       expect.objectContaining({
-        terms: { venue: BAZAAR_VENUE_ID, asset: BAZAAR_USDC, amount: "0.0010000" },
+        terms: {
+          venue: BAZAAR_VENUE_ID,
+          asset: BAZAAR_USDC,
+          amount: "0.0010000",
+          payTo: "GDVR2KDK5DSMNYZJKNISUIOBDC6FZK3XZOIQWSS7KL4BRMD5BMW6RMCQ",
+        },
       }),
     );
   });

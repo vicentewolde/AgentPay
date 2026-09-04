@@ -884,3 +884,44 @@ hayan filtrado fuera de este chat), pero vale la regla general: si hay
 que confirmar que un secreto existe en un archivo, mostrar que la línea
 existe (`grep -c` o similar) alcanza — no hace falta imprimir el valor
 completo, ni siquiera cuando el usuario pregunta "dónde lo encuentro".
+
+## 2026-09-04 — cc/g8-m14-g4
+
+Agente: Claude Code
+
+Qué: T26 de la Fase 4 — a pedido explícito del usuario ("continua con los
+1, 2, 3, no te detengas mucho"), se resolvieron los tres candidatos que T25
+había dejado anotados: `G-8` (una compra real contaba el doble contra
+`perDay`), `M-14` (falta el chequeo de `payTo` en el Mandato) y `G-4`
+(convertir el pago en una quinta tool del agente, `execute_payment`).
+Detalle técnico completo, con las alternativas descartadas de cada uno, en
+`docs/fase-4-mandategate/DECISIONES.md` → `G-10`, `G-11`, `G-12`
+(`G-4`/`G-8` marcadas `Superada` sin borrar el texto original). 15 tests
+nuevos (604 en total). `pnpm typecheck` y `pnpm test` (monorepo completo)
+limpios.
+
+Por qué: el usuario pidió avanzar los tres de una sola vez, priorizando
+velocidad sobre el ritmo habitual de "un hito, una pausa" — se trabajó todo
+en una sola rama (`cc/g8-m14-g4`) en vez de tres ramas separadas, dado el
+pedido explícito de no detenerse entre cada uno.
+
+Un detalle encontrado al implementar `payTo`, no anotado en ninguna
+decisión previa: `createMandate()` (`packages/mandate/src/create.ts`)
+validaba su `grant` contra `scopeSchema` (de `@agentpass/core`, sin
+`payTo`) en vez de `mandateGrantSchema` (con `payTo`) — el campo nuevo
+habría sido literalmente imposible de fijar desde el único constructor de
+mandatos, aunque el schema del documento ya lo aceptara. Corregido en el
+mismo commit.
+
+Documentación tocada: `docs/fase-4-mandategate/BITACORA.md` (T26 cerrado,
+más la sección de despliegue en Render actualizada de "preparado" a
+"cerrado", con las tres fallas reales que tuvo el camino hasta ahí) y
+`DECISIONES.md` de la Fase 4.
+
+Pendiente: mergear `cc/g8-m14-g4` a `main` y pushear (el `git push` sigue
+bloqueado para esta sesión por el clasificador de modo automático — lo
+tiene que correr el usuario). `apps/web`'s `buy()` sigue llamando
+`executeBazaarPayment` directamente, no a través de `execute_payment` —
+migrarlo no era parte de este pedido. Siguiente decisión del usuario:
+alguna de las que quedaban sin elegir (Fase 5 / MandateVault), o alguna
+completamente nueva.

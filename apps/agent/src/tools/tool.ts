@@ -10,8 +10,8 @@
  *
  * Two consequences worth stating, because they are load-bearing:
  *
- *  - {@link TOOL_NAMES} is a literal union. A fifth tool cannot be *named*
- *    without editing this file, so "four tools, no more" is checked by the
+ *  - {@link TOOL_NAMES} is a literal union. A new tool cannot be *named*
+ *    without editing this file, so the tool surface is checked by the
  *    compiler rather than by discipline.
  *  - A handler never sees unvalidated input. `invoke` parses through the tool's
  *    own zod schema first and fails with `InvalidToolInput` otherwise.
@@ -20,15 +20,19 @@ import { AgentPassError } from "@agentpass/core";
 import { z } from "zod";
 
 /**
- * Every tool this agent will ever have. The phase spec is "four tools, nothing
- * more"; making the names a literal union is how that survives contact with
- * later milestones.
+ * Every tool this agent will ever have. The phase spec started as "four
+ * tools, nothing more"; `execute_payment` is the fifth, added deliberately
+ * in `G-4` rather than by extending `create_purchase_intent` — a tool that
+ * moves real money is its own decision, not a variant of one that only signs.
+ * Making the names a literal union is how "exactly these, no more" survives
+ * contact with later milestones.
  */
 export const TOOL_NAMES = [
   "list_products",
   "get_product",
   "check_my_credential",
   "create_purchase_intent",
+  "execute_payment",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

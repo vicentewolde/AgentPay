@@ -17,7 +17,7 @@ import { checkOwnCredential } from "./credential/verifier.js";
 import type { MandateState, MandateVerifier } from "./mandate/verifier.js";
 import { checkOwnMandate } from "./mandate/verifier.js";
 import { createInMemorySpendLedger, type SpendLedger } from "./ledger/spend-ledger.js";
-import { createAgentTools } from "./tools/agent-tools.js";
+import { createAgentTools, type PaymentDeps } from "./tools/agent-tools.js";
 import type { ToolSet } from "./tools/tool.js";
 
 export interface AgentConfig {
@@ -57,6 +57,13 @@ export interface AgentConfig {
    * later to plug in something durable.
    */
   readonly ledger?: SpendLedger;
+  /**
+   * The venue's own base URL, when this agent should be able to pay for
+   * real, not just sign. Enables `execute_payment` (G-4) alongside
+   * everything `create_purchase_intent` already needs — absent, the tool
+   * stays out of the tool set exactly as it does for the mock catalogue.
+   */
+  readonly payment?: PaymentDeps;
 }
 
 export interface Agent {
@@ -153,6 +160,7 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
       intentTtlSeconds: config.intentTtlSeconds,
       now: config.now,
       ledger,
+      payment: config.payment,
     }),
   };
 }

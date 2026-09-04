@@ -24,20 +24,40 @@ import {
   scopeSchema,
   stellarDidSchema,
 } from "@agentpass/core";
+import { StrKey } from "@stellar/stellar-sdk/base";
 import { z } from "zod";
 
 export const AGENTPAY_MANDATE_TYPE = "AgentPayMandate";
 
 /**
- * What the principal authorises, in exactly the shape `scope` already has in
- * the credential.
- *
- * Reusing the shape is the point, not a shortcut: phase 3 compares a mandate's
- * grant against a credential's scope, and the comparison is only meaningful —
- * and only type-safe — if the two are the same shape. `B-1` carries over
- * unchanged: an empty `venues` or `assets` permits nothing.
+ * A Stellar payee: a classic account (`G...`) or a contract (`C...`) — the
+ * same either-or `parseAssetId` already accepts for an asset's issuer,
+ * because a real x402 challenge's `payTo` can be either.
  */
-export const mandateGrantSchema = scopeSchema;
+const payeeSchema = z
+  .string()
+  .refine((value) => StrKey.isValidEd25519PublicKey(value) || StrKey.isValidContract(value), {
+    message: "expected a Stellar account (G...) or contract (C...) address",
+  });
+
+/**
+ * What the principal authorises. `scopeSchema` extended, not reused verbatim
+ * as before `M-14`: phase 3 still compares a mandate's grant against a
+ * credential's scope field by field (`venues`, `assets`, `limits` — `M-4`),
+ * and that comparison stays meaningful with one extra field neither the
+ * comparison nor the credential's scope needs to know about.
+ *
+ * `payTo` is **optional**, deliberately or the same way `terms` already is in
+ * `PolicyRail.authorise()` (`M-14`): a mandate written before this field
+ * existed, or one that intentionally leaves it open, has nothing to check
+ * against, and `reconcileTerms` leaves `payTo` unchecked exactly as it did
+ * before — not silently, `reconciled` and the terms check both say so. Once
+ * present, it follows `B-1`'s rule for `venues`/`assets`: an empty array
+ * permits no payee, it does not mean "unchecked".
+ */
+export const mandateGrantSchema = scopeSchema.extend({
+  payTo: z.array(payeeSchema).optional(),
+});
 
 export const mandateSubjectSchema = z.strictObject({
   /** The agent this mandate empowers. Matches the credential's subject. */

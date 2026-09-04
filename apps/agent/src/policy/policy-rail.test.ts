@@ -1,5 +1,5 @@
 import { hasErrorCode, stellarAddressToDid, type Scope } from "@agentpass/core";
-import { createMandate, type AgentPayMandate } from "@agentpay/mandate";
+import { createMandate, type AgentPayMandate, type MandateGrant } from "@agentpay/mandate";
 import { Keypair } from "@stellar/stellar-sdk/base";
 import { describe, expect, it } from "vitest";
 
@@ -34,7 +34,7 @@ function scopeFor(overrides: Partial<Scope> = {}): Scope {
   };
 }
 
-function mandateFor(grant: Partial<Scope> = {}): AgentPayMandate {
+function mandateFor(grant: Partial<MandateGrant> = {}): AgentPayMandate {
   return createMandate({
     principal: PRINCIPAL_DID,
     agent: AGENT_DID,
@@ -166,6 +166,51 @@ describe("the terms of the payment are reconciled before anything else (M-14)", 
     expect(decision.code).toBe("TermsAmountMismatch");
     // And nothing was recorded: a refused purchase does not consume budget.
     expect(await ledger.spentOn(AGENT_DID, "USDC", NOON)).toBe("0.0000000");
+  });
+
+  it("refuses a payee the mandate's payTo list does not name (M-14)", async () => {
+    const { rail, ledger } = harness();
+    const mandate = mandateFor({ payTo: ["GDVR2KDK5DSMNYZJKNISUIOBDC6FZK3XZOIQWSS7KL4BRMD5BMW6RMCQ"] });
+
+    const decision = await rail.authorise({
+      intent: intentFor(),
+      scope: scopeFor(),
+      mandate,
+      terms: { ...TERMS, payTo: "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ" },
+    });
+
+    expect(decision.authorised).toBe(false);
+    if (decision.authorised) expect.unreachable("expected a refusal");
+    expect(decision.code).toBe("TermsPayeeNotAllowed");
+    expect(await ledger.spentOn(AGENT_DID, "USDC", NOON)).toBe("0.0000000");
+  });
+
+  it("authorises a payee the mandate's payTo list does name", async () => {
+    const { rail } = harness();
+    const payTo = "GDVR2KDK5DSMNYZJKNISUIOBDC6FZK3XZOIQWSS7KL4BRMD5BMW6RMCQ";
+    const mandate = mandateFor({ payTo: [payTo] });
+
+    const decision = await rail.authorise({
+      intent: intentFor(),
+      scope: scopeFor(),
+      mandate,
+      terms: { ...TERMS, payTo },
+    });
+
+    expect(decision.authorised).toBe(true);
+  });
+
+  it("does not check payTo when the mandate carries no list, exactly as before M-14", async () => {
+    const { rail } = harness();
+
+    const decision = await rail.authorise({
+      intent: intentFor(),
+      scope: scopeFor(),
+      mandate: mandateFor(),
+      terms: { ...TERMS, payTo: "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLTJJFC7MGXUA74P7UJVSGZ" },
+    });
+
+    expect(decision.authorised).toBe(true);
   });
 
   it("reports the terms mismatch ahead of a scope violation on the same request", async () => {
@@ -402,6 +447,7 @@ describe("concurrent authorisations cannot both spend the same room (M-15)", () 
     const inner = createInMemorySpendLedger();
     const flaky: SpendLedger = {
       spentOn: (subject, currency, at) => inner.spentOn(subject, currency, at),
+      hasRecorded: (intentId) => inner.hasRecorded(intentId),
       record: async (entry) => {
         calls += 1;
         if (calls === 1) throw new Error("ledger unavailable");
@@ -437,6 +483,27 @@ describe("authorising the same intent twice counts once", () => {
 
     expect(again.authorised).toBe(true);
     expect(await ledger.spentOn(AGENT_DID, "USDC", NOON)).toBe("37.0000000");
+  });
+
+  it("does not refuse a re-verification that only fits because it isn't counted twice (G-8)", async () => {
+    // perDay = 40.00 is tight around a single 37.00 purchase: room for one,
+    // not for the same purchase counted a second time on top of itself. This
+    // is exactly what a real payment does — authorise() is called once
+    // structurally (T19) and again with the venue's real terms (T24) — so a
+    // fix that only de-duplicates the *ledger* and not the *check* would
+    // still refuse the second call here.
+    const { rail } = harness();
+    const scope = scopeFor({ limits: { perTx: "50.00", perDay: "40.00", currency: "USDC" } });
+    const mandate = mandateFor({ limits: { perTx: "50.00", perDay: "40.00", currency: "USDC" } });
+    const intent = intentFor();
+
+    const first = await rail.authorise({ intent, scope, mandate });
+    expect(first.authorised).toBe(true);
+
+    const second = await rail.authorise({ intent, scope, mandate });
+    expect(second.authorised).toBe(true);
+    if (!second.authorised) expect.unreachable("expected the re-verification to be authorised");
+    expect(second.spentToday).toBe("37.0000000");
   });
 });
 

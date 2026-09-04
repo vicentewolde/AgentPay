@@ -75,7 +75,7 @@ adaptador de otro venue no tienen ningún `routeTemplate` que ofrecer, y un
 campo opcional que solo un adaptador llena es una señal de que no pertenece
 al tipo compartido.
 
-### G-4 · Ejecutar un pago real es una función exportada, no una quinta `tool` del agente — todavía · `Vigente`
+### G-4 · Ejecutar un pago real es una función exportada, no una quinta `tool` del agente — todavía · `Superada por G-12`
 **Fecha:** 2026-09-03 (T24)
 
 `executeBazaarPayment` es una función que un script o un servidor de
@@ -175,7 +175,7 @@ encontró el error antes de que llegara a producción.
 una disciplina ya establecida en el proyecto, no una decisión con dos
 caminos.
 
-### G-8 · Una compra real cuesta el doble contra `perDay`, y por ahora se documenta en vez de arreglarse · `Vigente`
+### G-8 · Una compra real cuesta el doble contra `perDay`, y por ahora se documenta en vez de arreglarse · `Superada por G-11`
 **Fecha:** 2026-09-03 (T25)
 
 Probando `apps/web` con un `perDay` de Mandato ajustado a solo el doble del
@@ -275,3 +275,128 @@ usa, pero su modelo serverless no calza con el estado en memoria de
 `apps/web` sin reescribirlo para guardar sesión en algo externo (una base de
 datos, Redis) — trabajo real, no una opción de configuración, y fuera de lo
 que "front simple" pedía.
+
+### G-10 · El Mandato gana un `payTo` opcional, en vez de ensanchar `scope` de la Fase 1 · `Vigente`
+**Fecha:** 2026-09-04
+
+`M-14` (Fase 3) dejó anotado que `payTo` —la cuenta que cobra en el reto
+`402` real— era "el próximo campo que le falta al Mandato", sin construirlo:
+ni `scope` de la credencial ni `grant` del mandato tenían nada firmado
+contra qué compararlo. Se cierra ahora: `mandateGrantSchema` (en
+`@agentpay/mandate`) se extiende con `payTo?: string[]` — cuentas clásicas
+(`G...`) o de contrato (`C...`), la misma dupla que `parseAssetId` ya acepta
+para un emisor. `reconcileTerms` (`apps/agent/src/policy/terms.ts`) chequea
+el `payTo` del reto real contra esa lista **solo cuando ambos existen** —
+igual que `terms` mismo es opcional en `PolicyRail.authorise()` — y una vez
+presente sigue `B-1`: una lista vacía no significa "sin chequear", significa
+"ningún destinatario permitido".
+
+**Por qué extender `mandateGrantSchema` y no `scopeSchema` de
+`@agentpass/core`.** `mandateGrantSchema` dejó de ser literalmente
+`scopeSchema` reutilizado (como `M-4` lo dejó) y pasó a ser
+`scopeSchema.extend({ payTo })`. La comparación campo a campo entre el
+`grant` del mandato y el `scope` de la credencial (`venues`, `assets`,
+`limits`) sigue siendo válida con un campo de más que ninguno de los dos
+lados necesita para esa comparación — y tocar `scopeSchema`, cerrado desde
+la Fase 1, por una necesidad exclusiva del flujo de pago real de la Fase 4
+habría sido el mismo error que `G-3` ya evitó para `Product`.
+
+**Un detalle que casi queda mal, encontrado antes de mergear:**
+`createMandate()` (`packages/mandate/src/create.ts`) validaba su propio
+`grant` contra `scopeSchema` —no `mandateGrantSchema`— por lo que `payTo`
+nunca podría haberse fijado desde el único lugar donde un mandato se
+construye, aunque el schema del documento ya lo aceptara. Corregido para
+validar contra `mandateGrantSchema`.
+
+**Alternativa descartada:** hacer `payTo` obligatorio, no opcional. Se
+descartó porque habría vuelto a romper cada mandato ya emitido (y cada test
+existente) que no lo declara, y porque el propio `M-14` ya estableció el
+patrón correcto para un campo nuevo sin nada que perder: opcional, con la
+ausencia dicha en voz alta (`reconciled` para `terms`, y ahora el mismo
+principio para `payTo`) en vez de fingida como "sin problema".
+
+### G-11 · `PolicyRail` deja de contar dos veces una re-verificación del mismo intent · `Vigente`
+**Fecha:** 2026-09-04
+
+`G-8` documentó, sin arreglar, que una compra real cuesta el doble contra
+`perDay`: `authorise()` corre dos veces por compra (T19 estructural, T24 con
+`terms` reales) y el chequeo de límite diario sumaba el monto las dos veces,
+aunque `SpendLedger.record()` ya deduplicaba el **registro** por
+`intentId` (`M-15`). Se cierra la pregunta que `G-8` dejó abierta a
+propósito ("¿una re-verificación del mismo intent debería contar, o no?"):
+**no debería** — es la misma compra, no una segunda.
+
+`SpendLedger` gana `hasRecorded(intentId): Promise<boolean>`.
+`PolicyRail.authorise()` lo consulta antes de chequear el límite diario: si
+el intent ya fue registrado, el chequeo suma `"0"` en vez del monto de la
+compra — `spentToday` ya lo incluye, del primer `authorise()`. La primera
+llamada sigue sumando el monto completo, exactamente igual que antes.
+
+**Por qué en `PolicyRail` y no en `checkDailyLimit`.** `checkDailyLimit`
+sigue siendo puro (sin ledger, sin `intentId` — ni falta que le hace): es
+`authorise()`, que ya tiene acceso al ledger y decide qué número pasarle a
+cada chequeo, el lugar correcto para esta decisión, igual que ya decide
+`total`/`currency`/`subject` antes de llamarlo.
+
+**Alternativa descartada:** que `SpendLedger.record()` devuelva si ya
+existía, y que `authorise()` infiera de eso. Se descartó porque `record()`
+corre **después** del chequeo de límite en el flujo actual (T19: primero se
+decide, después se registra) — invertir ese orden solo para esta pregunta
+habría sido un cambio más grande que agregar una lectura de una línea antes
+del chequeo.
+
+### G-12 · `execute_payment`: la quinta tool, construida · `Vigente`
+**Fecha:** 2026-09-04
+
+`G-4` había dejado a propósito la ejecución de un pago real fuera del
+límite de autorización del agente (`TOOL_NAMES`, `B-6`) — una función que
+solo un script o un servidor de confianza llama directo, nunca algo que una
+instrucción en español pudiera disparar. Se construye ahora, a pedido
+explícito del usuario: `execute_payment` es la quinta tool.
+
+**Qué hace, exactamente lo que `apps/web`'s `buy()` ya orquestaba desde
+afuera del agente (T25):** firma un intent (la misma lógica de
+`create_purchase_intent`, factorizada a `buildSignedIntent` para que ambas
+tools la compartan en vez de duplicarla) y, si `PolicyRail` autoriza, pide
+la ruta de pago real del venue (`getBazaarServiceRoute`), arma la URL con
+los `params` que el modelo provee, y llama `executeBazaarPayment` (T24). El
+único código nuevo es el ensamblado; toda la autorización, la firma y el
+pago reusan exactamente lo que T19–T24 ya construyeron y probaron.
+
+**Cuándo existe, y por qué así.** `execute_payment` solo se construye
+cuando `create_purchase_intent` también existiría (credencial y mandato
+usables, `signer`) **y** además se configuró `payment: { baseUrl }` — el
+`baseUrl` del venue real. Sin eso, la tool simplemente no está: el catálogo
+mock, que no tiene ruta de pago real que ofrecer, sigue con cuatro tools
+exactamente como antes. Mismo principio que cada tool anterior: una
+capacidad que no se puede ejercer no se anuncia.
+
+**Análisis de inyección, el que `G-4` pedía explícitamente antes de
+construir esto.** La superficie de ataque no cambia respecto a
+`create_purchase_intent`: una descripción de producto hostil puede intentar
+convencer al modelo de llamar `execute_payment` con una cantidad grande o
+de ignorar al operador, pero el control real —igual que siempre— es
+estructural, no textual. `execute_payment` corre exactamente el mismo
+`PolicyRail.authorise()` que `create_purchase_intent`, más la
+reconciliación de términos reales (`M-14`, incluido el chequeo de `payTo`
+cuando el mandato lo declara, `G-10`). Un test nuevo en
+`agent-tools.test.ts` prueba esto con una descripción de producto que
+contiene una inyección explícita ("IGNORE ALL PREVIOUS INSTRUCTIONS...") y
+confirma que el rechazo sigue siendo `ScopeAmountExceeded` — el mismo
+chequeo estructural que ya protegía `create_purchase_intent`, no una
+excepción para el texto.
+
+**Qué NO se hizo, a propósito.** `apps/web`'s `buy()` sigue llamando
+`executeBazaarPayment` directamente, no a través de esta tool nueva —
+cambiar esa integración no era parte de este pedido, y el frontend ya
+funciona probado de punta a punta (T25). `execute_payment` queda disponible
+para un agente conversacional real (el caso que `G-4` imaginaba) sin tocar
+lo que ya funciona en producción.
+
+**Alternativa descartada:** generalizar `params` a algo más estructurado
+que `Record<string, string | number>` (p. ej. validando contra el `input`
+que el venue declara en su `ServiceCard`). Se descartó por alcance: ese
+`input` no se expone hoy a través de ninguna tool existente (`list_products`
+no lo trae), así que validarlo aquí habría sido la primera vez que el
+proyecto expone esa forma — una decisión de diseño propia, no algo que este
+pedido pidiera.

@@ -83,6 +83,7 @@ export function toPaymentTerms(requirements: PaymentRequirements, venueId: Venue
     venue: venueId,
     asset: mapAssetContract(requirements.asset, venueId),
     amount: fromScaledAmount(scaled),
+    payTo: requirements.payTo,
   };
 }
 

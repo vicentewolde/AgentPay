@@ -16,21 +16,24 @@ import {
   AGENTPASS_STATUS_TYPE,
   AgentPassError,
   VC_CONTEXT_V2,
-  scopeSchema,
   stellarContractIdSchema,
   stellarDidSchema,
 } from "@agentpass/core";
 import { z } from "zod";
 
 import type { AgentPayMandate } from "./mandate.js";
-import { AGENTPAY_MANDATE_TYPE, agentPayMandateSchema } from "./mandate.js";
+import { AGENTPAY_MANDATE_TYPE, agentPayMandateSchema, mandateGrantSchema } from "./mandate.js";
 
 export const mandateRequestSchema = z.strictObject({
   /** The principal, who will sign this. */
   principal: stellarDidSchema,
   /** The agent being empowered. */
   agent: stellarDidSchema,
-  grant: scopeSchema,
+  // `mandateGrantSchema`, not `scopeSchema` (M-14): the latter is strict and
+  // has no `payTo`, so a caller could never set it — this is the one place a
+  // grant is built, and validating it against the narrower schema would
+  // silently make the field unreachable everywhere else.
+  grant: mandateGrantSchema,
   /** The registry that will answer for this mandate's status. */
   registry: stellarContractIdSchema,
   /** When the consent takes effect. Defaults to `now`. */
