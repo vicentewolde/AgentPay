@@ -10,6 +10,7 @@
     "bootstrap": "tsx --tsconfig tsconfig.scripts.json scripts/bootstrap.ts",
     "fund:usdc": "tsx --tsconfig tsconfig.scripts.json scripts/fund-usdc-trustline.ts",
     "deploy:registry": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-registry.ts",
+    "deploy:policy-rail": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-policy-rail.ts",
     "demo": "tsx --tsconfig tsconfig.scripts.json scripts/demo.ts",
     "demo:pay-real": "tsx --tsconfig tsconfig.scripts.json scripts/demo-real-payment.ts",
     "web": "pnpm --filter @agentpay/web run dev",

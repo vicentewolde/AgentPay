@@ -418,3 +418,18 @@ chequeo de `payTo`, que sigue sin nada firmado contra qué compararlo
 (`M-14`). `policy_rail` prueba que el camino on-chain funciona y cabe en el
 presupuesto real; no reemplaza al Mandato ni a `LocalPolicyRail`, los
 complementa como una segunda implementación posible del mismo puerto.
+
+---
+
+**Actualización 2026-09-04 (T31).** El evento `SpendAuthorised` que §9.3
+decidió conservar —costaba ~1 100 stroops y no hacía falta sacrificarlo por
+fee— fue **quitado del contrato**. Motivo nuevo, que en su momento no se
+conocía: el facilitator exige que todo evento de contrato de la simulación de
+un pago sea un `transfer`, así que mientras el rail lo emitiera no podía pagar
+ninguna factura x402 (`invalid_exact_stellar_payload_event_not_transfer`).
+Detalle, y qué se pierde y qué no, en
+`docs/fase-5-mandatevault/DECISIONES.md` → `V-13`. La conclusión de §7 (un
+comprador `C…` es viable) quedó confirmada por un pago real en T31, con una
+salvedad que esta lectura no había alcanzado: el paso de firma de
+`@x402/stellar` no sirve para cuentas de contrato y hubo que reemplazarlo
+(`V-12`).

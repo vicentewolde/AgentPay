@@ -10,5 +10,16 @@
     "schemaVersion": 1,
     "deployedAt": "2026-09-02T03:15:48.276Z",
     "protocolVersion": 28
+  },
+  "policyRail": {
+    "contractId": "CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I",
+    "wasmHash": "854b19f7bc472cb5ed8ada127ab12afde7857b7810a11e19a0490978cc7d7b88",
+    "owner": "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K",
+    "asset": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+    "perTx": "0.0020000",
+    "perDay": "0.0100000",
+    "validUntil": "2027-09-04T18:20:23.000Z",
+    "deployedAt": "2026-09-04T18:20:28.292Z",
+    "protocolVersion": 28
   }
 }

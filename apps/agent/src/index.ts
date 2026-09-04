@@ -214,3 +214,9 @@ export {
   type ExecuteBazaarPaymentDeps,
   type ExecuteBazaarPaymentInput,
 } from "./payment/x402.js";
+
+export {
+  PolicyRailStellarScheme,
+  authorizeAsPolicyRailOwner,
+  type PolicyRailPayer,
+} from "./payment/policy-rail-payer.js";

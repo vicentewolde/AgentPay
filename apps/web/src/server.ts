@@ -130,6 +130,12 @@ interface DemoSession {
   readonly issuerSecret: string;
   readonly baseUrl: string;
   readonly venueId: VenueId;
+  /**
+   * The deployed `policy_rail` smart account, when there is one
+   * (`POLICY_RAIL_CONTRACT_ID`, written by `pnpm run deploy:policy-rail`).
+   * Absent is a normal state: the classic-account path (T24) does not need it.
+   */
+  readonly railContractId: string | undefined;
 }
 
 let session: DemoSession | undefined;
@@ -262,6 +268,7 @@ async function startSession(): Promise<DemoSession> {
     issuerSecret,
     baseUrl,
     venueId: catalog.venueId,
+    railContractId: env.get("POLICY_RAIL_CONTRACT_ID"),
   };
 }
 
@@ -270,8 +277,18 @@ interface Step {
   readonly value: string;
 }
 
-/** Mirrors `pnpm run demo:pay-real`'s steps 3-5: sign the intent, then pay for real. */
-async function buy(current: DemoSession, instruction: string): Promise<readonly Step[]> {
+/**
+ * Mirrors `pnpm run demo:pay-real`'s steps 3-5: sign the intent, then pay for
+ * real. With `viaRail`, the `policy_rail` smart account pays instead of the
+ * agent's classic account (T31) — same intent, same authorisation, same
+ * challenge, and one more gate: the contract re-checks `perTx`/`perDay` inside
+ * the transfer itself.
+ */
+async function buy(
+  current: DemoSession,
+  instruction: string,
+  viaRail: boolean,
+): Promise<readonly Step[]> {
   const steps: Step[] = [];
 
   const products = await current.catalog.listProducts();
@@ -301,8 +318,27 @@ async function buy(current: DemoSession, instruction: string): Promise<readonly 
   const resourceUrl = fillRouteTemplate(current.baseUrl, route, ROUTE_PARAMS);
   steps.push({ label: "recurso", value: resourceUrl });
 
+  if (viaRail && current.railContractId === undefined) {
+    throw new AgentPassError(
+      "ConfigError",
+      "no hay ningún policy_rail desplegado — corré `pnpm run deploy:policy-rail` primero",
+      { details: { missing: "POLICY_RAIL_CONTRACT_ID" } },
+    );
+  }
+  const payer =
+    viaRail && current.railContractId !== undefined
+      ? { contractId: current.railContractId, ownerSecret: current.agentSecret }
+      : undefined;
+  steps.push({
+    label: "pagador",
+    value:
+      payer === undefined
+        ? `${Keypair.fromSecret(current.agentSecret).publicKey()} (cuenta clásica)`
+        : `${payer.contractId} (policy_rail, límites on-chain)`,
+  });
+
   const receipt = await executeBazaarPayment(
-    { policyRail: current.policyRail, signerSecret: current.agentSecret },
+    { policyRail: current.policyRail, signerSecret: current.agentSecret, payer },
     {
       resourceUrl,
       intent: verified.intent,
@@ -573,6 +609,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         venue: started.venueId,
         perTx: `${started.scope.limits.perTx} ${started.scope.limits.currency}`,
         perDay: `${started.scope.limits.perDay} ${started.scope.limits.currency}`,
+        policyRail: started.railContractId ?? null,
       });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });
@@ -591,7 +628,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         ? body.instruction
         : "Comprame un Swap Risk Quote, por favor.";
     try {
-      const steps = await buy(session, instruction);
+      const steps = await buy(session, instruction, body.payer === "policy-rail");
       sendJson(res, 200, { ok: true, steps });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });

@@ -482,10 +482,13 @@ ancla `sha256(record.hash + ":" + paymentTx)` contra `agent_registry`,
 verificado de forma independiente contra testnet real. T29 le dio a esa
 bitácora una superficie que un humano puede ver, en `apps/web`. T30 cerró
 el último candidato técnico que quedaba anotado: la credencial y el
-Mandato mismos, con su estado on-chain leído en vivo, en la misma bitácora
-(`docs/fase-5-mandatevault/evidencia/T27.md` a `T30.md`). Sin candidatos
-técnicos pendientes — lo único que le falta a esta fase es la ejecución de
-negocio del piloto, arriba en esta misma sección.
+Mandato mismos, con su estado on-chain leído en vivo, en la misma bitácora.
+T31 conectó `policy_rail` (T22) como pagador real: el smart account de
+Soroban que la Fase 3 construyó y midió ahora paga facturas x402 de verdad,
+con sus límites comprobados por la red dentro de la misma transacción que
+mueve la plata (`docs/fase-5-mandatevault/evidencia/T27.md` a `T31.md`). Lo
+único que le falta a esta fase es la ejecución de negocio del piloto, arriba
+en esta misma sección.
 
 **Desglose de tareas, según se van decidiendo — no se anticipa lo que sigue:**
 
@@ -495,6 +498,7 @@ negocio del piloto, arriba en esta misma sección.
 | T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry`, tras cada pago real | ✅ cerrado 2026-09-04 |
 | T29 | Superficie de consulta: sección "Bitácora" en `apps/web`, estado on-chain de cada anclaje en vivo | ✅ cerrado 2026-09-04 |
 | T30 | `AgentPass.getRecord()`: credencial y Mandato, con su estado on-chain, en la misma bitácora | ✅ cerrado 2026-09-04 |
+| T31 | `policy_rail` (T22) como pagador real de una factura x402: smart account de Soroban, límites on-chain | ✅ cerrado 2026-09-04 |
 
 Detalle completo en
 [`docs/fase-5-mandatevault/`](docs/fase-5-mandatevault/).

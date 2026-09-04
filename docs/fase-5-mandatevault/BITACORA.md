@@ -12,21 +12,24 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-04 · **Último hito cerrado:** T30 · **Fase 5: en curso — sin candidatos técnicos pendientes**
+**Fecha:** 2026-09-04 · **Último hito cerrado:** T31 · **Fase 5: en curso**
 
 Cada decisión de `PolicyRail.authorise()` — autorizada o rechazada — queda
 en un registro durable y encadenado por hash, que sobrevive un reinicio del
 proceso (T27). Cada pago real, además, queda vinculado criptográficamente a
 la decisión que lo autorizó mediante un hash anclado contra `agent_registry`
 — verificable por cualquiera, sin confiar en quien opera el vault (T28). Una
-persona puede ver todo eso en `apps/web` (T29) — y ahora también la
-credencial y el Mandato mismos, con su estado on-chain leído en vivo (T30).
+persona puede ver todo eso en `apps/web` (T29) — y también la credencial y el
+Mandato mismos, con su estado on-chain leído en vivo (T30). Desde T31, además,
+esa compra la puede pagar `policy_rail`: el smart account de Soroban que la
+Fase 3 construyó y midió, ahora pagando facturas x402 reales con sus límites
+comprobados por la red dentro de la misma transacción que mueve la plata.
 
 | | |
 |---|---|
-| Tests TypeScript | **630** rápidos (604 en T26 + 17 de T27 + 7 de T28 + 2 de T29; T30 no agrega tests rápidos, extiende la integración del SDK) |
+| Tests TypeScript | **635** rápidos (604 en T26 + 17 de T27 + 7 de T28 + 2 de T29 + 5 de T31; T30 no agrega tests rápidos, extiende la integración del SDK) |
 | Paquete nuevo | `@agentpay/vault` (T27) |
-| Código de fases cerradas tocado | `packages/sdk` (Fase 1) — un método nuevo, `getRecord()`, mismo precedente aditivo que `anchor()` en T20 (`V-11`). `policy-rail.ts` (Fase 3) y `payment/x402.ts` (Fase 4) siguen sin cambios |
+| Código de fases cerradas tocado | `packages/sdk` (Fase 1) — un método nuevo, `getRecord()`, mismo precedente aditivo que `anchor()` en T20 (`V-11`). `payment/x402.ts` (Fase 4) gana un `payer?` opcional en T31, sin tocar el camino existente. `contracts/policy-rail/` (Fase 3) pierde su evento de auditoría, con confirmación explícita del usuario (`V-13`). `policy-rail.ts` (Fase 3) sigue sin cambios |
 | Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` · pago T29/T30: `089d6ccce4...`, anclaje: `e6c34acb71...`, revocación: `5478e1e42b...` |
 
 ### Progreso
@@ -37,10 +40,10 @@ credencial y el Mandato mismos, con su estado on-chain leído en vivo (T30).
 | T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry` tras cada pago real | ✅ cerrado 2026-09-04 |
 | T29 | Superficie de consulta: sección "Bitácora" en `apps/web`, estado on-chain de cada anclaje en vivo | ✅ cerrado 2026-09-04 |
 | T30 | `AgentPass.getRecord()`: credencial y Mandato, con su estado on-chain, en la misma bitácora | ✅ cerrado 2026-09-04 |
+| T31 | `policy_rail` (T22) pasa a pagar facturas x402 reales: smart account como pagador, límites on-chain | ✅ cerrado 2026-09-04 |
 
-Sin candidatos técnicos pendientes. Lo único que le falta a la Fase 5 es la
-ejecución de negocio del piloto (§4.5 del `ROADMAP.md`) — no es trabajo de
-código.
+Lo único que le falta a la Fase 5 es la ejecución de negocio del piloto (§4.5
+del `ROADMAP.md`) — no es trabajo de código.
 
 ---
 
@@ -325,3 +328,94 @@ T27–T30 cerrados, sin candidatos técnicos pendientes.** Lo único que falta
 para cerrar la fase completa es la ejecución de negocio del piloto —
 cohorte de alumnos, comunidad aliada, demo grabable, formulario de Build
 Award — que sigue sin arrancar y no es trabajo de código.
+
+## T31 · `policy_rail` paga de verdad — el smart account como pagador — cerrado 2026-09-04
+
+**Qué quedó funcionando, en palabras llanas.** La Fase 3 construyó un contrato
+en la red de Stellar (`policy_rail`) que sabe decir "no" a una compra que se
+pase de los límites, y lo probó con transacciones reales. Pero hasta hoy ese
+contrato nunca había pagado nada: las compras del proyecto las pagaba la
+cuenta común del agente, y el contrato quedaba como una pieza demostrada de
+costado, invisible en cualquier demo. Desde este hito, la misma compra se puede
+pagar desde el contrato — y el límite ya no lo aplica solo nuestro código antes
+de firmar, lo aplica la red adentro de la misma transacción que mueve la plata.
+Si el monto no entra, no hay pago: el dinero nunca sale del contrato.
+
+**Antes de escribir código: la lectura de T22 estaba bien, pero incompleta.**
+`M-12` había concluido —leyendo `@x402/stellar`, el facilitator y el SDK— que
+nada en la cadena de pago restringe el tipo de dirección del pagador. Sigue
+siendo cierto. Lo que nadie había seguido era el paso de firma: el método que
+`@x402/stellar` usa (`AssembledTransaction.signAuthEntries`) reduce siempre la
+firma a bytes crudos, y con bytes crudos el SDK **deriva la llave pública de la
+dirección de la propia entrada** — que para una cuenta de contrato es un
+`C…`, y no es una llave Ed25519. Revienta antes de verificar nada. En la
+práctica ese camino es solo para cuentas clásicas. La salida no fue parchear
+nada: `signAuthEntries` acepta un `authorizeEntry` propio, y por esa vía el SDK
+construye exactamente el `Vec<Signature>` que `__check_auth` espera — la forma
+que `M-21` había elegido justamente para que esto fuera posible. Detalle en
+`DECISIONES.md` → `V-12`.
+
+**Dos rechazos reales del facilitator, ninguno documentado en ningún lado.**
+Los dos aparecieron pagando de verdad, no leyendo código:
+
+1. `invalid_exact_stellar_payload_malformed` — el SDK 17 de este repo arma
+   credenciales de autorización v2 (CAP-71) y el facilitator viaja con el SDK
+   16, que no las decodifica (`V-14`).
+2. `invalid_exact_stellar_payload_event_not_transfer` — el facilitator exige
+   que **todo** evento de contrato de la simulación sea un `transfer`, y
+   `policy_rail` emitía su propio evento de auditoría. Mientras lo emitiera, el
+   rail no podía pagar nada (`V-13`).
+
+**Una decisión de una fase cerrada, cambiada con permiso y no en silencio.** El
+segundo rechazo obligaba a quitar el evento de auditoría del contrato — algo
+que T22 había decidido conservar. Se verificó primero que quitarlo desbloqueaba
+el pago (contrato desplegado sin el evento, pago real asentado), después se le
+mostró al usuario la evidencia y el costo —qué es un evento, qué se pierde, qué
+no— y recién con su confirmación explícita se dejó el cambio. Mismo patrón que
+`M-1` en la Fase 3 y `V-3` en esta. Lo que el evento registraba no se perdió:
+`spent_on(day)` responde lo mismo cuando se le pregunte, y el `transfer` del
+token sigue emitiendo el suyo.
+
+**Cómo quedó construido.** `PolicyRailStellarScheme`
+(`apps/agent/src/payment/policy-rail-payer.ts`) arma la misma transacción que
+`ExactStellarScheme` contra el mismo `transfer` SEP-41 y solo firma distinto;
+se registra como un esquema más, así que el cliente x402 lo envuelve igual que
+al otro. `executeBazaarPayment` gana un `payer?` opcional: sin él, todo se
+comporta exactamente como antes (T24). `pnpm run deploy:policy-rail` (script
+nuevo, re-ejecutable) despliega el rail, lo verifica leyéndolo de vuelta, lo
+anota en `deployments/testnet.json` y lo deja fondeado con USDC propio.
+`apps/web` gana un segundo botón, al lado del que ya existía — el camino
+clásico no se tocó, a propósito.
+
+**Evidencia técnica.** 5 tests nuevos (635 en total) sobre lo único de este
+hito que se puede probar sin red: que la firma tenga exactamente la forma que
+`__check_auth` decodifica, que la llave sea la del `owner` y no la de la
+entrada, y que la expiración y la red estén dentro de lo firmado. 21 tests de
+Rust sin cambios tras quitar el evento. `pnpm typecheck`/`pnpm build` limpios.
+
+**Verificado en testnet real, de tres formas.** Por script
+(`pnpm run demo:pay-real -- --payer=policy-rail`): pago asentado
+`f58b8e49890acb26…`, `payer` = un contract id. Clickeando los dos botones en un
+navegador real: `22f31871dce75743…` pagado por el contrato y
+`cadac416fa966a82…` por la cuenta clásica, los dos anclados en la bitácora sin
+ningún cambio en el vault. Y leyendo el contrato directamente:
+`spent_on(20700)` = `10000` —lo contó él mismo, dentro del `__check_auth`— con
+su saldo bajando exactamente esa cifra, más un rechazo real por `perTx` con el
+código exacto del contrato (`Error(Contract, #7)`) en la simulación, sin llegar
+nunca a la red. Todo en `evidencia/T31.md`.
+
+**Por qué.** Era el candidato con más peso técnico de los que quedaban
+anotados: la pieza más nativa de Soroban del proyecto —un smart account con su
+propio `__check_auth`, con margen de fee ya medido— estaba construida, probada
+y sin usar. Ahora paga.
+
+Documentación tocada: `CONTEXTO.md` (`§3e` nueva), `ARQUITECTURA.md` (`§10`
+nueva), este `BITACORA.md`, `DECISIONES.md` (`V-12` a `V-15` nuevas), más
+`evidencia/T31.md`. Archivos nuevos:
+`apps/agent/src/payment/policy-rail-payer.ts` (+ test),
+`scripts/deploy-policy-rail.ts`. Archivos tocados:
+`contracts/policy-rail/src/lib.rs`, `apps/agent/src/payment/x402.ts`,
+`apps/agent/src/index.ts`, `apps/web/src/server.ts`,
+`apps/web/public/index.html`, `scripts/demo-real-payment.ts`,
+`scripts/deploy-registry.ts`, `scripts/lib/deployment.ts`, `package.json`,
+`.env.example`, `README.md`, `deployments/testnet.json`.

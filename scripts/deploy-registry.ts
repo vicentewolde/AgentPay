@@ -30,7 +30,7 @@ import { Client } from "@stellar/stellar-sdk/contract";
 
 import { readEnvFile, upsertEnvValue, writeEnvFile } from "./lib/env-file.js";
 import { TESTNET, getLiveVersion } from "./lib/network.js";
-import { EMPTY_DEPLOYMENT, readDeployment, writeDeployment } from "./lib/deployment.js";
+import { readDeployment, writeDeployment } from "./lib/deployment.js";
 import type { AgentRegistryDeployment } from "./lib/deployment.js";
 
 const execFileAsync = promisify(execFile);
@@ -249,8 +249,11 @@ async function main(): Promise<void> {
     process.stdout.write("  already deployed and matching the built wasm — nothing to do\n\n");
 
     await updateEnvLocal(previous.contractId);
+    // Spread what is already recorded, not EMPTY_DEPLOYMENT: `policy_rail`
+    // (T31) lives in the same file and has no business being erased by a
+    // registry deploy that has nothing to say about it.
     await writeDeployment(DEPLOYMENT_PATH, {
-      ...EMPTY_DEPLOYMENT,
+      ...recorded,
       protocolVersion: version.protocolVersion,
       agentRegistry: previous,
     });
@@ -304,7 +307,7 @@ async function main(): Promise<void> {
   };
 
   await writeDeployment(DEPLOYMENT_PATH, {
-    ...EMPTY_DEPLOYMENT,
+    ...recorded,
     protocolVersion: version.protocolVersion,
     agentRegistry: record,
   });

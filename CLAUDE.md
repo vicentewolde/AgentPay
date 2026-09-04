@@ -28,7 +28,7 @@ imposible de saltar por prompt injection.
 | [docs/fase-4-mandategate/DECISIONES.md](docs/fase-4-mandategate/DECISIONES.md) | Decisiones de la Fase 4 (prefijo `G-`) |
 | [docs/fase-5-mandatevault/CONTEXTO.md](docs/fase-5-mandatevault/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
 | [docs/fase-5-mandatevault/ARQUITECTURA.md](docs/fase-5-mandatevault/ARQUITECTURA.md) | Mapa técnico de la Fase 5: el paquete `@agentpay/vault`, la cadena de hashes, el seam de `policyRail?` |
-| [docs/fase-5-mandatevault/BITACORA.md](docs/fase-5-mandatevault/BITACORA.md) | **T27 cerrado.** Estado actual y qué sigue |
+| [docs/fase-5-mandatevault/BITACORA.md](docs/fase-5-mandatevault/BITACORA.md) | **T27–T31 cerrados.** Estado actual y qué sigue |
 | [docs/fase-5-mandatevault/DECISIONES.md](docs/fase-5-mandatevault/DECISIONES.md) | Decisiones de la Fase 5 (prefijo `V-`) |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Devin: qué se hizo, en qué branch, qué queda pendiente |
 | [README.md](README.md) | Cómo correr el proyecto |
@@ -55,7 +55,9 @@ imposible de saltar por prompt injection.
    `execute_payment` (la tool de pago del agente) entraron en alcance con la
    Fase 4 (cerrada, T24–T26) — ver `docs/fase-4-mandategate/CONTEXTO.md` §5 y
    `DECISIONES.md` → `G-12`. **MandateVault entró en alcance el 2026-09-04, a
-   pedido explícito del usuario** — Fase 5, ver `ROADMAP.md` §4.5. Sigue fuera:
+   pedido explícito del usuario** — Fase 5, ver `ROADMAP.md` §4.5. `policy_rail`
+   como pagador real en testnet entró en alcance el 2026-09-04 (T31), también a
+   pedido explícito del usuario. Sigue fuera:
    la ejecución de negocio del piloto (cohorte de alumnos, comunidad aliada,
    demo grabable, formulario de Build Award) todavía no arrancó y no es
    trabajo de código; cualquier cosa en mainnet o con rieles fiat. Si el

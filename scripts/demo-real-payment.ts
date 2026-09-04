@@ -18,6 +18,12 @@
  * Prerequisite: the agent's account needs an open USDC trustline and an
  * actual USDC balance — `pnpm run fund:usdc` opens the trustline; funding
  * the balance is a manual step at a third party's testnet faucet.
+ *
+ * `--payer=policy-rail` (T31) pays from the `policy_rail` smart account
+ * instead, so `perTx`/`perDay` are enforced by the network inside the same
+ * transaction that moves the money. Needs `pnpm run deploy:policy-rail` first
+ * — that script deploys the rail, points `POLICY_RAIL_CONTRACT_ID` at it, and
+ * funds it with USDC of its own.
  */
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -64,6 +70,8 @@ const CREDENTIAL_VALID_DAYS = 1;
 const PRODUCT_ID = "swap-risk-quote";
 const ROUTE_PARAMS = { pair: "XLM/USDC", amount: 100, side: "buy" };
 
+const VIA_POLICY_RAIL = process.argv.slice(2).includes("--payer=policy-rail");
+
 function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
   const value = env.get(key);
   if (value === undefined || value === "") {
@@ -102,10 +110,14 @@ async function main(): Promise<void> {
   const agentKeypair = Keypair.fromSecret(requireEnv(env, "AGENT_SECRET_KEY"));
   const contractId = requireEnv(env, "AGENT_REGISTRY_CONTRACT_ID");
   const baseUrl = env.get("BAZAAR_BASE_URL") ?? DEFAULT_BAZAAR_BASE_URL;
+  const payer = VIA_POLICY_RAIL
+    ? { contractId: requireEnv(env, "POLICY_RAIL_CONTRACT_ID"), ownerSecret: agentKeypair.secret() }
+    : undefined;
 
   process.stdout.write("\nAgentPay · pago x402 real · Fase 4 (T24) · Stellar testnet\n");
   line("producto", PRODUCT_ID);
   line("bazaar", baseUrl);
+  line("pagador", payer === undefined ? `${agentKeypair.publicKey()} (cuenta clásica)` : `${payer.contractId} (policy_rail)`);
 
   const catalog = createBazaarCatalog({ baseUrl });
   // The same ledger backs both the agent's own PolicyRail (inside
@@ -191,7 +203,7 @@ async function main(): Promise<void> {
   const resourceUrl = fillRouteTemplate(baseUrl, route, ROUTE_PARAMS);
   line("recurso", resourceUrl);
   const receipt = await executeBazaarPayment(
-    { policyRail, signerSecret: agentKeypair.secret() },
+    { policyRail, signerSecret: agentKeypair.secret(), payer },
     {
       resourceUrl,
       intent: verified.intent,

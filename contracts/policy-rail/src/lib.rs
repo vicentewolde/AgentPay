@@ -23,7 +23,7 @@
 //! Mandate's full validity-window semantics.
 use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
-    contract, contracterror, contractevent, contractimpl, contracttype,
+    contract, contracterror, contractimpl, contracttype,
     crypto::Hash,
     symbol_short, Address, Bytes, BytesN, Env, Symbol, TryIntoVal, Vec,
 };
@@ -120,16 +120,6 @@ pub enum DataKey {
     /// twin of `SpendLedger`'s per-day entries (T18), except there is no
     /// separate `record()` step: checking and recording are the same write.
     SpentOn(u64),
-}
-
-/// Topics: `("policy_rail", "authorised", day)`.
-#[contractevent(topics = ["policy_rail", "authorised"])]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SpendAuthorised {
-    #[topic]
-    pub day: u64,
-    pub amount: i128,
-    pub spent_today: i128,
 }
 
 #[contract]
@@ -333,12 +323,16 @@ impl CustomAccountInterface for PolicyRail {
             .instance()
             .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
 
-        SpendAuthorised {
-            day,
-            amount,
-            spent_today: spent_after,
-        }
-        .publish(&env);
+        // No event is published here, and that is a constraint from outside
+        // this contract, not a preference: the x402 facilitator that settles
+        // these payments requires *every* contract event a simulated payment
+        // emits to be a token `transfer`, and rejects the payment outright
+        // otherwise (`invalid_exact_stellar_payload_event_not_transfer`). An
+        // audit event named anything else — as this contract published until
+        // T31 — makes the rail unable to pay at all. What it recorded is not
+        // lost: `spent_on(day)` answers the same question on demand, and the
+        // token's own `transfer` event still records the payment. See
+        // `docs/fase-5-mandatevault/DECISIONES.md` → `V-12`.
 
         Ok(())
     }

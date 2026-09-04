@@ -143,9 +143,18 @@
     </p>
     <input id="instruction" type="text" value="Comprame un Swap Risk Quote, por favor." />
     <div class="row">
-      <button id="buy-btn" disabled>Comprar</button>
+      <button id="buy-btn" disabled>Comprar (cuenta clásica)</button>
+      <button id="buy-rail-btn" disabled>Comprar con policy_rail</button>
       <span class="hint">Cada clic paga de verdad — 0.001 USDC por compra.</span>
     </div>
+    <p class="lead">
+      Los dos botones firman la misma intención y pagan la misma factura. La
+      diferencia es quién paga: el primero, la cuenta clásica del agente; el
+      segundo, <b>policy_rail</b>, un contrato de Soroban que vuelve a
+      comprobar <code>perTx</code> y <code>perDay</code> dentro de la misma
+      transacción que mueve la plata — si el monto no entra, la red rechaza el
+      pago y nunca sale del contrato.
+    </p>
     <ul class="steps" id="buy-steps"></ul>
     <div id="buy-status" class="status"></div>
   </section>
@@ -244,6 +253,7 @@ document.getElementById("start-btn").addEventListener("click", async () => {
     ]);
     setStatus(status, true, "Sesión activa.");
     document.getElementById("buy-btn").disabled = false;
+    document.getElementById("buy-rail-btn").disabled = body.policyRail === null;
     document.getElementById("revoke-btn").disabled = false;
     document.getElementById("vault-btn").disabled = false;
   } catch (error) {
@@ -253,8 +263,8 @@ document.getElementById("start-btn").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("buy-btn").addEventListener("click", async () => {
-  const btn = document.getElementById("buy-btn");
+async function runBuy(buttonId, payer) {
+  const btn = document.getElementById(buttonId);
   const status = document.getElementById("buy-status");
   const stepsEl = document.getElementById("buy-steps");
   const instruction = document.getElementById("instruction").value;
@@ -265,7 +275,7 @@ document.getElementById("buy-btn").addEventListener("click", async () => {
     const { body } = await api("/api/session/buy", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ instruction }),
+      body: JSON.stringify({ instruction, payer }),
     });
     for (const step of body.steps ?? []) {
       const li = document.createElement("li");
@@ -296,7 +306,12 @@ document.getElementById("buy-btn").addEventListener("click", async () => {
     btn.disabled = false;
   }
   await loadVault();
-});
+}
+
+document.getElementById("buy-btn").addEventListener("click", () => runBuy("buy-btn", "classic"));
+document
+  .getElementById("buy-rail-btn")
+  .addEventListener("click", () => runBuy("buy-rail-btn", "policy-rail"));
 
 const VAULT_KIND_LABELS = { granted: "autorizada", refused: "rechazada", anchored: "anclada" };
 const IDENTITY_KIND_LABELS = { credential: "credencial", mandate: "mandato" };

@@ -214,3 +214,27 @@ retry — against live testnet in about twelve seconds.
 [`packages/mandate`](packages/mandate/README.md) is phase 3, in progress: the
 principal's signed consent, the document that says what the agent is actually
 allowed to spend.
+
+Phases 4 and 5 add real payments and their evidence. A purchase can be paid two
+ways, and both settle a real x402 invoice against the bazaar on testnet:
+
+```bash
+pnpm run demo:pay-real
+```
+
+pays from the agent's own classic account (T24). Deploy the `policy_rail` smart
+account once:
+
+```bash
+pnpm run deploy:policy-rail
+```
+
+and the same purchase can be paid by the contract instead, with its `perTx` and
+`perDay` limits enforced by the network inside the transfer itself (T31):
+
+```bash
+pnpm run demo:pay-real -- --payer=policy-rail
+```
+
+`pnpm run web` puts both behind buttons, alongside the MandateVault log that
+records every decision and anchors each payment on chain.

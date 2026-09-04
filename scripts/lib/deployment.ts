@@ -16,16 +16,37 @@ export const agentRegistryDeploymentSchema = z.strictObject({
   protocolVersion: z.number().int().positive(),
 });
 
+/**
+ * The `policy_rail` smart account (T22/T31). Its limits are recorded as the
+ * decimal strings the rest of the project speaks, not as stroops: the contract
+ * is the authority on the scaled values, this file is what a human reads.
+ */
+export const policyRailDeploymentSchema = z.strictObject({
+  contractId: stellarContractIdSchema,
+  wasmHash: z.string().regex(/^[0-9a-f]{64}$/),
+  /** The Ed25519 key whose signature `__check_auth` accepts — the agent's. */
+  owner: stellarAddressSchema,
+  /** The one SEP-41 token this rail can move. */
+  asset: stellarContractIdSchema,
+  perTx: z.string().min(1),
+  perDay: z.string().min(1),
+  validUntil: z.iso.datetime(),
+  deployedAt: z.iso.datetime(),
+  protocolVersion: z.number().int().positive(),
+});
+
 export const deploymentSchema = z.strictObject({
   network: z.literal("testnet"),
   networkPassphrase: z.string().min(1),
   rpcUrl: z.string().min(1),
   protocolVersion: z.number().int().positive().nullable(),
   agentRegistry: agentRegistryDeploymentSchema.nullable(),
+  policyRail: policyRailDeploymentSchema.nullable().default(null),
 });
 
 export type Deployment = z.infer<typeof deploymentSchema>;
 export type AgentRegistryDeployment = z.infer<typeof agentRegistryDeploymentSchema>;
+export type PolicyRailDeployment = z.infer<typeof policyRailDeploymentSchema>;
 
 export const EMPTY_DEPLOYMENT: Deployment = {
   network: "testnet",
@@ -33,6 +54,7 @@ export const EMPTY_DEPLOYMENT: Deployment = {
   rpcUrl: TESTNET.rpcUrl,
   protocolVersion: null,
   agentRegistry: null,
+  policyRail: null,
 };
 
 export async function readDeployment(path: string): Promise<Deployment> {

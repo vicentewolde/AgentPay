@@ -19,13 +19,16 @@
  * (`M-14`) here, for the first time with a real challenge instead of
  * `terms: undefined` — no signature exists to reconsider.
  *
- * The buyer is the agent's own classic (`G...`) account, not `policy_rail`
- * (the smart-account spike, `M-21`/`M-22`). `ClientStellarSigner` is
- * duck-typed by `@x402/stellar` — `{ address, signAuthEntry, signTransaction? }`
- * — so the agent's secret key is handed to `createEd25519Signer` directly,
- * never through a `Keypair` instance from this repo's own (newer)
- * `@stellar/stellar-sdk` copy, sidestepping any cross-package `instanceof`
- * mismatch between the two installed SDK versions.
+ * By default the buyer is the agent's own classic (`G...`) account.
+ * `ClientStellarSigner` is duck-typed by `@x402/stellar` — `{ address,
+ * signAuthEntry, signTransaction? }` — so the agent's secret key is handed to
+ * `createEd25519Signer` directly, never through a `Keypair` instance from this
+ * repo's own (newer) `@stellar/stellar-sdk` copy, sidestepping any
+ * cross-package `instanceof` mismatch between the two installed SDK versions.
+ *
+ * Pass `deps.payer` and `policy_rail` (`M-21`/`M-22`) pays instead, enforcing
+ * `perTx`/`perDay` on-chain inside the same transaction that moves the money
+ * — see `./policy-rail-payer.ts` for why that needs its own signing path.
  */
 import { AgentPassError } from "@agentpass/core";
 import type { Scope } from "@agentpass/core";
@@ -40,6 +43,7 @@ import type { PurchaseIntent } from "../intent/intent.js";
 import { fromScaledAmount } from "../scope/amount.js";
 import { policyRailError, type PolicyRail } from "../policy/policy-rail.js";
 import type { PaymentTerms } from "../policy/terms.js";
+import { PolicyRailStellarScheme, type PolicyRailPayer } from "./policy-rail-payer.js";
 
 function networkError(message: string, extra?: Record<string, unknown>, cause?: unknown): AgentPassError {
   return new AgentPassError("NetworkError", message, { cause, details: { ...extra } });
@@ -106,6 +110,14 @@ export interface ExecuteBazaarPaymentDeps {
   readonly policyRail: PolicyRail;
   /** The agent's own Stellar secret key (`S...`) — it pays with its own classic account. */
   readonly signerSecret: string;
+  /**
+   * When set, the `policy_rail` smart account pays instead of the agent's
+   * classic account (T31): the same limits, enforced by the network inside
+   * the transfer instead of by `LocalPolicyRail` beforehand. Everything up to
+   * and including `authorise()` is identical either way — only who signs the
+   * transfer's authorization changes.
+   */
+  readonly payer?: PolicyRailPayer;
   /** Injected for tests; defaults to the global `fetch`. */
   readonly fetchImpl?: typeof fetch;
 }
@@ -164,8 +176,10 @@ export async function executeBazaarPayment(
     });
   }
 
-  const signer = createEd25519Signer(deps.signerSecret, STELLAR_TESTNET_CAIP2);
-  const scheme = new ExactStellarScheme(signer);
+  const scheme =
+    deps.payer === undefined
+      ? new ExactStellarScheme(createEd25519Signer(deps.signerSecret, STELLAR_TESTNET_CAIP2))
+      : new PolicyRailStellarScheme(deps.payer);
   const client = x402Client.fromConfig({ schemes: [{ network: STELLAR_TESTNET_CAIP2, client: scheme }] });
   const httpClient = new x402HTTPClient(client);
 

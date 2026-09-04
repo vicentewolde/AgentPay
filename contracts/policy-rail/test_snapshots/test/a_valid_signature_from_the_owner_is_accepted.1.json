@@ -83,7 +83,7 @@
                               "symbol": "owner"
                             },
                             "val": {
-                              "bytes": "34cbbaae6f5b292ceafdc670a87968f42ed5207437e7b60ec13461080b15f2a8"
+                              "bytes": "55b695f50f60492ba1516e48f9fe883aa57063a82ae3e553381d0c8b5ba2f7fc"
                             }
                           },
                           {
@@ -138,49 +138,5 @@
       }
     ]
   },
-  "events": [
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "policy_rail"
-              },
-              {
-                "symbol": "authorised"
-              },
-              {
-                "u64": "20509"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "amount"
-                  },
-                  "val": {
-                    "i128": "100000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "spent_today"
-                  },
-                  "val": {
-                    "i128": "100000000"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    }
-  ]
+  "events": []
 }

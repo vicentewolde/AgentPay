@@ -227,3 +227,57 @@ recién emitida, después de revocar, y para un hash nunca anclado. Y en el
 navegador: revocar el Mandato cambió "mandato (en cadena)" de `activa` a
 `revocada` sin recargar la página, mientras la credencial —nunca
 revocada— se mantuvo `activa`. Detalle en `evidencia/T30.md`.
+
+## 10. `policy_rail` como pagador (T31)
+
+Hasta T30, toda compra real salía de la cuenta clásica del agente. T31 agrega
+un segundo camino, sin quitar el primero.
+
+```
+executeBazaarPayment(deps, input)
+  ├── fetch(resourceUrl) → 402  ····································· igual
+  ├── reconcileTerms + PolicyRail.authorise()  ······················ igual
+  └── firma y envía:
+        deps.payer === undefined                   deps.payer = { contractId, ownerSecret }
+        └── ExactStellarScheme                     └── PolicyRailStellarScheme
+              (cuenta clásica G…)                        (smart account C…)
+```
+
+Las dos ramas comparten todo lo anterior a la firma: el mismo reto real, el
+mismo `reconcileTerms` (`M-14`), el mismo `authorise()` de la Fase 3, el mismo
+registro en el vault y el mismo anclaje de T28. Lo único que cambia es quién
+firma la autorización de la transferencia — y, por lo tanto, quién más puede
+decir que no.
+
+### Por qué hay un esquema propio y no un signer distinto
+
+`ClientStellarSigner` acepta cualquier `address`, incluida una `C…`, pero el
+paso de firma que `ExactStellarScheme` usa no: `AssembledTransaction.signAuthEntries`
+reduce la firma a bytes crudos y `authorizeEntry` deriva entonces la llave
+pública de la dirección de la propia entrada, que para un contrato no es una
+llave Ed25519. `PolicyRailStellarScheme` reemplaza exactamente ese paso, vía el
+parámetro `authorizeEntry` que el SDK expone, y produce
+`Vec<{public_key, signature}>` — la forma que `__check_auth` decodifica
+(`V-12`).
+
+### Los dos gates, y qué comprueba cada uno
+
+| | `LocalPolicyRail` (off-chain, Fase 3) | `policy_rail.__check_auth` (on-chain, T22) |
+|---|---|---|
+| Cuándo | Antes de firmar nada | Dentro de la transacción que mueve la plata |
+| Qué compara | Scope + Mandato firmado: venue, activo, `payTo`, vigencia, `perTx`, `perDay` | `perTx`, `perDay`, y que lo autorizado sea un `transfer` de su propio activo desde sí mismo |
+| Qué sabe | Todo lo que el principal firmó | Solo lo que se le fijó al desplegar |
+| Ventana consultar↔registrar | Existe (`M-15`) | No existe: comprobar y registrar son la misma escritura |
+
+No se reemplazan (`V-15`): el contrato no conoce el Mandato, y `LocalPolicyRail`
+no puede impedir que el dinero se mueva si alguien lo saltea.
+
+### El script de despliegue
+
+`pnpm run deploy:policy-rail` (`scripts/deploy-policy-rail.ts`) es
+re-ejecutable como `deploy:registry`: construye, despliega, **lee el contrato de
+vuelta** para confirmar `owner`/`asset`/límites, escribe
+`deployments/testnet.json` y `POLICY_RAIL_CONTRACT_ID` en `.env.local`, y deja
+el rail fondeado con USDC propio. Un wasm distinto del registrado detiene el
+script y pide `--redeploy` — un redeploy es un contract id nuevo, y el viejo se
+queda con su saldo.

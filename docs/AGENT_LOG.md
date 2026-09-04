@@ -1112,3 +1112,59 @@ T27–T30 cerrados, sin candidatos técnicos pendientes.** Lo único que falta
 para cerrar la fase completa es la ejecución de negocio del piloto —
 cohorte de alumnos, comunidad aliada, demo grabable, formulario de Build
 Award — que el usuario indicó que quiere hablar a continuación.
+
+## 2026-09-04 (7) — cc/t31-policy-rail-payer
+
+Agente: Claude Code
+
+Qué: T31 — el usuario abrió un chat nuevo para "mejoras técnicas que valga la
+pena mostrarle a gente de Stellar". Se verificaron contra el código real los
+cinco candidatos que la documentación ya tenía anotados (los cinco siguen
+vigentes), se recomendó el del contrato `policy_rail` —la pieza más nativa de
+Soroban del proyecto, construida y medida en T22 pero nunca usada como
+pagador— y el usuario lo confirmó. Ahora paga de verdad: pago x402 real
+asentado en testnet con `payer` = un contract id
+(`22f31871dce757438fe306ac40c6395908cb7a08eb19b349d09fd29647324fc7`), el
+contrato llevando su propia cuenta del día (`spent_on` = 10000) y rechazando
+lo que no entra en la simulación misma (`Error(Contract, #7)`, PerTxExceeded).
+635 tests (5 nuevos), 21 tests Rust, `pnpm typecheck`/`pnpm build` limpios.
+
+Por qué: de los candidatos anotados era el de más peso técnico para el público
+que el usuario nombró (el Embajador, la comunidad, revisores de SCF): un smart
+account de Soroban con su propio `__check_auth` pagando una factura real, con
+el límite garantizado por la red y no solo por nuestro código.
+
+**Lo que la investigación previa de T22 no había alcanzado, encontrado
+siguiendo la cadena de llamadas del SDK instalado.** `M-12` concluyó bien que
+nada en el stack x402 restringe el tipo de dirección del pagador — pero el
+paso de firma sí: `AssembledTransaction.signAuthEntries` reduce siempre la
+firma a bytes crudos, y con bytes crudos `authorizeEntry` deriva la llave
+pública de la dirección de la propia entrada, que para un `C…` no es una llave
+Ed25519 y revienta. Se resolvió sin parchear ninguna dependencia, usando el
+parámetro `authorizeEntry` que el propio SDK expone (`V-12`).
+
+**Dos rechazos reales del facilitator, ninguno documentado, los dos
+encontrados pagando de verdad:** credenciales de autorización v2 que su SDK 16
+no decodifica (`V-14`), y —el importante— que exige que *todo* evento de
+contrato de la simulación sea un `transfer`. El evento de auditoría de
+`policy_rail` caía ahí y hacía imposible el pago. **No se cambió en silencio
+una decisión de una fase cerrada:** se verificó primero que quitarlo
+desbloqueaba el pago, se le explicó al usuario qué es un evento y qué se
+pierde al sacarlo, y se esperó su confirmación explícita (`V-13`).
+
+Decisiones nuevas: `V-12` a `V-15` en `docs/fase-5-mandatevault/DECISIONES.md`.
+Documentación tocada: `CONTEXTO.md` (§3e), `ARQUITECTURA.md` (§10),
+`BITACORA.md` y `evidencia/T31.md` de la Fase 5; `ROADMAP.md` §4.5;
+`CLAUDE.md`; `README.md`; `.env.example`; más una nota de actualización en
+`docs/fase-3-policyrail-mandato/evidencia/T22-spike.md` (sin reescribir nada
+de lo que decía). Archivos nuevos:
+`apps/agent/src/payment/policy-rail-payer.ts` (+ test),
+`scripts/deploy-policy-rail.ts` (`pnpm run deploy:policy-rail`).
+
+Pendiente: mergear `cc/t31-policy-rail-payer` a `main` y pushear (a confirmar
+con el usuario). El camino clásico de pago no se tocó y se verificó sin
+regresión en el navegador. Candidatos anotados y no construidos, de la misma
+lista: el disco persistente para el vault en Render (`render.yaml` sigue sin
+bloque `disk`), migrar `buy()` a `execute_payment`, conectar más productos del
+catálogo, y multi-tenant en `apps/web`. La ejecución de negocio del piloto
+sigue sin arrancar; no es trabajo de código.

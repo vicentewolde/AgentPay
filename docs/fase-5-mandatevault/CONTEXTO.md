@@ -98,6 +98,20 @@ mantuvo `activa`. Con esto, los tres eventos que `ROADMAP.md §4.5` nombró
 como "materia prima" (credencial, Mandato, decisiones de PolicyRail) están
 todos en la misma bitácora. Detalle en `V-11` y `evidencia/T30.md`.
 
+### 3e. T31 — `policy_rail` pasa de pieza probada a pagador real
+
+La Fase 3 construyó, midió y probó `policy_rail` (T22): un smart account de
+Soroban que hace cumplir `perTx`/`perDay` dentro de su propio `__check_auth`,
+con margen de fee conocido bajo el techo del facilitator. Nunca pagó nada: las
+compras reales (T24 en adelante) salían de la cuenta clásica del agente, y el
+contrato quedaba demostrado de costado. T31 lo conecta: `executeBazaarPayment`
+acepta un `payer` opcional y, con él, la factura x402 la paga el contrato — la
+misma intención firmada, la misma autorización off-chain, y una puerta más que
+la red misma cierra si el monto no entra. Dos rechazos reales del facilitator
+—ninguno documentado— aparecieron en el camino, y uno obligó a quitar el evento
+de auditoría del contrato, con la confirmación explícita del usuario. Detalle
+en `V-12` a `V-15` y `evidencia/T31.md`.
+
 ## 4. Qué NO es esta fase
 
 - **No es el cierre del piloto.** Nada de la cohorte de alumnos, la
@@ -107,6 +121,8 @@ todos en la misma bitácora. Detalle en `V-11` y `evidencia/T30.md`.
 
 ## 5. Fuera de alcance, a propósito
 
-Mainnet, rieles fiat o PSP, `policy_rail` (T22) como pagador de producción —
-igual que en las fases anteriores. La ejecución de negocio del piloto (§4) no
+Mainnet y rieles fiat o PSP, igual que en las fases anteriores. `policy_rail`
+sí pasó a ser pagador real en testnet (T31, `§3e`), lo que esta sección daba
+por fuera de alcance cuando la fase arrancó; sigue fuera como pagador de
+**producción**, que es otra conversación (mainnet). La ejecución de negocio del piloto (§4) no
 es trabajo de código y no se construye desde este repo.

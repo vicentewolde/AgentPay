@@ -316,3 +316,131 @@ va en el payload— así que responder "¿qué pasó con *este* hash puntual?"
 necesitaría traer *todos* los eventos de ese `subject` y filtrarlos del
 lado del cliente. `get_credential` responde la misma pregunta en una sola
 llamada, con el mismo costo que `status()` ya paga.
+
+### V-12 · `policy_rail` paga con su propio camino de firma, no con el de `@x402/stellar` · `Vigente`
+**Fecha:** 2026-09-04 (T31)
+
+`ExactStellarScheme` (el cliente x402 que T24 usa) no puede firmar por una
+cuenta de contrato, aunque `M-12` haya concluido —correctamente— que nada en la
+cadena de pago *prohíbe* un comprador `C…`. Se agregó
+`PolicyRailStellarScheme` (`apps/agent/src/payment/policy-rail-payer.ts`): arma
+la misma `AssembledTransaction` contra el mismo `transfer` SEP-41, y solo el
+paso de firma es propio.
+
+**Hallazgo, siguiendo la cadena de llamadas del SDK instalado y no sus tipos.**
+`ExactStellarScheme.createPaymentPayload` firma vía
+`AssembledTransaction.signAuthEntries({ address, signAuthEntry, expiration })`.
+El callback interno de ese método reduce **siempre** la respuesta de un signer
+SEP-43 a bytes crudos de firma (`base64ToUint8Array(signedAuthEntry)`). Con
+bytes crudos, `authorizeEntry` toma su rama "firma pelada", donde la llave
+pública se **deriva de la dirección de la propia entrada**:
+`Keypair.fromPublicKey(Address.fromScAddress(addrAuth.address).toString())`.
+Para una cuenta de contrato esa dirección es un strkey `C…`, que no es una
+llave Ed25519: revienta antes de verificar nada. En la práctica el camino
+estándar del cliente es solo para cuentas clásicas, más allá de lo que sus
+tipos permitan.
+
+**Motivo de la solución elegida.** La salida es API pública, no un parche:
+`signAuthEntries` acepta un `authorizeEntry` propio, y `authorizeEntry` acepta
+un callback que devuelve `{ signature, publicKey }` explícito. Por esa rama el
+SDK construye `scvVec([{ public_key: bytes32, signature: bytes64 }])` — campo
+por campo el `Vec<Signature>` que `__check_auth` de `policy_rail` espera, que es
+exactamente la forma que su docstring dice haber elegido para que esto fuera
+posible (`M-21`).
+
+**Alternativa descartada:** parchear `@x402/stellar` o `@stellar/stellar-sdk`
+para que el camino estándar acepte cuentas de contrato. Mismo motivo que `V-3`
+ya dio para el memo: este proyecto nunca modificó una dependencia de terceros;
+una divergencia así la rompe en silencio cualquier actualización.
+
+### V-13 · `policy_rail` deja de emitir su evento de auditoría — el facilitator no acepta pagadores que emitan otra cosa que `transfer` · `Vigente`
+**Fecha:** 2026-09-04 (T31)
+
+`contracts/policy-rail/src/lib.rs` ya no publica `SpendAuthorised`
+(`("policy_rail", "authorised", day)` con `amount`/`spent_today`), el evento que
+T22 había decidido conservar tras medir que costaba solo ~1 100 stroops.
+
+**Motivo, encontrado pagando de verdad y no leyendo código.** El facilitator de
+OpenZeppelin simula el pago y corre `validateSimulationEvents`, que exige que
+**todo** evento de contrato de esa simulación sea un `transfer`: recorre la
+lista y rechaza el primero cuyo primer tópico no sea el símbolo `transfer`. El
+evento de auditoría del rail cae ahí y el pago se rechaza entero
+(`invalid_exact_stellar_payload_event_not_transfer`), sin llegar nunca a la red.
+Mientras el contrato lo emitiera, `policy_rail` no podía pagar una factura x402
+— la razón entera de existir de este hito. Quitado el `publish`, el mismo pago
+asienta a la primera.
+
+**Qué se pierde y qué no.** Se pierde el rastro histórico en el ledger: ya no
+queda una línea por autorización con el total del día en ese momento. No se
+pierde el control —el rechazo por `perTx`/`perDay` sigue ocurriendo dentro de la
+misma transacción que mueve la plata— ni el dato: `spent_on(day)` responde lo
+mismo cuando se le pregunte, y el `transfer` del propio token sigue emitiendo su
+evento. La auditoría del proyecto tampoco depende de esto: MandateVault
+(T27–T30) ya encadena cada decisión por hash y ancla el vínculo pago↔decisión
+on-chain.
+
+**Cómo se decidió.** No se cambió en silencio una decisión de una fase cerrada:
+se verificó primero que quitarlo desbloqueaba el pago (contrato desplegado sin
+el evento, pago real asentado), se le mostró al usuario la evidencia y el costo
+—incluida la explicación de qué es un evento y qué implica perderlo— y se
+esperó su confirmación explícita. Mismo patrón que `M-1` en la Fase 3 y que
+`V-3` en esta.
+
+**Alternativa descartada:** conservar el evento y dar el hito por imposible con
+este facilitator. Se descartó porque el contrato seguiría siendo lo que ya era
+—una pieza probada que nunca paga— y porque el evento es reversible: si el
+proyecto alguna vez asienta sin facilitator, o con uno menos estricto, vuelve a
+agregarse sin tocar nada más.
+
+### V-14 · El pago se construye con credenciales de autorización v1 (`useUpgradedAuth: false`) · `Vigente`
+**Fecha:** 2026-09-04 (T31)
+
+`PolicyRailStellarScheme` pide explícitamente credenciales de autorización
+heredadas (v1) al simular, en vez del `sorobanCredentialsAddressV2` (CAP-71) que
+`@stellar/stellar-sdk@17` produce por defecto.
+
+**Motivo.** El facilitator viaja con `@stellar/stellar-sdk@16.3.0`, que no sabe
+decodificar credenciales v2: la transacción ni siquiera se parsea del otro lado
+(`invalid_exact_stellar_payload_malformed`), y `validateAuthEntries` exige
+`sorobanCredentialsAddress` de todos modos. `@x402/stellar` no tropieza con esto
+porque usa su propio SDK 16; solo aparece cuando la transacción la arma este
+repo con su SDK 17. Encontrado pagando de verdad y leyendo el rechazo, no en los
+tipos.
+
+**Nota de caducidad, dicha en voz alta:** el propio SDK marca `useUpgradedAuth`
+como transicional y avisa que dejará de tener efecto cuando la red devuelva
+credenciales v2 por defecto. Cuando eso pase, este pago dejará de funcionar
+hasta que el facilitator actualice su SDK — es una dependencia de terceros con
+fecha de vencimiento, no una decisión que dependa de nosotros.
+
+**Alternativa descartada:** construir la transacción con el `@stellar/stellar-sdk@16`
+que `@x402/stellar` trae adentro, para no tener el desfasaje. Se descartó por
+frágil: implicaría importar el SDK anidado de otra dependencia por su ruta
+interna, algo que cualquier reinstalación puede mover de lugar.
+
+### V-15 · El rail es una segunda puerta sobre los mismos números, no un reemplazo de `LocalPolicyRail` · `Vigente`
+**Fecha:** 2026-09-04 (T31)
+
+Con `payer` presente, una compra pasa igual por `checkScope` + `checkMandate` +
+`checkDailyLimit` + `reconcileTerms` off-chain (`PolicyRail.authorise()`, Fase
+3) **y además** por el `__check_auth` del contrato. Los límites se comprueban
+dos veces, en dos lugares, con dos implementaciones distintas.
+
+**Motivo.** No son redundantes: comprueban cosas distintas contra el mismo
+número. Off-chain se compara la compra contra el Mandato firmado por el
+principal —venue, activo, `payTo`, vigencia, todo lo que el contrato no sabe— y
+se rechaza antes de firmar nada. On-chain se comprueba lo único que el contrato
+sí puede garantizar por su cuenta: que del contrato no salga más de `perTx` en
+una transferencia ni más de `perDay` en el día, sin ventana entre consultar y
+registrar (`M-15`). Un operador que ignorara el rail off-chain igual choca con
+la red; un atacante que sortee la red igual no tiene un Mandato válido.
+
+`owner` es la llave del propio agente: el agente sigue autorizando sus compras
+igual que cuando paga con su cuenta clásica. Lo que cambia es de dónde sale la
+plata y quién más puede decir que no.
+
+**Alternativa descartada:** mover los límites al contrato y sacarlos de
+`LocalPolicyRail` cuando se paga por el rail. Se descartó porque el contrato no
+conoce el Mandato —ni principal, ni venue, ni `payTo`, ni vigencia firmada
+(`M-21` lo dice explícito)— así que "moverlos" habría sido perder los siete
+chequeos que el contrato no hace, a cambio de no repetir dos.
