@@ -41,6 +41,7 @@ import { createFileMandateVault, type MandateVault } from "@agentpay/vault";
 
 import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, VenueId } from "@agentpay/agent";
 import {
+  anchorPaymentDecision,
   createAgent,
   createBazaarCatalog,
   createLocalPolicyRail,
@@ -318,8 +319,57 @@ async function buy(current: DemoSession, instruction: string): Promise<readonly 
       label: "explorer",
       value: `https://stellar.expert/explorer/testnet/tx/${receipt.transaction}`,
     });
+    await anchorSettledPayment(current, intentResult.intent_id, receipt.transaction, steps);
   }
   return steps;
+}
+
+/**
+ * T28: anchors `paymentLinkHash(record, paymentTx)` against `agent_registry`
+ * — the companion transaction `V-3` describes, closing the loop T27 could
+ * not (`@x402/stellar` exposes no memo on the payment transaction itself).
+ *
+ * Best-effort, on purpose: the real payment already settled by the time this
+ * runs. A failure here (network, a registry hiccup) must never unwind or
+ * hide that — it is reported as its own step, not thrown, so `buy()`'s
+ * caller still sees the payment succeeded even if the anchor did not.
+ */
+async function anchorSettledPayment(
+  current: DemoSession,
+  intentId: string,
+  paymentTx: string,
+  steps: Step[],
+): Promise<void> {
+  const agentKeypair = Keypair.fromSecret(current.agentSecret);
+  const agentAddress = agentKeypair.publicKey();
+  // The vault stores `intent.agent`, a DID (`stellarDidSchema`) — not the raw
+  // address `anchorPaymentDecision`'s `subject` needs for the on-chain call.
+  const agentDid = stellarAddressToDid(agentAddress, "testnet");
+  const record = current.vault
+    .list(agentDid)
+    .find((r) => r.entry.kind === "granted" && r.entry.intentId === intentId);
+  if (record === undefined) {
+    // Fail-closed-by-construction (T24) guarantees `authorise()` — and so
+    // `vault.record()` — ran before any payment was signed; reaching this
+    // means something about that guarantee broke, worth surfacing loudly.
+    steps.push({ label: "vault_anchor", value: "sin registro en el vault para este intent" });
+    return;
+  }
+
+  try {
+    const anchored = await anchorPaymentDecision(current.agentpass, {
+      record,
+      paymentTx,
+      subject: agentAddress,
+      expiresAt: new Date(current.mandate.mandate.validUntil),
+      issuer: Keypair.fromSecret(current.issuerSecret),
+    });
+    steps.push({ label: "vault_anchor_hash", value: anchored.linkHash });
+    steps.push({ label: "vault_anchor_tx", value: anchored.transactionHash });
+  } catch (error) {
+    const message = isAgentPassError(error) ? `${error.code}: ${error.message}` : String(error);
+    steps.push({ label: "vault_anchor", value: `no se pudo anclar: ${message}` });
+  }
 }
 
 interface RevokeResult {

@@ -53,7 +53,7 @@ función) y Fase 2 (todos sus call sites) por una necesidad de un paquete
 nuevo de Fase 5. Queda anotado como limpieza posible si un tercer
 consumidor apareciera.
 
-### V-3 · El memo de la transacción de pago está bloqueado por `@x402/stellar`; se ancla vía transacción companion en su lugar · `Pendiente` (T28)
+### V-3 · El memo de la transacción de pago está bloqueado por `@x402/stellar`; se ancla vía transacción companion en su lugar · `Vigente` — construida en T28
 **Fecha:** 2026-09-04
 
 El plan original de T27 —bitácora durable **y** memo en la transacción de
@@ -82,12 +82,30 @@ de terceros (T19/T22/T24 la leyeron, nunca la tocaron), y hacerlo ahora
 crearía una divergencia que cualquier actualización del paquete rompería en
 silencio.
 
-**Qué falta decidir, explícitamente, antes de construir T28:** quién firma
-la transacción companion (¿la propia clave del agente, o la del principal/
-issuer, como ya hace el anclaje de credencial y mandato?), y con qué
-cadencia se ancla (¿cada pago real, o el head cada tanto?). Ninguna de las
-dos tiene una respuesta obvia todavía — anotado a propósito, no resuelto de
-paso dentro de este hito.
+**Resuelto en T28, las dos preguntas que quedaron abiertas:**
+
+- **Quién firma:** la clave del principal/issuer (`ISSUER_SECRET_KEY`), no la
+  del agente. Es la única clave registrada como issuer activo en el piloto
+  (`M-17`) — el agente nunca lo fue, y registrarlo solo para esto habría sido
+  una decisión de confianza aparte (¿debería un agente poder atestiguar su
+  propio historial, sin el principal de por medio?), no resuelta de paso.
+  Mismo firmante que ya ancla credencial y mandato — el mismo emisor que ya
+  se confía para "esto es quién sos y qué podés hacer" es el que ahora
+  también dice "esto es lo que hiciste".
+- **Qué se ancla, y con qué cadencia:** no `vault.head()` sin más — el hash
+  de un registro puntual de la Fase 3 no menciona la transacción de pago que
+  vino después, así que anclarlo solo no cierra el vínculo que esta fase
+  necesita. Se ancla `paymentLinkHash(record, paymentTx) = sha256(record.hash
+  + ":" + paymentTx)`, calculado recién cuando el pago real asienta — un
+  valor que solo existe si **ambas** cosas pasaron: la decisión y el pago. Se
+  ancla después de **cada** pago real, no en lote — el volumen del piloto en
+  testnet es bajo y anclar de a uno es la garantía más fuerte posible (nunca
+  hay una ventana donde un pago quedó sin su propio anclaje esperando el
+  siguiente lote).
+
+Ver `V-8` (`expiresAt`, y qué significa que un anclaje "expire" cuando lo que
+ancla es un hecho pasado, no una autoridad vigente) y `V-9` (por qué esto no
+bloquea el pago si falla).
 
 ### V-4 · `policyRail?` inyectable en `AgentConfig`/`AgentToolsDeps`, en vez de tocar `policy-rail.ts` · `Vigente`
 **Fecha:** 2026-09-04 (T27)
@@ -169,3 +187,53 @@ trabajo entre la lectura y la escritura del ledger *sí* tiene puntos de
 `await` (el chequeo de límite diario llama a `ledger.spentOn` de forma
 asíncrona). Acá no los hay: todo el ciclo lectura-en-memoria → escritura es
 síncrono de punta a punta.
+
+### V-8 · `expiresAt` del anclaje reusa `validUntil` del Mandato, aunque "expirado" no invalida el hecho histórico · `Vigente`
+**Fecha:** 2026-09-04 (T28)
+
+`agent_registry.anchor()` exige un `expires_at`, y `status()` reporta
+`Expired` una vez pasado — diseñado para una credencial o un mandato, cuya
+autoridad *debería* dejar de valer con el tiempo. Un anclaje de pago no es
+eso: es la prueba de que algo ya pasó, no un permiso vigente. Aun así, T28
+reusa `current.mandate.mandate.validUntil` como `expiresAt`, en vez de
+inventar un horizonte propio.
+
+**Motivo.** No hay un valor "correcto" obvio para algo que conceptualmente
+no debería expirar nunca — cualquier horizonte fijo (un año, diez años) es
+igual de arbitrario. Reusar `validUntil` es lo único que no agrega un
+parámetro nuevo sin significado: es el mismo horizonte bajo el cual el
+Mandato que autorizó la compra ya deja de ser consultable como "vigente" de
+todos modos. Que `status()` diga `Expired` después de esa fecha no borra
+nada — el evento `Anchored` que la transacción emitió al confirmarse queda
+en la historia del ledger de Stellar para siempre, recuperable vía Horizon
+aunque el storage vivo del contrato lo archive (`M-22` ya midió que el TTL
+del storage, no el evento, es lo que tiene horizonte).
+
+**Alternativa descartada:** un horizonte fijo, muy largo (p. ej. 100 años),
+para que `status()` prácticamente nunca reporte `Expired`. Se descartó por
+ser un número inventado sin ningún significado —ni siquiera aproximado— en
+el dominio del proyecto, mientras que `validUntil` del Mandato ya es un
+valor que otra parte del sistema calcula con una razón real.
+
+### V-9 · Un anclaje que falla no revierte ni oculta el pago que ya asentó · `Vigente`
+**Fecha:** 2026-09-04 (T28)
+
+`anchorSettledPayment` (`apps/web/src/server.ts`) corre **después** de que
+`executeBazaarPayment` ya confirmó `settled: true`. Si el anclaje falla —red,
+el issuer sin registrar, cualquier cosa— el error se atrapa y se reporta como
+un paso más (`vault_anchor: "no se pudo anclar: ..."`) en vez de propagarse.
+
+**Motivo.** El dinero real ya se movió en el momento en que este código
+corre; no hay ninguna acción que "deshaga" eso, y fallar la respuesta HTTP
+completa por un problema puramente de evidencia le mentiría al llamador
+sobre si el pago (la parte que sí importa financieramente) funcionó. Mismo
+principio que ya rige el resto del proyecto: el pago es fail-closed *antes*
+de firmar (T24, "nunca firma antes de autorizar"); una vez asentado, la
+evidencia alrededor de él es best-effort, no otra puerta que pueda cerrarse
+sobre plata que ya es del vendedor.
+
+**Alternativa descartada:** ninguna — no hay una versión razonable de
+"revertir un pago real en Stellar porque un paso de auditoría posterior
+falló". La alternativa habría sido no capturar el error y dejar que
+rompiera la respuesta entera, perdiendo el resto de los datos del recibo
+(`tx`, `settled`) que sí son reales y sí importan.

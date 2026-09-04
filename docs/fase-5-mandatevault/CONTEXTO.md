@@ -61,12 +61,19 @@ recomputa la cadena entera). `apps/web`, el único servidor que corre
 continuamente (desplegado en Render), quedó cableado a este vault en vez del
 `SpendLedger` en memoria de T19.
 
+## 3b. Qué prueba T28
+
+Que un pago real asentado y la decisión de `PolicyRail` que lo autorizó
+quedan vinculados criptográficamente, verificable por cualquiera sin
+confiar en quien opera el vault: `paymentLinkHash(record, paymentTx) =
+sha256(record.hash + ":" + paymentTx)`, anclado contra `agent_registry` con
+la misma llave que ya ancla credencial y mandato. Verificado en testnet
+real: `agentpass.status(linkHash)` devuelve `"Active"` consultado de forma
+completamente independiente del archivo del vault. Detalle en `V-3`,
+`V-8`, `V-9` y `evidencia/T28.md`.
+
 ## 4. Qué NO es esta fase, todavía
 
-- **No ancla nada on-chain.** El "head" de la cadena (el hash del último
-  registro) queda calculado y disponible (`vault.head()`), pero nada lo
-  publica todavía contra Stellar. Esa es la transacción companion que `V-3`
-  describe — el siguiente hito, no este.
 - **No tiene superficie de consulta.** `list()`/`verify()` existen como
   métodos del objeto `MandateVault`, pero no hay CLI ni vista en `apps/web`
   que los exponga a un humano todavía.

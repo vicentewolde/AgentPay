@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-04 · Fase actual: **Fase 5, en curso (T27)** — Fases 2, 3 y 4 completas (T9–T26)
+Última revisión: 2026-09-04 · Fase actual: **Fase 5, en curso (T27–T28)** — Fases 2, 3 y 4 completas (T9–T26)
 
 ---
 
@@ -63,13 +63,13 @@ en su propia carpeta bajo `docs/`.
 | `docs/fase-3-policyrail-mandato/ARQUITECTURA.md` | Fase 3 (PolicyRail + Mandato) | Mapa técnico denso: los tres documentos firmados, la forma del Mandato, dónde vive el enforcement | Cerrado, T16–T23 |
 | `docs/fase-3-policyrail-mandato/BITACORA.md` | Fase 3 (PolicyRail + Mandato) | Bitácora hito a hito (T16–T23), en lenguaje llano, con evidencia | Cerrado, T16–T23 |
 | `docs/fase-3-policyrail-mandato/DECISIONES.md` | Fase 3 (PolicyRail + Mandato) | Decisiones de esta fase (`M-1` a `M-22`), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
-| `docs/fase-4-mandategate/CONTEXTO.md` | Fase 4 (MandateGate) | Qué prueba la fase, qué NO es, qué cambió respecto al alcance documentado | Vigente, en curso |
-| `docs/fase-4-mandategate/ARQUITECTURA.md` | Fase 4 (MandateGate) | Mapa técnico denso: el módulo de pago x402, identidades resueltas contra tráfico real, dependencias nuevas | Vigente, en curso |
-| `docs/fase-4-mandategate/BITACORA.md` | Fase 4 (MandateGate) | Bitácora hito a hito (T24, T25), en lenguaje llano, con evidencia | T24 y T25 cerrados |
+| `docs/fase-4-mandategate/CONTEXTO.md` | Fase 4 (MandateGate) | Qué prueba la fase, qué NO es, qué cambió respecto al alcance documentado | Cerrado |
+| `docs/fase-4-mandategate/ARQUITECTURA.md` | Fase 4 (MandateGate) | Mapa técnico denso: el módulo de pago x402, identidades resueltas contra tráfico real, dependencias nuevas | Cerrado |
+| `docs/fase-4-mandategate/BITACORA.md` | Fase 4 (MandateGate) | Bitácora hito a hito (T24–T26), en lenguaje llano, con evidencia | Cerrado, T24–T26 |
 | `docs/fase-4-mandategate/DECISIONES.md` | Fase 4 (MandateGate) | Decisiones de esta fase (`G-1` a `G-12`), cada una con motivo y alternativa descartada | Cerrado, T24–T26 |
 | `docs/fase-5-mandatevault/CONTEXTO.md` | Fase 5 (MandateVault) | Qué prueba, qué NO es, qué cambió respecto al alcance documentado | Vigente, en curso |
 | `docs/fase-5-mandatevault/ARQUITECTURA.md` | Fase 5 (MandateVault) | Mapa técnico denso: el paquete `@agentpay/vault`, la cadena de hashes, el seam de `policyRail?` | Vigente, en curso |
-| `docs/fase-5-mandatevault/BITACORA.md` | Fase 5 (MandateVault) | Bitácora hito a hito (T27…), en lenguaje llano, con evidencia | T27 cerrado |
+| `docs/fase-5-mandatevault/BITACORA.md` | Fase 5 (MandateVault) | Bitácora hito a hito (T27, T28…), en lenguaje llano, con evidencia | T27–T28 cerrados |
 | `docs/fase-5-mandatevault/DECISIONES.md` | Fase 5 (MandateVault) | Decisiones de esta fase (`V-1` a `V-7`), cada una con motivo y alternativa descartada | En curso |
 
 **Resuelto (2026-09-02): documentación separada por fase.** Cada fase recibe su
@@ -106,7 +106,7 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 | 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | ✅ Completa (T9–T15) | — |
 | 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | ✅ Completa (T16–T23) | — |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ✅ Completa (T24–T26) | — |
-| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | 🔄 En curso (T27) | Fases 2–4 cerradas. La ejecución de negocio del piloto (alumnos, comunidad, formulario) no arrancó todavía — no es un bloqueante técnico |
+| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | 🔄 En curso (T27–T28) | Fases 2–4 cerradas. La ejecución de negocio del piloto (alumnos, comunidad, formulario) no arrancó todavía — no es un bloqueante técnico |
 | 6 | **Después: AgentGuard + comercialización** | Qué viene si SCF financia esto — no es parte del piloto | 🔲 Sin definir, a propósito | Todo lo anterior |
 
 Las Fases 0 y 1 están cerradas. Las Fases 2–5 son el piloto que falta ejecutar.
@@ -477,16 +477,17 @@ durable, ni había vínculo criptográfico entre un pago real y el intent/
 mandato que lo autorizó (`@x402/stellar` no expone memo — bloqueante real,
 detalle en `docs/fase-5-mandatevault/DECISIONES.md` → `V-3`). T27 cierra el
 primero: `@agentpay/vault`, una bitácora durable y encadenada por hash de
-cada decisión, cableada en `apps/web`. El segundo (anclar esa bitácora contra
-Stellar) queda para T28, con la decisión de diseño ya acotada pero sin
-construir.
+cada decisión, cableada en `apps/web`. T28 cerró el segundo: cada pago real
+ancla `sha256(record.hash + ":" + paymentTx)` contra `agent_registry`,
+verificado de forma independiente contra testnet real
+(`docs/fase-5-mandatevault/evidencia/T28.md`).
 
 **Desglose de tareas, según se van decidiendo — no se anticipa lo que sigue:**
 
 | Hito | Qué construye | Estado |
 |---|---|---|
 | T27 | `@agentpay/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` (aprobada o rechazada) | ✅ cerrado 2026-09-04 |
-| T28 | Ancla `vault.head()` on-chain vía una transacción companion contra `agent_registry` | ⏳ pendiente |
+| T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry`, tras cada pago real | ✅ cerrado 2026-09-04 |
 
 Detalle completo en
 [`docs/fase-5-mandatevault/`](docs/fase-5-mandatevault/).

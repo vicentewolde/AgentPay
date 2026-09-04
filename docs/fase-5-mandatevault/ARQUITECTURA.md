@@ -122,11 +122,42 @@ necesariamente un redeploy de Render, que puede o no preservar el disco
 local según el plan contratado. Confirmarlo con un disco persistente real es
 trabajo de infraestructura, no de este hito.
 
-## 7. Lo que sigue (T28, no construido)
+## 7. `apps/agent/src/vault/anchor-payment.ts` — el anclaje on-chain (T28)
 
-Anclar `vault.head()` contra `agent_registry` después de un pago real —
-mismo mecanismo de `anchor()` que T20 ya construyó para credenciales y
-mandatos, sin contrato nuevo. Ver `V-3` para el porqué (el memo dentro de la
-transacción de pago está bloqueado por `@x402/stellar`) y qué decisiones
-concretas faltan (quién firma la transacción companion, qué campos exactos
-entran al hash).
+Cierra lo que §6 dejaba pendiente: un vínculo criptográfico entre un pago
+real asentado y la decisión que lo autorizó, verificable sin confiar en
+quien opera el vault.
+
+```ts
+function paymentLinkHash(record: VaultRecord, paymentTx: string): string
+// sha256(`${record.hash}:${paymentTx}`) — solo existe si la decisión Y el pago pasaron
+
+function anchorPaymentDecision(registry: RegistryAnchor, params: {
+  record: VaultRecord; paymentTx: string; subject: string; expiresAt: Date; issuer: Keypair;
+}): Promise<{ linkHash: string; transactionHash: string }>
+
+function verifyPaymentAnchor(registry: RegistryAnchorStatus, record: VaultRecord, paymentTx: string):
+  Promise<{ linkHash: string; status: CredStatus }>
+```
+
+`RegistryAnchor`/`RegistryAnchorStatus` son la misma forma estructural que
+`RegistryAccess` (T20, `@agentpay/mandate`) — `AgentPass` de `@agentpass/sdk`
+las satisface directamente, sin adaptador.
+
+**Cableado en `apps/web`:** `anchorSettledPayment()` (`server.ts`) corre
+después de que `executeBazaarPayment` confirma `settled: true`. Busca en el
+vault el registro `granted` de ese `intentId` (`vault.list(agentDid)` —
+`intent.agent` es un DID, no la dirección cruda que `subject` necesita para
+el anclaje; `stellarAddressToDid` hace la conversión), calcula
+`paymentLinkHash` y llama `anchorPaymentDecision` firmando con
+`ISSUER_SECRET_KEY` — la misma llave que ya ancla credencial y mandato
+(`V-3`). El resultado se agrega como dos pasos más (`vault_anchor_hash`,
+`vault_anchor_tx`) a lo que `buy()` ya devolvía. Un fallo del anclaje no
+revierte ni oculta el pago (`V-9`): se reporta como un paso propio
+(`vault_anchor: "no se pudo anclar: ..."`), nunca lanzando.
+
+**Verificado en testnet real, de punta a punta:** un pago real se ancló
+(`transactionHash` confirmado en Horizon), y consultar
+`agentpass.status(linkHash)` de forma completamente independiente —sin tocar
+el archivo del vault— devolvió `"Active"`. Detalle en
+`evidencia/T28.md`.

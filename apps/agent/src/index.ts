@@ -188,6 +188,16 @@ export {
 export { withVault } from "./policy/with-vault.js";
 
 export {
+  anchorPaymentDecision,
+  paymentLinkHash,
+  verifyPaymentAnchor,
+  type AnchorPaymentDecisionParams,
+  type AnchoredPaymentDecision,
+  type RegistryAnchor,
+  type RegistryAnchorStatus,
+} from "./vault/anchor-payment.js";
+
+export {
   reconcileTerms,
   termsError,
   type PaymentTerms,

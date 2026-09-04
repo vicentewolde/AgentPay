@@ -12,26 +12,28 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-04 · **Último hito cerrado:** T27 · **Fase 5: en curso**
+**Fecha:** 2026-09-04 · **Último hito cerrado:** T28 · **Fase 5: en curso**
 
 Cada decisión de `PolicyRail.authorise()` — autorizada o rechazada — queda
-ahora en un registro durable y encadenado por hash, que sobrevive un
-reinicio del proceso. `apps/web` (el servidor público en Render) quedó
-cableado a este vault en vez del `SpendLedger` en memoria.
+en un registro durable y encadenado por hash, que sobrevive un reinicio del
+proceso (T27). Cada pago real, además, queda vinculado criptográficamente a
+la decisión que lo autorizó mediante un hash anclado contra `agent_registry`
+— verificable por cualquiera, sin confiar en quien opera el vault (T28).
+`apps/web` (el servidor público en Render) quedó cableado a ambos.
 
 | | |
 |---|---|
-| Tests TypeScript | **621** rápidos (604 en T26 + 17 nuevos: 15 de `@agentpay/vault`, 2 de `withVault`) |
-| Paquete nuevo | `@agentpay/vault` |
-| Código de fases cerradas tocado | Ninguno — `policy-rail.ts` (Fase 3) sin cambios; `apps/agent`/`apps/web` ganaron un seam opcional (`policyRail?`), aditivo |
-| Transacción real de la evidencia | pago verificado durante el smoke test de T27: `8d8e72989e14e8a28f5333946b946db617d9b035f75d1a9d4ac7d5176395c33c` |
+| Tests TypeScript | **628** rápidos (604 en T26 + 17 de T27 + 7 de T28) |
+| Paquete nuevo | `@agentpay/vault` (T27) |
+| Código de fases cerradas tocado | Ninguno — `policy-rail.ts` (Fase 3) y `payment/x402.ts` (Fase 4) sin cambios; todo lo nuevo se cableó desde `apps/web`/seams opcionales |
+| Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` |
 
 ### Progreso
 
 | Hito | Qué es | Estado |
 |---|---|---|
 | T27 | `@agentpay/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` | ✅ cerrado 2026-09-04 |
-| T28 | Anclar `vault.head()` contra `agent_registry` (transacción companion, `V-3`) | ⏳ pendiente, sin construir |
+| T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry` tras cada pago real | ✅ cerrado 2026-09-04 |
 | — | Superficie de consulta (CLI o vista en `apps/web`) | ⏳ pendiente, no elegido todavía |
 | — | Indexar los eventos que `agent_registry` ya emite (`Anchored`/`Revoked`) | ⏳ pendiente, no elegido todavía |
 
@@ -110,3 +112,85 @@ tabla de documentación). Archivos nuevos: `packages/vault/` completo,
 Pendiente: mergear `cc/t27-mandate-vault` a `main` y pushear (a confirmar con
 el usuario). Siguiente: T28 (anclar `vault.head()` on-chain, `V-3`), o
 priorizar la superficie de consulta primero — ninguno elegido todavía.
+
+**Cierre, mismo día.** El usuario confirmó mergear y pushear T27. Después
+pidió seguir avanzando con los hitos sin pausar a preguntar en cada uno.
+
+## T28 · Anclar el vínculo pago↔decisión contra `agent_registry` — cerrado 2026-09-04
+
+**Qué quedó funcionando, en palabras llanas.** Antes de este hito, un pago
+real en Stellar era indistinguible de cualquier otro pago de esa misma
+cuenta — nada en la transacción decía "esto fue autorizado por este
+Mandato, para esta compra". Ahora, después de cada pago real, queda una
+segunda transacción, chica y separada, que ancla una prueba de esa relación
+contra el mismo contrato que ya guarda el estado de las credenciales y los
+mandatos. Cualquiera que tenga el registro del vault (T27) y el hash del
+pago puede recalcular esa prueba y preguntarle al contrato si coincide —sin
+tener que confiar en el operador del servidor para nada de eso.
+
+**Las dos preguntas que T27 había dejado explícitamente sin resolver
+(`V-3`)** se contestaron antes de escribir código: quién firma la
+transacción de anclaje (la misma llave del principal/issuer que ya ancla
+credencial y mandato — el agente nunca fue un issuer registrado, y
+convertirlo en uno solo para esto habría sido otra decisión de confianza
+aparte) y qué se ancla, con qué cadencia (no `vault.head()` a secas, sino
+`sha256(record.hash + ":" + paymentTx)` — un valor que solo existe si la
+decisión *y* el pago pasaron los dos — después de cada pago real, no en
+lote). Detalle completo con las alternativas descartadas en `DECISIONES.md`
+→ `V-3` (actualizada), `V-8`, `V-9`.
+
+**Cómo quedó construido.** `apps/agent/src/vault/anchor-payment.ts`:
+`paymentLinkHash` (pura), `anchorPaymentDecision` (llama
+`registry.anchor()`, la misma llamada cruda de T20) y `verifyPaymentAnchor`
+(recalcula el hash y pregunta `registry.status()` — la mitad de verificación
+que cualquier tercero puede correr). `apps/web`'s `buy()` llama a esto
+después de que el pago ya asentó — nunca antes, y un fallo del anclaje no
+revierte ni oculta el pago (`V-9`): queda como su propio paso en la
+respuesta, no como una excepción que rompe todo lo demás.
+
+**Un detalle real, encontrado en el primer smoke test, no en los tests
+unitarios.** El primer intento buscaba el registro del vault por la
+dirección cruda del agente (`G...`); la búsqueda no encontraba nada, porque
+el vault guarda `intent.agent`, que es un DID (`did:stellar:testnet:G...`),
+no la dirección sola. `apps/web` ya tenía `stellarAddressToDid` importado
+para otra cosa — se usó para la conversión, sin agregar ninguna dependencia
+nueva.
+
+**Evidencia técnica.** 7 tests nuevos (628 en total, de 621) en
+`apps/agent/src/vault/anchor-payment.test.ts`: determinismo y unicidad de
+`paymentLinkHash`, que `anchorPaymentDecision` llama al registro con los
+parámetros correctos, que `verifyPaymentAnchor` recalcula el mismo hash y
+devuelve lo que el registro responda (incluido `"Unknown"` para algo nunca
+anclado). `pnpm typecheck`/`pnpm build` limpios.
+
+**Verificado en testnet real, de punta a punta, dos veces.** Primero contra
+el servidor local (`apps/web`): compra real asentada
+(`47896c6db6f28d1e8020fb8f2a95e9b23d299a748ad3934d6d3f8a0dc8f6a6c3`), anclaje
+real confirmado
+(`feda66884b503dd0505f07a9d6be05b27dfd96c82200cf0b5996374430bdd446`), hash
+anclado `ab4dfb10bb9d07b356ae9a1d4e4eabef8e8c608a8ec780b3f89cc2bfc394827b`.
+Segundo, **de forma completamente independiente** — un script chico, sin
+tocar el vault ni ningún código de este repo más que `AgentPass.status()` —
+le preguntó al contrato por ese hash exacto y devolvió `"Active"`: la prueba
+de que el anclaje es real y consultable por cualquiera, no solo algo que el
+propio servidor afirma.
+
+**Por qué.** Cierra el segundo de los dos huecos que la investigación
+inicial de esta fase encontró (`CONTEXTO.md §2`) — el que T27 no pudo
+cerrar por el bloqueante de `@x402/stellar`. Con esto, la frase de
+`CONTEXTO.md §1` ("confiar en el operador no alcanza; tiene que poder
+probarse") queda cierta para las dos mitades de una compra real: la decisión
+(T27) y el pago (T28).
+
+Documentación tocada: `CONTEXTO.md` (`§3b` nueva), `ARQUITECTURA.md` (`§7`
+reescrita), este `BITACORA.md`, `DECISIONES.md` (`V-3` actualizada, `V-8` y
+`V-9` nuevas), más `evidencia/T28.md`. Archivos nuevos:
+`apps/agent/src/vault/anchor-payment.ts` (+ test). Archivos tocados:
+`apps/agent/src/index.ts`, `apps/web/src/server.ts`.
+
+Pendiente: mergear `cc/t28-anchor-payment` a `main` y pushear. Fase 5: T27 y
+T28 cerrados. Siguiente, sin elegir todavía: la superficie de consulta (CLI
+o vista en `apps/web` que muestre el vault y el estado de sus anclajes), o
+indexar los eventos que `agent_registry` ya emite para credencial y mandato.
+La ejecución de negocio del piloto sigue sin arrancar — no es trabajo de
+código.

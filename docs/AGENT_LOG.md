@@ -998,3 +998,45 @@ Pendiente: mergear `cc/t27-mandate-vault` a `main` y pushear (a confirmar
 con el usuario). Siguiente: T28 (anclar `vault.head()` on-chain) o la
 superficie de consulta — ninguno elegido todavía. La ejecución de negocio
 del piloto sigue sin arrancar; no es trabajo de código.
+
+## 2026-09-04 (4) — main (T27 mergeado) / cc/t28-anchor-payment
+
+Agente: Claude Code
+
+Qué: el usuario confirmó mergear y pushear T27 (`428d11f`, fast-forward a
+`main`, rama borrada), y pidió seguir avanzando con los hitos sin pausar a
+preguntar en cada uno. Se construyó T28: cierra el segundo hueco que la
+Fase 5 había encontrado al arrancar — ningún pago real quedaba vinculado
+criptográficamente a la decisión que lo autorizó. `apps/agent/src/vault/
+anchor-payment.ts` (nuevo): `paymentLinkHash(record, paymentTx) =
+sha256(record.hash + ":" + paymentTx)`, anclado contra `agent_registry` con
+la misma llave que ya ancla credencial y mandato (`ISSUER_SECRET_KEY`) —
+resolviendo las dos preguntas que `V-3` había dejado explícitamente
+abiertas (quién firma, con qué cadencia). `apps/web`'s `buy()` lo llama
+después de que el pago ya asentó; un fallo del anclaje no revierte ni
+oculta el pago (`V-9`). 7 tests nuevos (628 en total).
+
+Un bug real, encontrado en el primer smoke test: el vault guarda
+`intent.agent` como DID, no como dirección cruda — la primera búsqueda del
+registro no encontraba nada. Corregido con `stellarAddressToDid`, ya
+importado en `server.ts` para otra cosa. Verificado en testnet real, dos
+veces: contra el servidor (`apps/web`) y de forma completamente
+independiente (un script aparte le preguntó a `AgentPass.status()` por el
+hash anclado y confirmó `"Active"`, sin tocar el vault).
+
+Por qué: cierra la segunda mitad de la tesis de esta fase — que ninguna
+decisión (T27) ni ningún pago (T28) dependa de confiar en el operador para
+poder probarse.
+
+Documentación tocada: `docs/fase-5-mandatevault/` completa (`CONTEXTO.md`
+§3b nueva, `ARQUITECTURA.md` §7 reescrita, `BITACORA.md` T28, `DECISIONES.md`
+`V-3` actualizada + `V-8`/`V-9` nuevas, `evidencia/T28.md`). `ROADMAP.md`
+§4.5 y la tabla de documentación actualizadas (de paso, se corrigieron dos
+líneas desactualizadas de la Fase 4 en esa misma tabla — seguían diciendo
+"en curso"/"T24 y T25" pese a estar cerrada desde T26).
+
+Pendiente: mergear `cc/t28-anchor-payment` a `main` y pushear. **Fase 5: T27
+y T28 cerrados.** Siguiente, sin elegir todavía: la superficie de consulta
+(CLI o vista en `apps/web`), o indexar los eventos que `agent_registry` ya
+emite para credencial y mandato. La ejecución de negocio del piloto sigue
+sin arrancar; no es trabajo de código.
