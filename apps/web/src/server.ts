@@ -33,7 +33,7 @@ import {
   isAgentPassError,
   stellarAddressToDid,
 } from "@agentpass/core";
-import { createAgentPass, type AgentPass } from "@agentpass/sdk";
+import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 import { anchorMandate, createMandate, revokeMandate, type AnchoredMandate } from "@agentpay/mandate";
@@ -364,6 +364,13 @@ async function anchorSettledPayment(
       expiresAt: new Date(current.mandate.mandate.validUntil),
       issuer: Keypair.fromSecret(current.issuerSecret),
     });
+    await current.vault.recordAnchor({
+      subject: agentDid,
+      intentId,
+      paymentTx,
+      linkHash: anchored.linkHash,
+      anchorTx: anchored.transactionHash,
+    });
     steps.push({ label: "vault_anchor_hash", value: anchored.linkHash });
     steps.push({ label: "vault_anchor_tx", value: anchored.transactionHash });
   } catch (error) {
@@ -385,6 +392,56 @@ async function revoke(current: DemoSession): Promise<RevokeResult> {
   });
   const credentialStatus = await current.agentpass.status(current.credentialHash);
   return { mandateHash: current.mandate.hash, revokeTx, credentialStatus };
+}
+
+interface WireVaultRecord {
+  readonly seq: number;
+  readonly kind: "granted" | "refused" | "anchored";
+  readonly hash: string;
+  readonly at: string;
+  readonly intentId: string;
+  readonly detail: string;
+  /** Only for `kind: "anchored"` — a live read from the registry, not just what the vault file says. */
+  readonly onChainStatus?: CredStatus;
+}
+
+interface VaultReport {
+  readonly chain: { readonly ok: boolean; readonly brokenAtSeq?: number };
+  readonly records: readonly WireVaultRecord[];
+}
+
+/**
+ * T29: turns the vault's own chain (T27) plus its anchors (T28) into
+ * something a human can read — the "evidencia consultable" §4.5 asks for.
+ * The anchored entries' `onChainStatus` is a live call to the registry, not
+ * a cached value, so the page proves the anchor still holds rather than
+ * repeating what the vault file merely claims.
+ */
+async function vaultReport(current: DemoSession): Promise<VaultReport> {
+  const agentDid = stellarAddressToDid(Keypair.fromSecret(current.agentSecret).publicKey(), "testnet");
+  const records = current.vault.list(agentDid);
+  const chain = current.vault.verify();
+
+  const wireRecords = await Promise.all(
+    records.map(async (record): Promise<WireVaultRecord> => {
+      const { entry } = record;
+      const base = { seq: record.seq, hash: record.hash, kind: entry.kind, at: entry.at, intentId: entry.intentId };
+      if (entry.kind === "granted") {
+        return { ...base, detail: `${entry.amount} ${entry.currency}` };
+      }
+      if (entry.kind === "refused") {
+        return { ...base, detail: `${entry.code}: ${entry.reason}` };
+      }
+      const onChainStatus = await current.agentpass.status(entry.linkHash).catch(() => "Unknown" as const);
+      return {
+        ...base,
+        detail: `pago ${entry.paymentTx} · ancla ${entry.anchorTx}`,
+        onChainStatus,
+      };
+    }),
+  );
+
+  return { chain, records: wireRecords };
 }
 
 // ---- HTTP plumbing -------------------------------------------------------
@@ -497,6 +554,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       sendJson(res, 200, { ok: true, steps });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/session/vault") {
+    if (session === undefined) {
+      sendJson(res, 400, { ok: false, code: "ConfigError", message: "no active session — iniciá primero" });
+      return;
+    }
+    try {
+      const report = await vaultReport(session);
+      sendJson(res, 200, { ok: true, ...report });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
   }

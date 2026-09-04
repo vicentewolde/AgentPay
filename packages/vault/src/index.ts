@@ -5,7 +5,9 @@
 export {
   createFileMandateVault,
   type MandateVault,
+  type RecordAnchorInput,
   type RecordRefusalInput,
+  type VaultAnchoredEntry,
   type VaultEntry,
   type VaultGrantedEntry,
   type VaultRecord,

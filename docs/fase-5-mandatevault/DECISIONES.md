@@ -237,3 +237,36 @@ sobre plata que ya es del vendedor.
 falló". La alternativa habría sido no capturar el error y dejar que
 rompiera la respuesta entera, perdiendo el resto de los datos del recibo
 (`tx`, `settled`) que sí son reales y sí importan.
+
+### V-10 · El anclaje se guarda como una tercera clase de entrada en el vault, y su estado se lee en vivo, no cacheado · `Vigente`
+**Fecha:** 2026-09-04 (T29)
+
+Hasta T28, el resultado de `anchorPaymentDecision` (`linkHash`,
+`transactionHash`) solo existía en la respuesta HTTP de `buy()` — se perdía
+apenas el navegador cerraba esa respuesta. T29 le agrega a `MandateVault`
+una tercera clase de entrada, `VaultAnchoredEntry` (`kind: "anchored"`), y
+`recordAnchor()` la escribe en la misma cadena que ya guarda concesiones y
+rechazos — el acto de anclar queda, en sí mismo, parte de la evidencia
+encadenada por hash, no solo su resultado on-chain.
+
+**Motivo.** Sin esto, `GET /api/session/vault` (la superficie de consulta
+nueva) no tendría nada que mostrar para un pago ya anclado en una visita
+anterior — la única fuente sería releer la respuesta de `buy()`, que nadie
+guarda. Guardarlo en el vault es coherente con lo que T27 ya estableció:
+todo lo que le pasa a una decisión es evidencia, y una decisión que además
+se ancló es información nueva sobre esa decisión, no un evento aparte.
+
+**El estado que la página muestra (`onChainStatus`) se pide a `agent_registry`
+en cada carga**, vía `agentpass.status(linkHash)` — nunca se guarda como
+parte de la entrada del vault. Es la diferencia entre "esto es lo que
+pasó" (el vault, inmutable una vez escrito) y "esto es lo que el registro
+dice ahora mismo" (una pregunta en vivo, que en principio podría cambiar si
+alguien revocara el anclaje — algo que este proyecto nunca hace, pero que
+la página no debería fingir que es imposible por diseño).
+
+**Alternativa descartada:** guardar `onChainStatus` como parte de
+`VaultAnchoredEntry`, calculado una sola vez al anclar. Se descartó porque
+mezclaría un hecho inmutable (se ancló, con este hash, en esta transacción)
+con una lectura que solo tiene sentido en el momento en que se pide —
+guardar un estado que después no se vuelve a comprobar habría sido fingir
+una garantía de "sigue vigente" que el vault, por sí solo, no puede dar.

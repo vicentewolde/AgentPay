@@ -128,6 +128,48 @@ describe("createFileMandateVault — refusals", () => {
   });
 });
 
+describe("createFileMandateVault — anchors (T28/T29)", () => {
+  it("records an anchor without affecting spentOn or hasRecorded", async () => {
+    const vault = createFileMandateVault({ path });
+    await vault.record({
+      subject: "agent-1",
+      intentId: "i1",
+      currency: "USDC",
+      amount: "0.001",
+      at: new Date("2026-09-04T00:00:00Z"),
+    });
+    await vault.recordAnchor({
+      subject: "agent-1",
+      intentId: "i1",
+      paymentTx: "pay-tx",
+      linkHash: "link-hash",
+      anchorTx: "anchor-tx",
+    });
+
+    const records = vault.list("agent-1");
+    expect(records).toHaveLength(2);
+    expect(records[1]?.entry).toMatchObject({
+      kind: "anchored",
+      intentId: "i1",
+      paymentTx: "pay-tx",
+      linkHash: "link-hash",
+      anchorTx: "anchor-tx",
+    });
+    expect(await vault.spentOn("agent-1", "USDC", new Date("2026-09-04T00:00:00Z"))).toBe("0.0010000");
+  });
+
+  it("chains an anchor record onto whatever came before it, and survives a restart", async () => {
+    const at = new Date("2026-09-04T00:00:00Z");
+    const first = createFileMandateVault({ path });
+    await first.record({ subject: "a", intentId: "i1", currency: "USDC", amount: "1.00", at });
+    await first.recordAnchor({ subject: "a", intentId: "i1", paymentTx: "tx", linkHash: "h", anchorTx: "atx" });
+
+    const reopened = createFileMandateVault({ path });
+    expect(reopened.verify()).toEqual({ ok: true });
+    expect(reopened.list("a").map((r) => r.entry.kind)).toEqual(["granted", "anchored"]);
+  });
+});
+
 describe("createFileMandateVault — the chain", () => {
   it("assigns sequential seq numbers and links each record's prevHash to the last hash", async () => {
     const vault = createFileMandateVault({ path });

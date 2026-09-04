@@ -83,7 +83,27 @@ export interface VaultRefusedEntry {
   readonly at: string;
 }
 
-export type VaultEntry = VaultGrantedEntry | VaultRefusedEntry;
+/**
+ * That a `granted` decision's payment settled and got anchored on-chain
+ * (Fase 5, T28) — the third thing that can happen to an intent, after
+ * `granted`/`refused`. Kept in the same chain as everything else, so the act
+ * of anchoring is itself part of the tamper-evident history, not just its
+ * on-chain result.
+ */
+export interface VaultAnchoredEntry {
+  readonly kind: "anchored";
+  readonly subject: string;
+  readonly intentId: string;
+  /** The Stellar transaction hash the payment itself settled as. */
+  readonly paymentTx: string;
+  /** `sha256(<granted record's hash> + ":" + paymentTx)` — what got anchored. */
+  readonly linkHash: string;
+  /** The transaction hash of the anchoring call itself. */
+  readonly anchorTx: string;
+  readonly at: string;
+}
+
+export type VaultEntry = VaultGrantedEntry | VaultRefusedEntry | VaultAnchoredEntry;
 
 export interface VaultRecord {
   readonly seq: number;
@@ -99,6 +119,14 @@ export interface RecordRefusalInput {
   readonly code: string;
   readonly reason: string;
   readonly details: Readonly<Record<string, unknown>>;
+}
+
+export interface RecordAnchorInput {
+  readonly subject: string;
+  readonly intentId: string;
+  readonly paymentTx: string;
+  readonly linkHash: string;
+  readonly anchorTx: string;
 }
 
 export interface VaultVerification {
@@ -122,6 +150,9 @@ export interface MandateVault {
 
   /** Everything `record` is not: a refusal, kept instead of thrown away. */
   recordRefusal(input: RecordRefusalInput, at?: Date): Promise<void>;
+
+  /** That a `granted` decision's payment settled and got anchored on-chain (T28). */
+  recordAnchor(input: RecordAnchorInput, at?: Date): Promise<void>;
 
   /** The full chain, in order — or just one subject's slice of it. */
   list(subject?: string): readonly VaultRecord[];
@@ -265,6 +296,18 @@ export function createFileMandateVault(options: { readonly path: string }): Mand
         code: input.code,
         reason: input.reason,
         details: input.details,
+        at: (at ?? new Date()).toISOString(),
+      });
+    },
+
+    async recordAnchor(input, at) {
+      append({
+        kind: "anchored",
+        subject: input.subject,
+        intentId: input.intentId,
+        paymentTx: input.paymentTx,
+        linkHash: input.linkHash,
+        anchorTx: input.anchorTx,
         at: (at ?? new Date()).toISOString(),
       });
     },

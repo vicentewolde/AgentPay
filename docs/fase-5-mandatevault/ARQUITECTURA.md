@@ -161,3 +161,35 @@ revierte ni oculta el pago (`V-9`): se reporta como un paso propio
 `agentpass.status(linkHash)` de forma completamente independiente —sin tocar
 el archivo del vault— devolvió `"Active"`. Detalle en
 `evidencia/T28.md`.
+
+## 8. La superficie de consulta (T29)
+
+`GET /api/session/vault` (`apps/web/src/server.ts`) y la sección 5
+("Bitácora (MandateVault)") de `public/index.html` — lo que hace que T27/T28
+sean *consultables* por una persona, no solo por un script.
+
+**Backend.** `vaultReport(current: DemoSession)` toma
+`current.vault.list(agentDid)` y `current.vault.verify()`, y para cada
+registro `anchored` hace una llamada en vivo a
+`current.agentpass.status(entry.linkHash)` — nunca reusa un valor guardado
+(`V-10`). Devuelve `{ chain: VaultVerification, records: WireVaultRecord[] }`.
+
+**Vault, extendido.** `MandateVault` gana una tercera clase de entrada,
+`VaultAnchoredEntry` (`kind: "anchored"`, con `paymentTx`/`linkHash`/
+`anchorTx`) y el método `recordAnchor()` — misma cadena de hashes que ya
+guarda `granted`/`refused`, sin abrir un archivo ni una estructura aparte.
+`apps/web`'s `anchorSettledPayment` (T28) lo llama justo después de que
+`anchorPaymentDecision` confirma la transacción.
+
+**Frontend.** Sin build step, mismo patrón que el resto de `apps/web`
+(T25): un botón ("Ver bitácora") que pide `/api/session/vault` y renderiza
+cada registro — `#seq tipo: intentId — detalle`, con `— on-chain: <estado>`
+para los anclados — más un indicador de si la cadena entera verificó
+íntegra. Se vuelve a pedir automáticamente después de cada compra, así que
+el resultado de una compra real aparece sin un segundo clic.
+
+**Verificado clickeando el flujo completo en un navegador real** (Claude
+Browser, contra el servidor local): sesión → compra real → la sección 5
+mostró `"Cadena íntegra ✓ (2 registros)"`, el registro `granted` (monto y
+moneda) y el `anchored` con `on-chain: Active` — leído en vivo, no
+cacheado. Detalle en `evidencia/T29.md`.

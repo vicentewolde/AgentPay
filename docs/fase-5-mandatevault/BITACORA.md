@@ -12,21 +12,23 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-04 · **Último hito cerrado:** T28 · **Fase 5: en curso**
+**Fecha:** 2026-09-04 · **Último hito cerrado:** T29 · **Fase 5: en curso**
 
 Cada decisión de `PolicyRail.authorise()` — autorizada o rechazada — queda
 en un registro durable y encadenado por hash, que sobrevive un reinicio del
 proceso (T27). Cada pago real, además, queda vinculado criptográficamente a
 la decisión que lo autorizó mediante un hash anclado contra `agent_registry`
-— verificable por cualquiera, sin confiar en quien opera el vault (T28).
-`apps/web` (el servidor público en Render) quedó cableado a ambos.
+— verificable por cualquiera, sin confiar en quien opera el vault (T28). Y
+ahora una persona puede verlo: `apps/web` tiene una sección de bitácora que
+muestra cada registro y el estado on-chain de cada anclaje, leído en vivo
+(T29).
 
 | | |
 |---|---|
-| Tests TypeScript | **628** rápidos (604 en T26 + 17 de T27 + 7 de T28) |
+| Tests TypeScript | **630** rápidos (604 en T26 + 17 de T27 + 7 de T28 + 2 de T29) |
 | Paquete nuevo | `@agentpay/vault` (T27) |
 | Código de fases cerradas tocado | Ninguno — `policy-rail.ts` (Fase 3) y `payment/x402.ts` (Fase 4) sin cambios; todo lo nuevo se cableó desde `apps/web`/seams opcionales |
-| Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` |
+| Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` · pago T29: `a9e353df24...`, anclaje: `39510bcd60...` |
 
 ### Progreso
 
@@ -34,7 +36,7 @@ la decisión que lo autorizó mediante un hash anclado contra `agent_registry`
 |---|---|---|
 | T27 | `@agentpay/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` | ✅ cerrado 2026-09-04 |
 | T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry` tras cada pago real | ✅ cerrado 2026-09-04 |
-| — | Superficie de consulta (CLI o vista en `apps/web`) | ⏳ pendiente, no elegido todavía |
+| T29 | Superficie de consulta: sección "Bitácora" en `apps/web`, estado on-chain de cada anclaje en vivo | ✅ cerrado 2026-09-04 |
 | — | Indexar los eventos que `agent_registry` ya emite (`Anchored`/`Revoked`) | ⏳ pendiente, no elegido todavía |
 
 ---
@@ -194,3 +196,66 @@ o vista en `apps/web` que muestre el vault y el estado de sus anclajes), o
 indexar los eventos que `agent_registry` ya emite para credencial y mandato.
 La ejecución de negocio del piloto sigue sin arrancar — no es trabajo de
 código.
+
+**Cierre, mismo día.** El usuario preguntó cuál de los dos candidatos
+recomendaba; se recomendó la superficie de consulta (es lo que hace la
+evidencia demostrable, no solo técnicamente verificable — el objetivo
+declarado de esta fase) y el usuario confirmó seguir con esa.
+
+## T29 · Superficie de consulta: la bitácora, visible — cerrado 2026-09-04
+
+**Qué quedó funcionando, en palabras llanas.** T27 y T28 dejaron cada
+decisión y cada anclaje verificables — pero solo si alguien sabía leer un
+archivo JSON Lines o escribir un script contra el registro, como se hizo
+para cerrar T28. Ahora `apps/web` tiene una quinta sección, "Bitácora
+(MandateVault)": un clic muestra cada decisión (aprobada o rechazada), cada
+anclaje, y si la cadena completa sigue íntegra — y para cada anclaje, si el
+registro **todavía** lo confirma, consultado en el momento, no un valor
+guardado de cuando se ancló.
+
+**Un detalle de diseño, explícito.** El estado on-chain de cada anclaje
+(`onChainStatus`) nunca se guarda en el vault — se pide de nuevo cada vez
+que alguien abre la bitácora. El vault guarda hechos que ya pasaron
+(se ancló, con este hash, en esta transacción); si algo cambiara del lado
+del registro, la página tiene que poder mostrarlo, no repetir para siempre
+lo que creyó en el momento de anclar. Detalle completo en `DECISIONES.md` →
+`V-10`.
+
+**Cómo quedó construido.** `MandateVault` gana una tercera clase de entrada
+(`VaultAnchoredEntry`, `kind: "anchored"`) y `recordAnchor()` — la misma
+cadena de hashes que ya guardaba concesiones y rechazos, ahora también
+guarda el acto de anclar. `apps/web` gana `GET /api/session/vault`
+(`vaultReport()`, en `server.ts`), que arma la lista completa y, para cada
+anclaje, llama en vivo a `agentpass.status(linkHash)`. El frontend (sin
+build step, mismo patrón que T25) agrega un botón que pide ese endpoint y
+lo renderiza — y se vuelve a pedir solo, después de cada compra, así que el
+resultado aparece sin un segundo clic.
+
+**Evidencia técnica.** 2 tests nuevos en `packages/vault/src/vault.test.ts`
+(630 en total, de 628): que un anclaje no afecta `spentOn`/`hasRecorded`, y
+que sobrevive un "reinicio" del proceso encadenado correctamente detrás de
+la concesión que lo precede. `pnpm typecheck`/`pnpm build` limpios.
+
+**Verificado clickeando el flujo completo en un navegador real** (Claude
+Browser, contra el servidor local, no solo leyendo el código): iniciar
+sesión → comprar (pago real asentado,
+`a9e353df24caae674c18e1b39c0d3016d037c47fbe82673d1ce61bc8d9bb817a`) → la
+sección 5 mostró sola "Cadena íntegra ✓ (2 registros)", el registro de la
+compra (`0.0010000 USDC`) y el del anclaje
+(`39510bcd609e7643dba9374b6fa2e02773cd5df907b49a842386fc64265475be`) con
+`on-chain: Active`. Capturas y el flujo completo en `evidencia/T29.md`.
+
+**Por qué.** Es lo que le faltaba a T27/T28 para cumplir la definición de
+"listo" de esta fase en sus propios términos — "evidencia **consultable**",
+no solo verificable por quien sepa leer un archivo o escribir un script.
+
+Documentación tocada: `CONTEXTO.md` (`§3c` nueva), `ARQUITECTURA.md` (`§8`
+nueva), este `BITACORA.md`, `DECISIONES.md` (`V-10` nueva), más
+`evidencia/T29.md`. Archivos tocados: `packages/vault/src/vault.ts` (+
+`index.ts`, + test), `apps/web/src/server.ts`, `apps/web/public/index.html`.
+
+Pendiente: mergear `cc/t29-vault-query` a `main` y pushear. **Fase 5: T27,
+T28 y T29 cerrados.** Siguiente, sin elegir todavía: indexar los eventos que
+`agent_registry` ya emite para credencial y mandato (`Anchored`/`Revoked`)
+dentro de la misma bitácora. La ejecución de negocio del piloto sigue sin
+arrancar — no es trabajo de código.

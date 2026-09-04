@@ -162,6 +162,20 @@
     <dl class="facts" id="revoke-facts" hidden></dl>
     <div id="revoke-status" class="status"></div>
   </section>
+
+  <section>
+    <h2>5 · Bitácora (MandateVault)</h2>
+    <p class="lead">
+      Cada decisión de autorización — aprobada o rechazada — y el anclaje
+      on-chain de cada pago real. La cadena se verifica al vuelo; el estado
+      de cada anclaje se lee en vivo del registro, no del archivo local.
+    </p>
+    <div class="row">
+      <button id="vault-btn" class="secondary" disabled>Ver bitácora</button>
+    </div>
+    <div id="vault-chain" class="status"></div>
+    <ul class="steps" id="vault-records"></ul>
+  </section>
 </main>
 
 <script>
@@ -230,6 +244,7 @@ document.getElementById("start-btn").addEventListener("click", async () => {
     setStatus(status, true, "Sesión activa.");
     document.getElementById("buy-btn").disabled = false;
     document.getElementById("revoke-btn").disabled = false;
+    document.getElementById("vault-btn").disabled = false;
   } catch (error) {
     setStatus(status, false, error.message);
   } finally {
@@ -279,7 +294,40 @@ document.getElementById("buy-btn").addEventListener("click", async () => {
   } finally {
     btn.disabled = false;
   }
+  await loadVault();
 });
+
+const VAULT_KIND_LABELS = { granted: "autorizada", refused: "rechazada", anchored: "anclada" };
+
+async function loadVault() {
+  const chainEl = document.getElementById("vault-chain");
+  const recordsEl = document.getElementById("vault-records");
+  recordsEl.innerHTML = "";
+  setStatus(chainEl, true, "Cargando…");
+  try {
+    const { body } = await api("/api/session/vault");
+    if (!body.ok) throw new Error((body.code ?? "error") + ": " + body.message);
+    setStatus(
+      chainEl,
+      body.chain.ok,
+      body.chain.ok ? "Cadena íntegra ✓ (" + body.records.length + " registros)" : "Cadena rota en seq " + body.chain.brokenAtSeq,
+    );
+    for (const r of body.records) {
+      const li = document.createElement("li");
+      const label = VAULT_KIND_LABELS[r.kind] ?? r.kind;
+      let rest = r.intentId + " — " + r.detail;
+      if (r.kind === "anchored") rest += " — on-chain: " + r.onChainStatus;
+      const b = document.createElement("b");
+      b.textContent = "#" + r.seq + " " + label + ": ";
+      li.append(b, document.createTextNode(rest));
+      recordsEl.append(li);
+    }
+  } catch (error) {
+    setStatus(chainEl, false, error.message);
+  }
+}
+
+document.getElementById("vault-btn").addEventListener("click", loadVault);
 
 document.getElementById("revoke-btn").addEventListener("click", async () => {
   const btn = document.getElementById("revoke-btn");

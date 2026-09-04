@@ -72,11 +72,17 @@ real: `agentpass.status(linkHash)` devuelve `"Active"` consultado de forma
 completamente independiente del archivo del vault. Detalle en `V-3`,
 `V-8`, `V-9` y `evidencia/T28.md`.
 
+## 3c. Qué prueba T29
+
+Que un humano —no solo un script— puede ver la bitácora completa: cada
+decisión (T27), y el estado on-chain **en vivo** de cada anclaje (T28), en
+`apps/web` (§5 de la página, "Bitácora (MandateVault)"). El estado de cada
+anclaje se lee del registro en el momento de pedirlo, no de lo que el
+archivo local dice que pasó — verificado clickeando el flujo completo en un
+navegador real. Detalle en `V-10` y `evidencia/T29.md`.
+
 ## 4. Qué NO es esta fase, todavía
 
-- **No tiene superficie de consulta.** `list()`/`verify()` existen como
-  métodos del objeto `MandateVault`, pero no hay CLI ni vista en `apps/web`
-  que los exponga a un humano todavía.
 - **No indexa los eventos que `agent_registry` ya emite** (`Anchored`,
   `Revoked` de credencial y mandato) — esos ya son consultables vía Horizon,
   pero nada en este repo los correlaciona con el resto de la evidencia.

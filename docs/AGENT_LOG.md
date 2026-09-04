@@ -1040,3 +1040,38 @@ y T28 cerrados.** Siguiente, sin elegir todavía: la superficie de consulta
 (CLI o vista en `apps/web`), o indexar los eventos que `agent_registry` ya
 emite para credencial y mandato. La ejecución de negocio del piloto sigue
 sin arrancar; no es trabajo de código.
+
+## 2026-09-04 (5) — main (T28 mergeado) / cc/t29-vault-query
+
+Agente: Claude Code
+
+Qué: el usuario preguntó qué recomendaba entre los dos candidatos abiertos;
+se recomendó la superficie de consulta (es lo que hace la evidencia
+demostrable, no solo verificable) y el usuario confirmó. T29: `apps/web`
+gana una quinta sección, "Bitácora (MandateVault)" — un botón que muestra
+cada decisión de `PolicyRail` (T27) y, para cada pago real anclado (T28), su
+estado on-chain leído **en vivo** (`agentpass.status(linkHash)`, no un valor
+guardado). `MandateVault` gana una tercera clase de entrada
+(`VaultAnchoredEntry`) y `recordAnchor()`, para que el acto de anclar quede
+en la misma cadena que ya guardaba concesiones y rechazos — sin eso, la
+página no tendría nada que mostrar para un anclaje de una visita anterior.
+2 tests nuevos (630 en total). `pnpm typecheck`/`pnpm build` limpios.
+
+Verificado clickeando el flujo completo en un navegador real (Claude
+Browser, no solo leyendo código): sesión → compra real → la sección de
+bitácora se actualizó sola y mostró "Cadena íntegra ✓ (2 registros)", con
+el anclaje en `on-chain: Active`.
+
+Por qué: cierra la definición de "listo" de esta fase en sus propios
+términos — evidencia consultable, no solo técnicamente verificable por
+quien sepa escribir un script (como se tuvo que hacer para cerrar T28).
+
+Documentación tocada: `docs/fase-5-mandatevault/` completa (`CONTEXTO.md`
+§3c nueva, `ARQUITECTURA.md` §8 nueva, `BITACORA.md` T29, `DECISIONES.md`
+`V-10` nueva, `evidencia/T29.md`). `ROADMAP.md` actualizado.
+
+Pendiente: mergear `cc/t29-vault-query` a `main` y pushear. **Fase 5: T27,
+T28 y T29 cerrados.** Siguiente, sin elegir todavía: indexar los eventos que
+`agent_registry` ya emite para credencial y mandato dentro de la misma
+bitácora. La ejecución de negocio del piloto sigue sin arrancar; no es
+trabajo de código.
