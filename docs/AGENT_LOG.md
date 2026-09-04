@@ -925,3 +925,34 @@ tiene que correr el usuario). `apps/web`'s `buy()` sigue llamando
 migrarlo no era parte de este pedido. Siguiente decisión del usuario:
 alguna de las que quedaban sin elegir (Fase 5 / MandateVault), o alguna
 completamente nueva.
+
+## 2026-09-04 (2) — cc/close-phase-4
+
+Agente: Claude Code
+
+Qué: cierre formal de la **Fase 4 (MandateGate)** — el usuario confirmó que
+pusheó T26 y preguntó qué faltaba para dar la fase por cerrada. Con T24, T25
+y T26 cerrados, y los tres huecos que `docs/fase-4-mandategate/CONTEXTO.md`
+§6 marcaba fuera de alcance ya resueltos (`payTo`, `execute_payment`, el
+doble conteo de `perDay`), no quedaba nada de código pendiente — solo
+documentación desactualizada: `ROADMAP.md` seguía diciendo "Fase 4 ⏳ Sin
+diseñar" en tres lugares distintos (línea de estado, tabla `§3`, header
+`§4.4`) pese a que `§4.4` en prosa ya narraba T24–T25 como en curso, y la
+Fase 2 en la misma tabla seguía marcada "T15 sin construir" pese a haber
+cerrado hace varias sesiones. Se corrigieron los tres, se agregó el cierre
+de T26 a `§4.4`, y se agregó `§7` a `CONTEXTO.md` de la Fase 4 (cierre
+formal, mismo patrón que las Fases 1–3).
+
+Por qué: es trabajo de higiene documental puro — sin él, la próxima sesión
+(de cualquiera de los dos agentes) que lea `ROADMAP.md` primero, como pide
+`CLAUDE.md`, arrancaría creyendo que la Fase 4 seguía sin diseñar.
+
+Documentación tocada: `ROADMAP.md` (línea de estado, tabla `§3`, `§4.2`,
+`§4.4`), `docs/fase-4-mandategate/CONTEXTO.md` (`§6`, `§7` nueva). Sin
+decisiones nuevas — no se tocó código.
+
+Pendiente: mergear `cc/close-phase-4` a `main` y pushear (a confirmar con
+el usuario). **Fase 4 completa: T24–T26.** Siguiente: Fase 5 (MandateVault
++ cierre de piloto) — sin diseñar todavía, ver `ROADMAP.md` §4.5. Se generó
+un prompt de arranque para un chat nuevo:
+`docs/fase-0-fundamentos/prompt-inicio-fase-5.md`.

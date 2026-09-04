@@ -71,5 +71,26 @@ alcance no se cambia en silencio, se documenta cuándo y por qué se superó.
 ## 6. Fuera de alcance, a propósito (todavía vigente)
 
 MandateVault (Fase 5) · Stellar mainnet · rieles fiat o PSP · `policy_rail`
-como pagador de producción · una lista de `payTo` permitidos en el Mandato ·
-convertir el pago en una tool del agente.
+como pagador de producción.
+
+**Cerrado en T26 (2026-09-04) — dejó de estar fuera de alcance:** la lista de
+`payTo` permitidos en el Mandato (`G-10`) y convertir el pago en una tool del
+agente (`execute_payment`, `G-12`). Ambos a pedido explícito del usuario,
+mismo patrón que el resto de esta fase — nada se cambió en silencio. Detalle
+en `BITACORA.md` (T26) y `DECISIONES.md` (`G-10` a `G-12`).
+
+## 7. Fase 4, completa
+
+**Fecha:** 2026-09-04 · **Hitos:** T24, T25, T26
+
+La frase de §1 quedó probada de punta a punta: un `PurchaseIntent` firmado
+se convierte en plata real movida en Stellar testnet (T24), desde un
+navegador público (T25, `apps/web` desplegado en Render), y ahora también
+directamente por el propio agente vía una instrucción en español (T26). Los
+tres huecos que quedaban anotados a propósito — la quinta tool, `payTo`, el
+doble conteo de `perDay` — se cerraron en T26. Lo único que sigue fuera es lo
+que §6 sigue marcando como tal: `policy_rail` como pagador real, mainnet,
+rieles fiat.
+
+Siguiente: Fase 5 (MandateVault + cierre del piloto), sin diseñar todavía —
+ver `ROADMAP.md` §4.5.

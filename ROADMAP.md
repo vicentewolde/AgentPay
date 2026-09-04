@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-03 · Fase actual: **Fase 4 en curso (T24 y T25 cerrados)** — Fases 2 y 3 completas (T9–T23)
+Última revisión: 2026-09-04 · Fase actual: **Fase 5, sin empezar** — Fases 2, 3 y 4 completas (T9–T26)
 
 ---
 
@@ -99,10 +99,10 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 |---|---|---|---|---|
 | 0 | Fundamentos | Que hay una tesis técnica y una ventana regulatoria reales, no solo entusiasmo | ✅ Completa (pre-código) | — |
 | 1 | **AgentPass** | Identidad verificable del agente, revocable desde afuera | ✅ Completa (T1–T8) | — |
-| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | 🔄 T9–T14 completos, T15 desbloqueado (2026-09-03) sin construir | **Nada.** T15 dejó de depender del embajador — el catálogo es una API pública (ver Fase 2) |
+| 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | ✅ Completa (T9–T15) | — |
 | 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | ✅ Completa (T16–T23) | — |
-| 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ⏳ Sin diseñar | Timeline de integración del embajador; es el hito de mayor riesgo del proyecto |
-| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | ⏳ Sin diseñar | Fases 2–4 cerradas |
+| 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ✅ Completa (T24–T26) | — |
+| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | ⏳ Sin diseñar | Fases 2–4 cerradas — **ya no hay bloqueante** |
 | 6 | **Después: AgentGuard + comercialización** | Qué viene si SCF financia esto — no es parte del piloto | 🔲 Sin definir, a propósito | Todo lo anterior |
 
 Las Fases 0 y 1 están cerradas. Las Fases 2–5 son el piloto que falta ejecutar.
@@ -359,7 +359,7 @@ tareas:** un `PurchaseIntent` de la Fase 2 no puede convertirse en una compra
 real si excede lo que el Mandato autoriza — y esa comprobación no depende de
 que el agente "decida" respetarlo.
 
-### 4.4 · Fase 4 — MandateGate 🚧 en curso
+### 4.4 · Fase 4 — MandateGate ✅ completa
 
 **Qué prueba:** que toda la cadena —identidad, política, mandato— funciona
 dentro del checkout **real** del bazaar del embajador, no en un entorno de prueba
@@ -409,12 +409,32 @@ cuenta del agente confirmado bajando lo esperado. Detalle en
 sin framework nuevo, probada de punta a punta en un navegador real: catálogo
 real → sesión (credencial + Mandato anclados) → compra real (pago x402
 verificado en Horizon) → revocación real → reintento rechazado con
-`MandateRevoked`. Encontró y corrigió un hallazgo real sobre `perDay` en el
-camino de pago real (`docs/fase-4-mandategate/DECISIONES.md` → `G-8`): una
-compra cuenta el doble contra el límite diario porque `authorise()` se llama
-dos veces por compra (T19 estructural + T24 real) y el chequeo no distingue
-una re-verificación del mismo intent de una compra nueva — no corregido en
-el rail, documentado como decisión pendiente.
+`MandateRevoked`. Encontró un hallazgo real sobre `perDay` en el camino de
+pago real (`G-8`): una compra cuenta el doble contra el límite diario porque
+`authorise()` se llama dos veces por compra (T19 estructural + T24 real) y
+el chequeo no distingue una re-verificación del mismo intent de una compra
+nueva — documentado en ese momento como decisión pendiente, cerrado en T26
+(`G-11`).
+
+**T26 cerrado, y con eso la Fase 4 completa.** Los tres huecos que T24/T25
+habían dejado anotados y explícitamente fuera de alcance (`docs/fase-4-mandategate/CONTEXTO.md`
+§6): `execute_payment`, la quinta tool del agente que firma y paga en una
+sola llamada, invocable por instrucción en español igual que
+`create_purchase_intent` (`G-4` → `G-12`); `grant.payTo` en el Mandato, un
+allowlist opcional de cuentas que cobran, chequeado contra el reto `402`
+real cuando está presente (`M-14` → `G-10`); y el doble conteo de `perDay`
+en una compra real (`G-8` → `G-11`, arriba). 604 tests (589 + 15 nuevos),
+`pnpm typecheck`/`pnpm test` limpios. Detalle en
+[`docs/fase-4-mandategate/BITACORA.md`](docs/fase-4-mandategate/BITACORA.md).
+
+`apps/web` está desplegado y público en
+[agentpay-web.onrender.com](https://agentpay-web.onrender.com/) — tres
+fallas reales de deploy (versión de Node bajo Corepack, y los secretos del
+servidor leídos solo de un archivo que no existe en Render) diagnosticadas
+y corregidas contra el log real, no supuestas. Sigue llamando
+`executeBazaarPayment` directo, no a través de `execute_payment` — migrar
+esa integración no era parte de T26 y queda como trabajo opcional futuro,
+no como algo pendiente para cerrar la fase.
 
 ### 4.5 · Fase 5 — MandateVault + cierre del piloto ⏳ sin diseñar
 
