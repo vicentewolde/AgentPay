@@ -185,6 +185,8 @@ export {
   type PolicyRail,
 } from "./policy/policy-rail.js";
 
+export { withVault } from "./policy/with-vault.js";
+
 export {
   reconcileTerms,
   termsError,

@@ -24,8 +24,12 @@ imposible de saltar por prompt injection.
 | [docs/fase-3-policyrail-mandato/DECISIONES.md](docs/fase-3-policyrail-mandato/DECISIONES.md) | Decisiones de la Fase 3 (prefijo `M-`). `M-1` quedó **superada** en T19; `M-11` y `M-12` la reemplazan |
 | [docs/fase-4-mandategate/CONTEXTO.md](docs/fase-4-mandategate/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
 | [docs/fase-4-mandategate/ARQUITECTURA.md](docs/fase-4-mandategate/ARQUITECTURA.md) | Mapa técnico de la Fase 4: el módulo de pago x402, identidades resueltas contra tráfico real |
-| [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24 y T25 cerrados.** Estado actual y qué sigue |
+| [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24–T26 cerrados.** Estado actual y qué sigue |
 | [docs/fase-4-mandategate/DECISIONES.md](docs/fase-4-mandategate/DECISIONES.md) | Decisiones de la Fase 4 (prefijo `G-`) |
+| [docs/fase-5-mandatevault/CONTEXTO.md](docs/fase-5-mandatevault/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
+| [docs/fase-5-mandatevault/ARQUITECTURA.md](docs/fase-5-mandatevault/ARQUITECTURA.md) | Mapa técnico de la Fase 5: el paquete `@agentpay/vault`, la cadena de hashes, el seam de `policyRail?` |
+| [docs/fase-5-mandatevault/BITACORA.md](docs/fase-5-mandatevault/BITACORA.md) | **T27 cerrado.** Estado actual y qué sigue |
+| [docs/fase-5-mandatevault/DECISIONES.md](docs/fase-5-mandatevault/DECISIONES.md) | Decisiones de la Fase 5 (prefijo `V-`) |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Devin: qué se hizo, en qué branch, qué queda pendiente |
 | [README.md](README.md) | Cómo correr el proyecto |
 
@@ -47,13 +51,16 @@ imposible de saltar por prompt injection.
    comentarios, mensajes de commit y `README.md` en inglés.
 5. **No construyas lo que está fuera de alcance.** PolicyRail y Mandato
    —incluido el enforcement de `scope.limits`— entraron en alcance con la Fase
-   3 (cerrada). **MandateGate (pagos x402 reales) y un frontend simple
-   entraron en alcance el 2026-09-03, a pedido explícito del usuario** — ver
-   `docs/fase-4-mandategate/CONTEXTO.md` §5. Siguen fuera: MandateVault (Fase
-   5), convertir la ejecución de un pago en una tool del agente invocable por
-   instrucción en español (ver `docs/fase-4-mandategate/DECISIONES.md` →
-   `G-4`), cualquier cosa en mainnet o con rieles fiat. Si el trabajo actual
-   parece pedir algo de lo que sigue fuera: anótalo y déjalo sin construir.
+   3 (cerrada). MandateGate (pagos x402 reales), un frontend simple y
+   `execute_payment` (la tool de pago del agente) entraron en alcance con la
+   Fase 4 (cerrada, T24–T26) — ver `docs/fase-4-mandategate/CONTEXTO.md` §5 y
+   `DECISIONES.md` → `G-12`. **MandateVault entró en alcance el 2026-09-04, a
+   pedido explícito del usuario** — Fase 5, ver `ROADMAP.md` §4.5. Sigue fuera:
+   la ejecución de negocio del piloto (cohorte de alumnos, comunidad aliada,
+   demo grabable, formulario de Build Award) todavía no arrancó y no es
+   trabajo de código; cualquier cosa en mainnet o con rieles fiat. Si el
+   trabajo actual parece pedir algo de lo que sigue fuera: anótalo y déjalo
+   sin construir.
 
 ## Coordinación con Devin — protocolo obligatorio, no opcional
 

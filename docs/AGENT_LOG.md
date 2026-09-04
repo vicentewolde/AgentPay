@@ -956,3 +956,45 @@ el usuario). **Fase 4 completa: T24–T26.** Siguiente: Fase 5 (MandateVault
 + cierre de piloto) — sin diseñar todavía, ver `ROADMAP.md` §4.5. Se generó
 un prompt de arranque para un chat nuevo:
 `docs/fase-0-fundamentos/prompt-inicio-fase-5.md`.
+
+## 2026-09-04 (3) — cc/t27-mandate-vault
+
+Agente: Claude Code
+
+Qué: T27, primer hito de la Fase 5 (MandateVault) — antes de diseñar nada se
+le preguntó al usuario en qué punto estaba la ejecución de negocio del
+piloto (alumnos, comunidad aliada, formulario de Build Award); nada había
+arrancado todavía, y el usuario pidió avanzar con MandateVault igual, con
+datos simulados. Investigar qué evidencia produce hoy el sistema encontró
+dos huecos: la decisión de `PolicyRail.authorise()` (aprobada o rechazada)
+no quedaba en ningún lado durable, y no hay vínculo criptográfico entre un
+pago real y el intent/mandato que lo autorizó. El segundo resultó bloqueado
+por `@x402/stellar` (construye la transacción de pago sin exponer memo) —
+se le mostró al usuario antes de seguir, junto con la alternativa (anclar
+vía transacción companion contra `agent_registry`, T20 reusado), y quedó
+confirmada para T28, no construida todavía.
+
+T27 cierra el primer hueco: `@agentpay/vault` (paquete nuevo), una bitácora
+JSON Lines *append-only*, encadenada por hash, que implementa el mismo
+puerto que `SpendLedger` estructuralmente (sin importar ese tipo — mismo
+patrón que `RegistryAccess`, T20). Un decorador nuevo, `withVault`, agrega el
+registro de rechazos sin tocar `policy-rail.ts` (Fase 3, cerrado). `apps/web`
+quedó cableado a este vault en vez del ledger en memoria — verificado con un
+smoke test real contra testnet (sesión, compra x402 real, revocación, los
+tres con transacción confirmada). 17 tests nuevos (621 en total).
+`pnpm typecheck`/`pnpm build` limpios.
+
+Por qué: es el primer requisito de la definición de "listo" de esta fase
+(`ROADMAP.md §4.5`) — que cada decisión del sistema quede como evidencia
+consultable, no solo texto de terminal que se pierde al reiniciar.
+
+Documentación nueva: `docs/fase-5-mandatevault/` completa (`CONTEXTO.md`,
+`ARQUITECTURA.md`, `BITACORA.md`, `DECISIONES.md` con `V-1` a `V-7`,
+`evidencia/T27.md`). `CLAUDE.md` actualizado (nota de alcance del punto 5,
+tabla de documentación). `ROADMAP.md` §4.5 pasa de "sin diseñar" a "en
+curso".
+
+Pendiente: mergear `cc/t27-mandate-vault` a `main` y pushear (a confirmar
+con el usuario). Siguiente: T28 (anclar `vault.head()` on-chain) o la
+superficie de consulta — ninguno elegido todavía. La ejecución de negocio
+del piloto sigue sin arrancar; no es trabajo de código.

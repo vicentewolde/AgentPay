@@ -38,6 +38,9 @@ importers:
       '@agentpay/mandate':
         specifier: workspace:*
         version: link:../../packages/mandate
+      '@agentpay/vault':
+        specifier: workspace:*
+        version: link:../../packages/vault
       '@stellar/stellar-sdk':
         specifier: ^17.0.1
         version: 17.0.1(debug@4.4.3)
@@ -68,6 +71,9 @@ importers:
       '@agentpay/mandate':
         specifier: workspace:*
         version: link:../../packages/mandate
+      '@agentpay/vault':
+        specifier: workspace:*
+        version: link:../../packages/vault
       '@stellar/stellar-sdk':
         specifier: ^17.0.1
         version: 17.0.1(debug@4.4.3)
@@ -133,6 +139,12 @@ importers:
       zod:
         specifier: ^4.5.4
         version: 4.5.4
+
+  packages/vault:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../core
 
 packages:
 

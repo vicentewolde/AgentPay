@@ -42,7 +42,7 @@ import { checkMandate, mandateCheckError } from "../mandate/check-mandate.js";
 import type { MandateState, MandateVerifier, UsableMandate } from "../mandate/verifier.js";
 import { checkOwnMandate } from "../mandate/verifier.js";
 import { executeBazaarPayment, fillRouteTemplate } from "../payment/x402.js";
-import { createLocalPolicyRail, policyRailError } from "../policy/policy-rail.js";
+import { createLocalPolicyRail, policyRailError, type PolicyRail } from "../policy/policy-rail.js";
 import { fromScaledAmount, multiplyAmount } from "../scope/amount.js";
 import { checkScope, scopeError } from "../scope/scope.js";
 import { createToolSet, defineTool, type ErasedTool, type ToolSet } from "./tool.js";
@@ -551,6 +551,13 @@ export interface AgentToolsDeps {
   readonly ledger: SpendLedger;
   /** Enables `execute_payment` (G-4) when present, alongside everything `create_purchase_intent` needs. */
   readonly payment?: PaymentDeps;
+  /**
+   * Overrides the `LocalPolicyRail` this module would otherwise build from
+   * `ledger` — e.g. `withVault(createLocalPolicyRail({ ledger: vault }), vault)`
+   * (T27), so refusals reach the same durable vault `ledger` already does.
+   * Absent, behaviour is unchanged from before T27.
+   */
+  readonly policyRail?: PolicyRail;
 }
 
 /**
@@ -576,7 +583,7 @@ function purchaseIntentDepsOf(deps: AgentToolsDeps): PurchaseIntentDeps | undefi
     signer: deps.signer,
     verifier: deps.verifier,
     mandateVerifier: deps.mandateVerifier,
-    policyRail: createLocalPolicyRail({ ledger: deps.ledger, now: () => deps.now ?? new Date() }),
+    policyRail: deps.policyRail ?? createLocalPolicyRail({ ledger: deps.ledger, now: () => deps.now ?? new Date() }),
     intentTtlSeconds: deps.intentTtlSeconds,
     now: deps.now,
   };

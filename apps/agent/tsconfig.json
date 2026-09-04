@@ -5,5 +5,10 @@
     "outDir": "dist"
   },
   "include": ["src/**/*"],
-  "references": [{ "path": "../../packages/core" }, { "path": "../../packages/sdk" }, { "path": "../../packages/mandate" }]
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/sdk" },
+    { "path": "../../packages/mandate" },
+    { "path": "../../packages/vault" }
+  ]
 }

@@ -111,7 +111,9 @@ export type AgentPassErrorCode =
   /** The venue is asking for a different amount than the intent's total. */
   | "TermsAmountMismatch"
   /** The mandate's `grant.payTo` does not list the account the venue asks to be paid. */
-  | "TermsPayeeNotAllowed";
+  | "TermsPayeeNotAllowed"
+  /** A `MandateVault` file is not well-formed JSON Lines of vault records. */
+  | "VaultCorrupted";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

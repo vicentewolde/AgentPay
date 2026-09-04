@@ -18,6 +18,7 @@
     "@agentpass/core": "workspace:*",
     "@agentpass/sdk": "workspace:*",
     "@agentpay/mandate": "workspace:*",
+    "@agentpay/vault": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1",
     "@x402/core": "~2.24.0",
     "@x402/stellar": "^2.24.0",

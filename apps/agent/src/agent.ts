@@ -17,6 +17,7 @@ import { checkOwnCredential } from "./credential/verifier.js";
 import type { MandateState, MandateVerifier } from "./mandate/verifier.js";
 import { checkOwnMandate } from "./mandate/verifier.js";
 import { createInMemorySpendLedger, type SpendLedger } from "./ledger/spend-ledger.js";
+import type { PolicyRail } from "./policy/policy-rail.js";
 import { createAgentTools, type PaymentDeps } from "./tools/agent-tools.js";
 import type { ToolSet } from "./tools/tool.js";
 
@@ -64,6 +65,12 @@ export interface AgentConfig {
    * stays out of the tool set exactly as it does for the mock catalogue.
    */
   readonly payment?: PaymentDeps;
+  /**
+   * Overrides the `LocalPolicyRail` this agent would otherwise build from
+   * `ledger`. Absent, behaviour is unchanged — pass one (e.g. wrapped with
+   * `withVault`, T27) to also keep every refusal, not just every grant.
+   */
+  readonly policyRail?: PolicyRail;
 }
 
 export interface Agent {
@@ -161,6 +168,7 @@ export async function createAgent(config: AgentConfig): Promise<Agent> {
       now: config.now,
       ledger,
       payment: config.payment,
+      policyRail: config.policyRail,
     }),
   };
 }

@@ -18,5 +18,8 @@ target/
 # demo artefact from the README walkthrough
 credential.jws
 
+# apps/web's durable MandateVault (T27) — runtime data, not source
+/data/
+
 # os
 .DS_Store

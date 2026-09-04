@@ -5,6 +5,7 @@
     { "path": "./packages/sdk" },
     { "path": "./packages/cli" },
     { "path": "./packages/mandate" },
+    { "path": "./packages/vault" },
     { "path": "./apps/agent" },
     { "path": "./apps/web" }
   ]

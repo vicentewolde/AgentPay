@@ -37,12 +37,12 @@ import { createAgentPass, type AgentPass } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 import { anchorMandate, createMandate, revokeMandate, type AnchoredMandate } from "@agentpay/mandate";
+import { createFileMandateVault, type MandateVault } from "@agentpay/vault";
 
 import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, VenueId } from "@agentpay/agent";
 import {
   createAgent,
   createBazaarCatalog,
-  createInMemorySpendLedger,
   createLocalPolicyRail,
   createOnChainMandateVerifier,
   executeBazaarPayment,
@@ -50,8 +50,8 @@ import {
   getBazaarServiceRoute,
   interpretPurchase,
   verifyIntent,
+  withVault,
   type PolicyRail,
-  type SpendLedger,
 } from "@agentpay/agent";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
@@ -60,6 +60,9 @@ const SCOPE_PATH = resolve(REPO_ROOT, "examples/scope-stellar-bazaar.json");
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
 const DEFAULT_BAZAAR_BASE_URL = "https://stellar-bazaar-x402.vercel.app";
+// A relative path, so a durable disk mounted at the process's cwd (e.g.
+// Render's persistent disk) picks it up without any code change — see T27.
+const DEFAULT_VAULT_PATH = resolve(REPO_ROOT, "data/mandate-vault.jsonl");
 const CREDENTIAL_VALID_DAYS = 1;
 const PAYABLE_PRODUCT_ID = "swap-risk-quote";
 const ROUTE_PARAMS = { pair: "XLM/USDC", amount: 100, side: "buy" };
@@ -118,7 +121,7 @@ interface DemoSession {
   readonly agent: Agent;
   readonly catalog: CatalogAdapter;
   readonly policyRail: PolicyRail;
-  readonly ledger: SpendLedger;
+  readonly vault: MandateVault;
   readonly scope: Scope;
   readonly mandate: AnchoredMandate;
   readonly credentialHash: string;
@@ -226,11 +229,13 @@ async function startSession(): Promise<DemoSession> {
   const anchoredMandate = await anchorMandate(agentpass, { mandate, principal: issuer });
 
   const catalog = createBazaarCatalog({ baseUrl });
-  // Same ledger backs both PolicyRail instances (G-5, T24) — the two
+  // Same vault backs both PolicyRail instances (G-5, T24) — the two
   // authorise() calls a purchase makes (structural, then against the real
-  // 402) record the same intentId once, not twice.
-  const ledger = createInMemorySpendLedger();
-  const policyRail = createLocalPolicyRail({ ledger });
+  // 402) record the same intentId once, not twice. A MandateVault satisfies
+  // SpendLedger structurally (T27), so it drops in wherever the ledger did;
+  // withVault additionally keeps every refusal, not just every grant.
+  const vault = createFileMandateVault({ path: env.get("MANDATE_VAULT_PATH") ?? DEFAULT_VAULT_PATH });
+  const policyRail = withVault(createLocalPolicyRail({ ledger: vault }), vault);
 
   const agent = await createAgent({
     credential: issued.jws,
@@ -239,7 +244,8 @@ async function startSession(): Promise<DemoSession> {
     verifier: agentpass,
     mandateVerifier: createOnChainMandateVerifier(agentpass),
     signer: agentKeypair,
-    ledger,
+    ledger: vault,
+    policyRail,
   });
 
   return {
@@ -247,7 +253,7 @@ async function startSession(): Promise<DemoSession> {
     agent,
     catalog,
     policyRail,
-    ledger,
+    vault,
     scope: demoScope.scope,
     mandate: anchoredMandate,
     credentialHash: issued.hash,

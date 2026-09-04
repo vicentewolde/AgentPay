@@ -12,6 +12,7 @@
     "@agentpass/sdk": "workspace:*",
     "@agentpay/agent": "workspace:*",
     "@agentpay/mandate": "workspace:*",
+    "@agentpay/vault": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1"
   }
 }
