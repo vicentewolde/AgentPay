@@ -554,7 +554,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
 };
 
 async function serveStatic(pathname: string, res: ServerResponse): Promise<void> {
-  const relative = pathname === "/" ? "/index.html" : pathname;
+  const relative = pathname === "/" ? "/index.html" : pathname === "/landing" ? "/landing.html" : pathname;
   const filePath = join(PUBLIC_DIR, relative);
   // No user input reaches this join beyond the URL pathname of a same-origin
   // GET, and every route below is fixed — but refuse a path that escapes

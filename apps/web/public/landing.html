@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentPay — IA que paga por vos, con límites reales</title>
+<meta name="description" content="Un agente de IA prueba quién lo opera, cuánto puede gastar, y ese permiso se puede cortar desde afuera. Corriendo en vivo en Stellar testnet." />
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0d12;
+    --panel: #12151c;
+    --panel-2: #0e1118;
+    --panel-border: #232838;
+    --text: #e7e9ee;
+    --muted: #8a91a3;
+    --accent: #5fe3b3;
+    --accent-dim: #2f7a5f;
+    --accent-soft: #1a3329;
+    --danger: #ff6b6b;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 0 20px 64px; }
+  a { color: var(--accent); }
+
+  /* ---- Hero ---- */
+  .hero {
+    padding: 56px 0 32px;
+    text-align: center;
+  }
+  .eyebrow {
+    display: inline-block;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-dim);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 30px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin: 0 0 16px;
+  }
+  .hero p.sub {
+    color: var(--muted);
+    font-size: 16px;
+    max-width: 540px;
+    margin: 0 auto 28px;
+  }
+  .cta-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    text-decoration: none;
+    border-radius: 8px;
+    padding: 13px 22px;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .btn-primary { background: var(--accent); color: #06110d; }
+  .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--panel-border); }
+
+  /* ---- Sections ---- */
+  section { margin-top: 48px; }
+  .kicker {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  h2 { font-size: 21px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  section > p { color: var(--muted); font-size: 15px; }
+
+  /* ---- Problem ---- */
+  .problem-box {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-left: 3px solid var(--danger);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .problem-box p { margin: 0; color: var(--text); font-size: 15px; }
+  .problem-box p + p { margin-top: 10px; }
+
+  /* ---- How it works ---- */
+  .steps { display: grid; gap: 14px; }
+  .step {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .step .num {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-dim);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step h3 { margin: 0 0 4px; font-size: 15px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+  /* ---- Evidence ---- */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .metric {
+    background: var(--panel-2);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .metric .n { font-size: 20px; font-weight: 700; color: var(--accent); font-family: var(--mono); }
+  .metric .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; margin-top: 2px; }
+
+  .tx-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 10px;
+  }
+  .tx-card .badge {
+    display: inline-block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--accent-dim);
+    color: #cffff0;
+    margin-bottom: 8px;
+  }
+  .tx-card p.desc { margin: 0 0 10px; font-size: 14px; color: var(--text); }
+  .tx-card .hash-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .tx-card .hash { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tx-card .verify { flex: none; font-weight: 600; }
+
+  /* ---- Timeline ---- */
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px dashed var(--panel-border);
+    font-size: 14px;
+  }
+  .timeline li:first-child { border-top: none; }
+  .timeline .check {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+  .timeline .check.pending { background: transparent; border: 1px dashed var(--muted); color: transparent; }
+  .timeline b { color: var(--text); }
+  .timeline span.d { color: var(--muted); }
+
+  /* ---- Integration note ---- */
+  .note {
+    background: var(--panel-2);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .note b { color: var(--text); }
+
+  /* ---- Final CTA ---- */
+  .final-cta {
+    text-align: center;
+    padding: 40px 24px;
+    background: var(--panel);
+    border: 1px solid var(--accent-dim);
+    border-radius: 14px;
+    margin-top: 56px;
+  }
+  .final-cta h2 { margin-bottom: 8px; }
+  .final-cta p { color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--panel-border);
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  footer a { color: var(--muted); text-decoration: underline; }
+
+  @media (max-width: 480px) {
+    h1 { font-size: 25px; }
+    .metrics { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .metric .n { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="hero">
+    <span class="eyebrow">Stellar Testnet · en vivo, no simulado</span>
+    <h1>IA que paga por vos — con límites que no puede saltarse</h1>
+    <p class="sub">
+      AgentPay le da identidad verificable a un agente de compras, le pone un
+      tope de gasto que aplica la propia red de Stellar, y te deja cortarle
+      el permiso al instante, desde afuera. Ya funciona hoy, contra dinero
+      real de testnet — no es una maqueta.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/">Ver la demo en vivo →</a>
+      <a class="btn btn-secondary" href="https://github.com/vicentewolde/AgentPay" target="_blank" rel="noopener">Ver el código</a>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">El problema</p>
+    <div class="problem-box">
+      <p>Los agentes de IA ya pueden comprar solos — pero si le das a uno
+      acceso a gastar, hoy no hay forma real de saber que es <em>tu</em>
+      agente actuando, de limitar cuánto puede gastar sin confiar
+      ciegamente en su código, ni de cortarle el permiso al instante si
+      algo sale mal.</p>
+      <p>Y un agente se puede convencer con texto — con las instrucciones
+      correctas, alguien podría intentar que "olvide" sus límites. La
+      protección no puede vivir en lo que el agente decide obedecer.</p>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Cómo funciona</p>
+    <h2>Tres piezas, cada una construida y probada en Stellar</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <div>
+          <h3>Identidad verificable</h3>
+          <p>El agente prueba criptográficamente quién lo opera y qué tiene
+          permitido hacer — una credencial firmada, anclada en un contrato
+          de Stellar.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <div>
+          <h3>Límite de gasto real</h3>
+          <p>El tope no vive en las instrucciones del agente — vive en un
+          smart contract de Soroban que lo aplica dentro de la misma
+          transacción que mueve la plata. La red lo rechaza, no un "por
+          favor no lo hagas".</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <div>
+          <h3>Apagado remoto</h3>
+          <p>El dueño puede revocar el permiso desde afuera del agente, en
+          cualquier momento — sin tocar su código ni su identidad.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Evidencia</p>
+    <h2>No es una maqueta — es Stellar testnet, en vivo</h2>
+    <div class="metrics">
+      <div class="metric"><div class="n">635</div><div class="l">tests, 0 fallando</div></div>
+      <div class="metric"><div class="n">31</div><div class="l">commits públicos</div></div>
+      <div class="metric"><div class="n">5</div><div class="l">pagos reales asentados</div></div>
+    </div>
+
+    <div class="tx-card">
+      <span class="badge">Pago real · smart contract</span>
+      <p class="desc">Compra pagada por <code>policy_rail</code> — un
+      contrato de Soroban que verifica el límite de gasto dentro de la
+      misma transacción, no solo antes de firmarla.</p>
+      <div class="hash-row">
+        <span class="hash">22f31871dce75743…647324fc7</span>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/22f31871dce757438fe306ac40c6395908cb7a08eb19b349d09fd29647324fc7" target="_blank" rel="noopener">Verificar →</a>
+      </div>
+    </div>
+
+    <div class="tx-card">
+      <span class="badge">Pago real · bazaar del Embajador</span>
+      <p class="desc">Factura x402 real del bazaar, pagada de punta a
+      punta por el agente sin que el comercio tuviera que cambiar nada de
+      su código.</p>
+      <div class="hash-row">
+        <span class="hash">fda497c5fd6b9b40…6db93c2</span>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/fda497c5fd6b9b402ab2839b632730b8710b65dae7aa08c873a19b5ac6db93c2" target="_blank" rel="noopener">Verificar →</a>
+      </div>
+    </div>
+
+    <div class="tx-card">
+      <span class="badge">Anclaje on-chain</span>
+      <p class="desc">Cada pago real queda vinculado, con hash, a la
+      decisión que lo autorizó — anclado contra el mismo contrato que
+      guarda la identidad. Verificable por cualquiera, sin confiar en
+      quien opera el servidor.</p>
+      <div class="hash-row">
+        <span class="hash">feda66884b503dd0…30bdd446</span>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/feda66884b503dd0505f07a9d6be05b27dfd96c82200cf0b5996374430bdd446" target="_blank" rel="noopener">Verificar →</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Integración</p>
+    <div class="note">
+      <b>Corre en vivo contra el bazaar x402 de Stellar del Embajador</b> —
+      un comercio 100% on-chain — sin que él tuviera que tocar una sola
+      línea de su código. El agente lee su catálogo real, arma una compra,
+      y la paga de verdad usando el protocolo que el propio bazaar ya
+      expone.
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Estado del proyecto</p>
+    <h2>Cinco fases construidas, en dos semanas</h2>
+    <ul class="timeline">
+      <li><span class="check">✓</span><div><b>Identidad del agente</b> — credencial revocable, contrato desplegado en testnet.</div></li>
+      <li><span class="check">✓</span><div><b>Agente de compra</b> — lee el catálogo real y genera una intención firmada.</div></li>
+      <li><span class="check">✓</span><div><b>Política + mandato</b> — límite de gasto y consentimiento firmado, aplicados en infraestructura.</div></li>
+      <li><span class="check">✓</span><div><b>Pago real</b> — la cadena completa paga una factura real en el bazaar.</div></li>
+      <li><span class="check">✓</span><div><b>Evidencia verificable</b> — cada decisión y cada pago quedan anclados on-chain.</div></li>
+      <li><span class="check pending">○</span><div><span class="d"><b>Piloto con usuarios reales</b> — cohorte de alumnos y comunidad Stellar, arrancando ahora.</span></div></li>
+    </ul>
+  </section>
+
+  <div class="final-cta">
+    <h2>¿Lo querés probar vos mismo?</h2>
+    <p>Un clic, una compra real, un pago verificable — sin instalar nada.</p>
+    <a class="btn btn-primary" href="/">Ver la demo en vivo →</a>
+  </div>
+
+  <footer>
+    Todo corre en Stellar <b>testnet</b> — nada de dinero real fuera del
+    entorno de pruebas. Código abierto en
+    <a href="https://github.com/vicentewolde/AgentPay" target="_blank" rel="noopener">github.com/vicentewolde/AgentPay</a>.
+  </footer>
+
+</main>
+</body>
+</html>
