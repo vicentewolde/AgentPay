@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AgentPay — a spending limit an AI agent can’t talk its way past</title>
-<meta name="description" content="An AI agent proves who runs it and pays real invoices, with a spending limit Stellar enforces inside the same transaction that moves the money. Live on testnet." />
+<title>AgentPay — payment infrastructure for AI agents on Stellar</title>
+<meta name="description" content="AgentPay is payment infrastructure for AI agents: a provable identity, a spending limit Stellar enforces on-chain, and control you can pull from outside the agent. Live on Stellar testnet, paying real x402 charges." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -62,11 +62,14 @@
   /* ---------- top bar ---------- */
   .top {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     padding: 26px 0 0;
+    flex-wrap: wrap;
+    gap: 6px 16px;
   }
   .mark { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+  .mark .tagline { font-weight: 400; color: var(--ink-3); font-size: 12.5px; margin-left: 4px; letter-spacing: 0; }
   .lang { display: flex; align-items: center; gap: 8px; }
   .lang button {
     appearance: none;
@@ -92,7 +95,7 @@
   html[lang="es"] .lang button[data-set-lang="es"] { color: var(--ink); }
 
   /* ---------- hero ---------- */
-  .hero { padding: clamp(60px, 9vw, 112px) 0 clamp(56px, 8vw, 96px); }
+  .hero { padding: clamp(56px, 8vw, 100px) 0 clamp(52px, 7vw, 84px); }
   .eyebrow {
     font-size: 11.5px;
     font-weight: 500;
@@ -104,21 +107,21 @@
   h1 {
     font-family: var(--serif);
     font-weight: 400;
-    font-size: clamp(2.6rem, 7.6vw, 5.2rem);
-    line-height: 1.02;
-    letter-spacing: -0.018em;
-    margin: 22px 0 0;
-    max-width: 15ch;
+    font-size: clamp(2.4rem, 6.6vw, 4.4rem);
+    line-height: 1.06;
+    letter-spacing: -0.016em;
+    margin: 20px 0 0;
+    max-width: 17ch;
   }
   h1 em { font-style: italic; color: var(--accent); }
   .hero .sub {
-    margin: 28px 0 0;
-    font-size: clamp(1.02rem, 1.9vw, 1.26rem);
-    line-height: 1.52;
+    margin: 26px 0 0;
+    font-size: clamp(1rem, 1.8vw, 1.18rem);
+    line-height: 1.55;
     color: var(--ink-2);
-    max-width: 54ch;
+    max-width: 56ch;
   }
-  .cta-row { margin-top: 40px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .cta-row { margin-top: 38px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .btn {
     display: inline-block;
     background: var(--ink);
@@ -150,7 +153,53 @@
     font-size: clamp(1rem, 1.6vw, 1.1rem);
     line-height: 1.55;
     color: var(--ink-2);
-    max-width: 56ch;
+    max-width: 58ch;
+  }
+
+  /* ---------- flow strip ---------- */
+  .flow {
+    margin-top: 44px;
+    display: flex;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .flow-step {
+    flex: 1 1 150px;
+    padding: 18px 18px 18px 0;
+    border-right: 1px solid var(--rule);
+  }
+  .flow-step:last-child { border-right: none; }
+  .flow-step .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.04em; color: var(--accent); text-transform: uppercase; }
+  .flow-step .label { margin-top: 7px; font-size: 14px; font-weight: 500; color: var(--ink); line-height: 1.35; }
+  @media (max-width: 720px) {
+    .flow { border-bottom: none; }
+    .flow-step { flex: 1 1 100%; border-right: none; border-bottom: 1px solid var(--rule); padding: 16px 0; }
+    .flow-step:last-child { border-bottom: none; }
+  }
+
+  /* ---------- three patterns ---------- */
+  .steps { margin-top: 12px; }
+  .step {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 0 26px;
+    padding: 32px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .step .n { font-family: var(--serif); font-size: 26px; line-height: 1.2; color: var(--accent); }
+  .step h3 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.4rem, 2.7vw, 1.8rem);
+    line-height: 1.15;
+    letter-spacing: -0.012em;
+    margin: 0 0 12px;
+  }
+  .step p { margin: 0; font-size: 15.5px; line-height: 1.62; color: var(--ink-2); max-width: 62ch; }
+  @media (max-width: 640px) {
+    .step { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .step .n { font-size: 22px; }
   }
 
   /* ---------- evidence (dark band) ---------- */
@@ -208,30 +257,6 @@
     color: #fff;
   }
   .stat span { display: block; margin-top: 10px; font-size: 12.5px; line-height: 1.4; color: var(--dark-muted); }
-
-  /* ---------- three patterns ---------- */
-  .steps { margin-top: 46px; }
-  .step {
-    display: grid;
-    grid-template-columns: 62px minmax(0, 1fr);
-    gap: 0 26px;
-    padding: 32px 0;
-    border-top: 1px solid var(--rule);
-  }
-  .step .n { font-family: var(--serif); font-size: 26px; line-height: 1.2; color: var(--accent); }
-  .step h3 {
-    font-family: var(--serif);
-    font-weight: 400;
-    font-size: clamp(1.4rem, 2.7vw, 1.8rem);
-    line-height: 1.15;
-    letter-spacing: -0.012em;
-    margin: 0 0 12px;
-  }
-  .step p { margin: 0; font-size: 15.5px; line-height: 1.62; color: var(--ink-2); max-width: 62ch; }
-  @media (max-width: 640px) {
-    .step { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-    .step .n { font-size: 22px; }
-  }
 
   /* ---------- merchant ---------- */
   .merchant p.big {
@@ -310,7 +335,13 @@
 
 <div class="wrap">
   <div class="top">
-    <div class="mark">AgentPay</div>
+    <div class="mark">
+      AgentPay
+      <span class="tagline">
+        <span data-tr="en">· payment infrastructure</span>
+        <span data-tr="es">· infraestructura de pagos</span>
+      </span>
+    </div>
     <div class="lang">
       <button type="button" data-set-lang="en" aria-pressed="true">EN</button>
       <span aria-hidden="true">/</span>
@@ -324,17 +355,17 @@
       <span data-tr="es">En vivo en Stellar testnet</span>
     </p>
     <h1>
-      <span data-tr="en">The spending limit lives on the network, <em>not in the prompt</em>.</span>
-      <span data-tr="es">El límite de gasto vive en la red, <em>no en el prompt</em>.</span>
+      <span data-tr="en">Payment infrastructure for AI agents: <em>control</em>, identity, and protection.</span>
+      <span data-tr="es">Infraestructura de pagos para agentes de IA: <em>control</em>, identidad y protección.</span>
     </h1>
     <p class="sub">
-      <span data-tr="en">An AI agent proves who runs it and pays a real invoice — and it cannot go over its limit, because Stellar checks that limit inside the same transaction that moves the money.</span>
-      <span data-tr="es">Un agente de IA prueba quién lo opera y paga una factura real — y no puede pasarse de su límite, porque Stellar verifica ese límite dentro de la misma transacción que mueve la plata.</span>
+      <span data-tr="en">Your agent gets a credential that proves whose money it's paying with, and a limit Stellar enforces inside the same transaction that moves the payment — not a promise the agent makes on its own.</span>
+      <span data-tr="es">Tu agente recibe una credencial que prueba de quién es la plata que paga, y un límite que Stellar hace cumplir dentro de la misma transacción que mueve el pago — no una promesa que hace el agente por su cuenta.</span>
     </p>
     <div class="cta-row">
       <a class="btn" href="/">
-        <span data-tr="en">Watch it buy something →</span>
-        <span data-tr="es">Míralo comprar algo →</span>
+        <span data-tr="en">Watch it pay, live →</span>
+        <span data-tr="es">Míralo pagar, en vivo →</span>
       </a>
       <p class="cta-note">
         <span data-tr="en">Nothing to install. About a minute.</span>
@@ -344,31 +375,116 @@
   </header>
 </div>
 
+<div class="wrap">
+  <section>
+    <p class="eyebrow">
+      <span data-tr="en">How it works</span>
+      <span data-tr="es">Cómo funciona</span>
+    </p>
+    <h2 class="sh">
+      <span data-tr="en">What actually happens when it pays for something.</span>
+      <span data-tr="es">Qué pasa en verdad cuando paga algo.</span>
+    </h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="k">01</div>
+        <div class="label"><span data-tr="en">Reads the catalog</span><span data-tr="es">Lee el catálogo</span></div>
+      </div>
+      <div class="flow-step">
+        <div class="k">02</div>
+        <div class="label"><span data-tr="en">Signs the intent</span><span data-tr="es">Firma la intención</span></div>
+      </div>
+      <div class="flow-step">
+        <div class="k">03</div>
+        <div class="label"><span data-tr="en">Checks the limit (x402)</span><span data-tr="es">Revisa el límite (x402)</span></div>
+      </div>
+      <div class="flow-step">
+        <div class="k">04</div>
+        <div class="label"><span data-tr="en">Pays</span><span data-tr="es">Paga</span></div>
+      </div>
+      <div class="flow-step">
+        <div class="k">05</div>
+        <div class="label"><span data-tr="en">Anchors the decision</span><span data-tr="es">Ancla la decisión</span></div>
+      </div>
+    </div>
+
+    <p class="lead">
+      <span data-tr="en">Step three is the one that matters. Three things make it hold:</span>
+      <span data-tr="es">El paso tres es el que importa. Tres cosas hacen que se sostenga:</span>
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="n">01</div>
+        <div>
+          <h3>
+            <span data-tr="en">It proves who's behind it.</span>
+            <span data-tr="es">Prueba quién está detrás.</span>
+          </h3>
+          <p>
+            <span data-tr="en">The agent carries a credential — signed, registered in a Stellar contract. Whoever is on the other end of a payment can look up exactly who it belongs to, and what it's allowed to do.</span>
+            <span data-tr="es">El agente lleva una credencial firmada, registrada en un contrato de Stellar. Quien está del otro lado de un pago puede revisar exactamente de quién es, y qué tiene permitido hacer.</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="n">02</div>
+        <div>
+          <h3>
+            <span data-tr="en">It can't be talked out of its limit.</span>
+            <span data-tr="es">No se lo puede convencer de saltarse su límite.</span>
+          </h3>
+          <p>
+            <span data-tr="en">Feed an agent the right words and it'll believe almost anything — that's just how they work. So the limit doesn't live in its instructions. It lives in a Soroban contract that checks the x402 charge while the payment is happening. The agent can be fooled. The network can't.</span>
+            <span data-tr="es">Al agente lo puedes convencer de casi cualquier cosa con las palabras correctas — así funcionan. Por eso el límite no vive en sus instrucciones: vive en un contrato de Soroban que revisa el cobro x402 mientras el pago está ocurriendo. Al agente lo pueden engañar. A la red, no.</span>
+          </p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="n">03</div>
+        <div>
+          <h3>
+            <span data-tr="en">You can cut it off, from outside.</span>
+            <span data-tr="es">Se lo puede cortar desde afuera.</span>
+          </h3>
+          <p>
+            <span data-tr="en">Revoke the credential and the agent stops being able to pay — immediately, without touching its code, without needing it to cooperate.</span>
+            <span data-tr="es">Revocas la credencial y el agente deja de poder pagar — al instante, sin tocar su código, sin necesitar que colabore.</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
 <div class="band">
   <div class="wrap">
     <p class="eyebrow">
-      <span data-tr="en">Proof, not a mockup</span>
-      <span data-tr="es">Evidencia, no una maqueta</span>
+      <span data-tr="en">Proof, not a pitch</span>
+      <span data-tr="es">Evidencia, no promesas</span>
     </p>
     <h2 class="sh">
-      <span data-tr="en">Three transactions you can open right now.</span>
-      <span data-tr="es">Tres transacciones que puedes abrir ahora mismo.</span>
+      <span data-tr="en">Three transactions you can go check right now.</span>
+      <span data-tr="es">Tres transacciones que puedes ir a comprobar ahora mismo.</span>
     </h2>
     <p class="lead">
-      <span data-tr="en">Each one settled on Stellar testnet. Open any of them in a public block explorer and check it yourself — no account, no login.</span>
-      <span data-tr="es">Cada una quedó asentada en Stellar testnet. Abre cualquiera en un explorador público y compruébala tú mismo — sin cuenta, sin registro.</span>
+      <span data-tr="en">Every one of these settled on Stellar testnet. Open any of them in a public explorer — no account, nothing to trust but the chain itself.</span>
+      <span data-tr="es">Las tres quedaron asentadas en Stellar testnet. Ábrelas en un explorador público — sin cuenta, sin tener que confiarnos nada a nosotros.</span>
     </p>
 
     <div class="ev-list">
       <div class="ev">
         <div>
           <h3>
-            <span data-tr="en">The contract paid, and checked its own limit</span>
-            <span data-tr="es">El contrato pagó, y verificó su propio límite</span>
+            <span data-tr="en">The contract paid — and checked its own limit while doing it</span>
+            <span data-tr="es">El contrato pagó — y revisó su propio límite mientras lo hacía</span>
           </h3>
           <p>
-            <span data-tr="en">The payer here is not a person’s wallet: it is a contract on Stellar that adds up what it has already spent today and refuses anything above the cap — while the payment is happening, not before. Over the limit, the network rejects it.</span>
-            <span data-tr="es">Quien paga acá no es la billetera de una persona: es un contrato en Stellar que suma lo que ya gastó ese día y rechaza lo que pase del tope — mientras el pago ocurre, no antes. Si se pasa, la red lo rechaza.</span>
+            <span data-tr="en">The payer isn't a person's wallet. It's a Soroban contract that adds up what it already spent today and refuses anything past the cap, mid-payment, not before. Go over, and the network itself says no.</span>
+            <span data-tr="es">Quien paga no es la billetera de una persona. Es un contrato de Soroban que suma lo que ya pagó hoy y rechaza lo que se pase del tope, a mitad del pago, no antes. Si te pasas, la red misma dice que no.</span>
           </p>
         </div>
         <div class="tx">
@@ -383,12 +499,12 @@
       <div class="ev">
         <div>
           <h3>
-            <span data-tr="en">A real invoice, at a merchant that never heard of us</span>
-            <span data-tr="es">Una factura real, en un comercio que nunca supo de nosotros</span>
+            <span data-tr="en">A real charge, paid through x402</span>
+            <span data-tr="es">Un cobro real, pagado con x402</span>
           </h3>
           <p>
-            <span data-tr="en">Paid at the on-chain bazaar of a Stellar Ambassador, using the payment protocol the store already speaks. Not one line of its code had to change.</span>
-            <span data-tr="es">Pagada en el bazaar on-chain de un Embajador de Stellar, con el protocolo de pago que su tienda ya habla. No hubo que cambiar ni una línea de su código.</span>
+            <span data-tr="en">Settled at a live bazaar running on Stellar, using the same open payment protocol the store already speaks — no custom code on either side.</span>
+            <span data-tr="es">Se pagó en un bazaar en vivo sobre Stellar, con el mismo protocolo de pago abierto que la tienda ya habla — sin código a medida de ningún lado.</span>
           </p>
         </div>
         <div class="tx">
@@ -403,12 +519,12 @@
       <div class="ev">
         <div>
           <h3>
-            <span data-tr="en">The decision behind the payment, anchored</span>
-            <span data-tr="es">La decisión detrás del pago, anclada</span>
+            <span data-tr="en">The decision, anchored to the payment</span>
+            <span data-tr="es">La decisión, anclada al pago</span>
           </h3>
           <p>
-            <span data-tr="en">Every payment is tied to the authorisation that allowed it, by a fingerprint written to Stellar. Anyone can confirm the two belong together — without trusting whoever runs our server.</span>
-            <span data-tr="es">Cada pago queda atado a la autorización que lo permitió, con una huella escrita en Stellar. Cualquiera puede confirmar que los dos van juntos — sin confiar en quien opera nuestro servidor.</span>
+            <span data-tr="en">A fingerprint of the authorization is written to Stellar, permanently tied to the payment it approved. Anyone can check the two match — no need to trust whoever runs our server.</span>
+            <span data-tr="es">Una huella de la autorización queda escrita en Stellar, atada para siempre al pago que aprobó. Cualquiera puede comprobar que calzan — sin tener que confiar en quien opera nuestro servidor.</span>
           </p>
         </div>
         <div class="tx">
@@ -425,22 +541,22 @@
       <div class="stat">
         <b>656</b>
         <span>
-          <span data-tr="en">automated tests, none failing — 635 TypeScript, 21 Rust</span>
-          <span data-tr="es">tests automáticos, ninguno fallando — 635 TypeScript, 21 Rust</span>
+          <span data-tr="en">tests, all green — 635 TypeScript, 21 Rust</span>
+          <span data-tr="es">tests, todos en verde — 635 TypeScript, 21 Rust</span>
         </span>
       </div>
       <div class="stat">
         <b>5</b>
         <span>
-          <span data-tr="en">phases built and closed, each with its own written evidence</span>
-          <span data-tr="es">fases construidas y cerradas, cada una con su evidencia escrita</span>
+          <span data-tr="en">phases shipped and closed, each one with its own written evidence</span>
+          <span data-tr="es">fases construidas y cerradas, cada una con su propia evidencia escrita</span>
         </span>
       </div>
       <div class="stat">
         <b>31</b>
         <span>
-          <span data-tr="en">public commits — the repository is open, nothing is hidden</span>
-          <span data-tr="es">commits públicos — el repositorio es abierto, nada está escondido</span>
+          <span data-tr="en">commits, and you can read every one of them</span>
+          <span data-tr="es">commits, y puedes leerlos todos</span>
         </span>
       </div>
     </div>
@@ -448,73 +564,18 @@
 </div>
 
 <div class="wrap">
-  <section>
-    <p class="eyebrow">
-      <span data-tr="en">Three patterns</span>
-      <span data-tr="es">Tres patrones</span>
-    </p>
-    <h2 class="sh">
-      <span data-tr="en">An identity, a limit, and an off switch.</span>
-      <span data-tr="es">Una identidad, un límite, y una llave de corte.</span>
-    </h2>
-
-    <div class="steps">
-      <div class="step">
-        <div class="n">01</div>
-        <div>
-          <h3>
-            <span data-tr="en">It proves who runs it.</span>
-            <span data-tr="es">Prueba quién lo opera.</span>
-          </h3>
-          <p>
-            <span data-tr="en">The agent carries a signed credential registered in a Stellar contract. Anyone on the other side of a purchase can check which person or company stands behind it, and exactly what it was allowed to do.</span>
-            <span data-tr="es">El agente lleva una credencial firmada, registrada en un contrato de Stellar. Quien está del otro lado de una compra puede comprobar qué persona o empresa lo respalda, y qué exactamente tenía permitido hacer.</span>
-          </p>
-        </div>
-      </div>
-
-      <div class="step">
-        <div class="n">02</div>
-        <div>
-          <h3>
-            <span data-tr="en">It can’t be talked out of its limit.</span>
-            <span data-tr="es">No se lo puede convencer de saltarse su límite.</span>
-          </h3>
-          <p>
-            <span data-tr="en">An agent follows text, so the right text can convince it to ignore its own rules. That is why the limit is not written into its instructions: it lives in a contract that verifies it while the money moves. Someone can feed the agent the perfect message — the network still says no.</span>
-            <span data-tr="es">Un agente obedece texto, así que el texto correcto puede convencerlo de ignorar sus propias reglas. Por eso el límite no está escrito en sus instrucciones: vive en un contrato que lo verifica mientras la plata se mueve. Alguien puede darle al agente el mensaje perfecto — la red igual dice que no.</span>
-          </p>
-        </div>
-      </div>
-
-      <div class="step">
-        <div class="n">03</div>
-        <div>
-          <h3>
-            <span data-tr="en">You can cut it off from outside.</span>
-            <span data-tr="es">Se lo puede cortar desde afuera.</span>
-          </h3>
-          <p>
-            <span data-tr="en">The owner revokes the credential whenever they want, without touching the agent or its code, and without asking it to cooperate. The next payment simply fails.</span>
-            <span data-tr="es">El dueño revoca la credencial cuando quiere, sin tocar el agente ni su código, y sin pedirle que colabore. El pago siguiente simplemente falla.</span>
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <section class="merchant">
     <p class="eyebrow">
       <span data-tr="en">Where it already runs</span>
       <span data-tr="es">Dónde ya corre</span>
     </p>
     <p class="big">
-      <span data-tr="en">It buys from a store nobody adapted for it.</span>
-      <span data-tr="es">Compra en una tienda que nadie adaptó para él.</span>
+      <span data-tr="en">It already pays a real bazaar on Stellar.</span>
+      <span data-tr="es">Ya le paga a un bazaar real sobre Stellar.</span>
     </p>
     <p class="note">
-      <span data-tr="en">The agent reads the live catalogue of a Stellar Ambassador’s fully on-chain bazaar, picks what fits its budget, and pays the invoice the store itself issues. No integration, no plugin, no agreement to sign: it works because both sides speak the same open payment protocol.</span>
-      <span data-tr="es">El agente lee el catálogo en vivo del bazaar 100% on-chain de un Embajador de Stellar, elige lo que entra en su presupuesto, y paga la factura que la propia tienda emite. Sin integración, sin plugin, sin acuerdo que firmar: funciona porque los dos lados hablan el mismo protocolo abierto de pago.</span>
+      <span data-tr="en">The agent reads the bazaar's live catalog, puts together an offer that fits its budget, and pays through x402 — the open payment protocol the store already speaks. Any store that speaks x402 can plug in the same way, no custom integration needed. That's the point of building payments on an open protocol instead of a closed one: it's built for this kind of cooperation.</span>
+      <span data-tr="es">El agente lee el catálogo en vivo del bazaar, arma una oferta que entra en su presupuesto, y paga con x402 — el protocolo abierto de pago que la tienda ya habla. Cualquier tienda que hable x402 se puede sumar de la misma forma, sin integración a medida. Para eso sirve construir pagos sobre un protocolo abierto y no uno cerrado: está pensado para esta clase de cooperación.</span>
     </p>
     <p class="src">
       <a href="https://stellar-bazaar-x402.vercel.app" target="_blank" rel="noopener">stellar-bazaar-x402.vercel.app</a>
@@ -527,8 +588,8 @@
       <span data-tr="es">En qué está</span>
     </p>
     <h2 class="sh">
-      <span data-tr="en">Five phases built. The pilot is what’s next.</span>
-      <span data-tr="es">Cinco fases construidas. El piloto es lo que sigue.</span>
+      <span data-tr="en">Five phases done. The pilot's what's left.</span>
+      <span data-tr="es">Cinco fases listas. Falta el piloto.</span>
     </h2>
 
     <div class="status">
@@ -541,8 +602,8 @@
       </div>
       <div class="status-row">
         <div class="what">
-          <span data-tr="en">An agent that reads a real catalogue and signs what it intends to buy</span>
-          <span data-tr="es">Un agente que lee un catálogo real y firma lo que pretende comprar</span>
+          <span data-tr="en">An agent that reads a real catalog and signs what it means to pay for</span>
+          <span data-tr="es">Un agente que lee un catálogo real y firma lo que pretende pagar</span>
         </div>
         <div class="st"><span data-tr="en">Shipped</span><span data-tr="es">Listo</span></div>
       </div>
@@ -555,8 +616,8 @@
       </div>
       <div class="status-row">
         <div class="what">
-          <span data-tr="en">A real payment at a live merchant’s checkout</span>
-          <span data-tr="es">Un pago real en el checkout de un comercio en vivo</span>
+          <span data-tr="en">A real charge, paid at a live store on Stellar</span>
+          <span data-tr="es">Un cobro real, pagado en una tienda en vivo sobre Stellar</span>
         </div>
         <div class="st"><span data-tr="en">Shipped</span><span data-tr="es">Listo</span></div>
       </div>
@@ -581,8 +642,8 @@
 <div class="close">
   <div class="wrap">
     <p class="big">
-      <span data-tr="en">The shortest way to judge this is to make it buy something.</span>
-      <span data-tr="es">La forma más corta de juzgar esto es hacerlo comprar algo.</span>
+      <span data-tr="en">Don't take our word for it. Watch it pay.</span>
+      <span data-tr="es">No nos creas. Mira cómo paga.</span>
     </p>
     <div class="cta-row">
       <a class="btn" href="/">
@@ -600,7 +661,7 @@
 <div class="wrap">
   <footer>
     <div>
-      <span data-tr="en">AgentPay — agent payments on Stellar. Santiago, Chile.</span>
+      <span data-tr="en">AgentPay — agentic payments on Stellar. Santiago, Chile.</span>
       <span data-tr="es">AgentPay — pagos agénticos en Stellar. Santiago, Chile.</span>
     </div>
     <div>
@@ -614,8 +675,8 @@
   (function () {
     var root = document.documentElement;
     var titles = {
-      en: "AgentPay — a spending limit an AI agent can’t talk its way past",
-      es: "AgentPay — un límite de gasto que un agente de IA no puede saltarse"
+      en: "AgentPay — payment infrastructure for AI agents on Stellar",
+      es: "AgentPay — infraestructura de pagos para agentes de IA en Stellar"
     };
     var buttons = document.querySelectorAll("[data-set-lang]");
 
