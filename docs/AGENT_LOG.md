@@ -1168,3 +1168,37 @@ lista: el disco persistente para el vault en Render (`render.yaml` sigue sin
 bloque `disk`), migrar `buy()` a `execute_payment`, conectar más productos del
 catálogo, y multi-tenant en `apps/web`. La ejecución de negocio del piloto
 sigue sin arrancar; no es trabajo de código.
+
+## 2026-09-05 — cc/landing-yc-bilingual
+
+Agente: Claude Code
+
+Qué: tercera versión de `apps/web/public/landing.html`, la landing pública que
+se le manda por WhatsApp al referente de Stellar en Chile por la Instaward.
+**Inglés por defecto, con cambio a español a un clic** — un solo archivo, los
+dos idiomas dentro (`data-tr="en"` / `data-tr="es"`), el cambio resuelto por
+CSS contra el atributo `lang` del `<html>` y un único script inline que
+persiste la elección en `localStorage`. Sin JS el inglés se ve completo. Se
+tocó también `docs/fase-0-fundamentos/prompt-landing-yc-style.md` (el brief que
+originó este trabajo), agregándole el requisito bilingüe.
+
+Por qué: las dos versiones anteriores se descartaron —la primera por genérica
+(landing oscuro con badges y tarjetas), la segunda por plana (documento blanco
+con tabla)—. Esta apuesta por tipografía editorial (Instrument Serif + Inter),
+un solo acento verde, y una banda oscura full-bleed donde las tres
+transacciones reales de testnet son el héroe visual, no letra chica al final.
+El inglés por defecto es porque la Instaward la evalúa gente del SCF que
+trabaja en inglés y el link se reenvía; el español queda a un clic para el
+referente chileno.
+
+No se inventó ningún número: 656 tests (635 TS + 21 Rust), 5 fases cerradas,
+31 commits públicos, y los tres hashes verificables en stellar.expert. El
+piloto figura explícitamente como **sin arrancar**.
+
+Verificado en el navegador contra el servidor real (`pnpm run web`, ruta
+`/landing`): desktop y 375px, EN → ES → EN, sin overflow horizontal en ninguno
+de los dos idiomas, sin errores de consola ni de servidor. `index.html` (la
+demo) y `server.ts` no se tocaron.
+
+Pendiente: nada de esta tarea. No es un hito numerado del proyecto, así que
+ningún `BITACORA.md` de fase cambió.
