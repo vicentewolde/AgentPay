@@ -7,16 +7,20 @@
  * step. Every secret (`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`) stays here;
  * the browser only ever sees JSON responses.
  *
- * One demo session, held in memory, shared by whoever is looking at the
- * page — this is a conference-demo server, not a multi-tenant app. Clicking
- * "Iniciar" issues a fresh credential and Mandate, exactly like `pnpm demo`
- * does on every run.
+ * One demo session per browser, held in memory and keyed by a random cookie
+ * — this is still not a real multi-tenant app (every session signs with the
+ * same `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY`, so two visitors share one
+ * Stellar identity), but two people clicking through the demo at the same
+ * time no longer stomp on each other's in-memory state or spend ledger.
+ * Clicking "Iniciar" issues a fresh credential and Mandate, exactly like
+ * `pnpm demo` does on every run.
  *
  * The one product this can actually pay for is `swap-risk-quote` — the same
  * one `scripts/demo-real-payment.ts` (T24) proved end to end. The catalogue
  * shows the bazaar's other real products too, read-only, rather than
  * pretending every one of them is a verified payment path.
  */
+import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -61,9 +65,6 @@ const SCOPE_PATH = resolve(REPO_ROOT, "examples/scope-stellar-bazaar.json");
 const PUBLIC_DIR = fileURLToPath(new URL("../public", import.meta.url));
 
 const DEFAULT_BAZAAR_BASE_URL = "https://stellar-bazaar-x402.vercel.app";
-// A relative path, so a durable disk mounted at the process's cwd (e.g.
-// Render's persistent disk) picks it up without any code change — see T27.
-const DEFAULT_VAULT_PATH = resolve(REPO_ROOT, "data/mandate-vault.jsonl");
 const CREDENTIAL_VALID_DAYS = 1;
 const PAYABLE_PRODUCT_ID = "swap-risk-quote";
 const ROUTE_PARAMS = { pair: "XLM/USDC", amount: 100, side: "buy" };
@@ -138,7 +139,49 @@ interface DemoSession {
   readonly railContractId: string | undefined;
 }
 
-let session: DemoSession | undefined;
+const sessions = new Map<string, DemoSession>();
+
+const SESSION_COOKIE = "agentpay_sid";
+// Only ever set by this server (see `randomUUID()` below) — validated on the
+// way back in so a forged cookie can't be used to build a path elsewhere on
+// disk (`vaultPathFor` interpolates it directly into a file name).
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseCookies(header: string | undefined): Map<string, string> {
+  const cookies = new Map<string, string>();
+  if (header === undefined) return cookies;
+  for (const part of header.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq === -1) continue;
+    const key = part.slice(0, eq).trim();
+    if (key === "") continue;
+    cookies.set(key, decodeURIComponent(part.slice(eq + 1).trim()));
+  }
+  return cookies;
+}
+
+function readSessionId(req: IncomingMessage): string | undefined {
+  const raw = parseCookies(req.headers.cookie).get(SESSION_COOKIE);
+  return raw !== undefined && SESSION_ID_RE.test(raw) ? raw : undefined;
+}
+
+function getSession(req: IncomingMessage): DemoSession | undefined {
+  const sessionId = readSessionId(req);
+  return sessionId === undefined ? undefined : sessions.get(sessionId);
+}
+
+function withSessionCookie(res: ServerResponse, sessionId: string): void {
+  res.setHeader("set-cookie", `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax`);
+}
+
+/**
+ * Each visitor's own append-only log — otherwise two people clicking through
+ * the demo at once would share one `perDay` counter and one bitácora. Only
+ * used when the operator hasn't pinned `MANDATE_VAULT_PATH` explicitly.
+ */
+function vaultPathFor(sessionId: string): string {
+  return resolve(REPO_ROOT, `data/mandate-vault-${sessionId}.jsonl`);
+}
 
 function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
   const value = env.get(key);
@@ -180,7 +223,7 @@ async function readEnv(): Promise<Map<string, string>> {
 }
 
 /** Mirrors `pnpm demo`'s step 2: issue a credential, then a Mandate with its own (tighter) perDay. */
-async function startSession(): Promise<DemoSession> {
+async function startSession(sessionId: string): Promise<DemoSession> {
   const env = await readEnv();
   const issuerSecret = requireEnv(env, "ISSUER_SECRET_KEY");
   const issuer = Keypair.fromSecret(issuerSecret);
@@ -241,7 +284,7 @@ async function startSession(): Promise<DemoSession> {
   // 402) record the same intentId once, not twice. A MandateVault satisfies
   // SpendLedger structurally (T27), so it drops in wherever the ledger did;
   // withVault additionally keeps every refusal, not just every grant.
-  const vault = createFileMandateVault({ path: env.get("MANDATE_VAULT_PATH") ?? DEFAULT_VAULT_PATH });
+  const vault = createFileMandateVault({ path: env.get("MANDATE_VAULT_PATH") ?? vaultPathFor(sessionId) });
   const policyRail = withVault(createLocalPolicyRail({ ledger: vault }), vault);
 
   const agent = await createAgent({
@@ -598,8 +641,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/session/start") {
     try {
-      const started = await startSession();
-      session = started;
+      const sessionId = readSessionId(req) ?? randomUUID();
+      const started = await startSession(sessionId);
+      sessions.set(sessionId, started);
+      withSessionCookie(res, sessionId);
       sendJson(res, 200, {
         ok: true,
         credentialHash: started.credentialHash,
@@ -618,7 +663,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   if (req.method === "POST" && pathname === "/api/session/buy") {
-    if (session === undefined) {
+    const current = getSession(req);
+    if (current === undefined) {
       sendJson(res, 400, { ok: false, code: "ConfigError", message: "no active session — iniciá primero" });
       return;
     }
@@ -628,7 +674,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         ? body.instruction
         : "Comprame un Swap Risk Quote, por favor.";
     try {
-      const steps = await buy(session, instruction, body.payer === "policy-rail");
+      const steps = await buy(current, instruction, body.payer === "policy-rail");
       sendJson(res, 200, { ok: true, steps });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });
@@ -637,12 +683,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   if (req.method === "GET" && pathname === "/api/session/vault") {
-    if (session === undefined) {
+    const current = getSession(req);
+    if (current === undefined) {
       sendJson(res, 400, { ok: false, code: "ConfigError", message: "no active session — iniciá primero" });
       return;
     }
     try {
-      const report = await vaultReport(session);
+      const report = await vaultReport(current);
       sendJson(res, 200, { ok: true, ...report });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });
@@ -651,12 +698,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   if (req.method === "POST" && pathname === "/api/session/revoke") {
-    if (session === undefined) {
+    const current = getSession(req);
+    if (current === undefined) {
       sendJson(res, 400, { ok: false, code: "ConfigError", message: "no active session — iniciá primero" });
       return;
     }
     try {
-      const result = await revoke(session);
+      const result = await revoke(current);
       sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });

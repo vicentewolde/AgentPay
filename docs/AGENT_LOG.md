@@ -1262,3 +1262,68 @@ ninguna fase, así que ningún `BITACORA.md` cambió. Sigue pendiente lo que ya
 anota `P-3`: verificar que el MVP (`apps/web`) funcione bien de punta a punta
 antes de mandar el mensaje a Tellus — la landing ya quedó verificada en este
 tramo (desktop, mobile 375px, EN/ES, sin errores de consola).
+
+## 2026-09-06 — cc/mvp-tellus-usability
+
+Agente: Claude Code
+
+Qué: siguiendo el prompt de continuación
+(`docs/fase-0-fundamentos/prompt-mejorar-mvp.md`), se evaluaron en frío los
+candidatos de mejora del MVP (`apps/web`) ya anotados en la documentación más
+otros encontrados leyendo el código real de `server.ts`/`index.html`, y se le
+presentó al usuario una lista corta con recomendación. Confirmó el combo
+recomendado: tres cambios de UI/UX, sin tocar ningún contrato ni paquete de
+fases cerradas — no se numeró como hito de ninguna fase, mismo criterio que
+la landing (`P-3`: "ningún candidato técnico nuevo se agrega").
+
+1. **Sesión aislada por visitante.** `let session` (una sola sesión global en
+   memoria, documentado como riesgo desde T25) se reemplazó por un
+   `Map<sessionId, DemoSession>`, con el `sessionId` viajando en una cookie
+   `HttpOnly` (`agentpay_sid`, UUID v4 generado con `randomUUID()`, validado
+   con regex al leer para que una cookie forjada no pueda usarse para
+   construir una ruta de archivo). Cada sesión también gana su propio archivo
+   de vault (`data/mandate-vault-<uuid>.jsonl`) en vez de compartir uno
+   global, para que el `perDay` y la bitácora de un visitante no se mezclen
+   con los de otro. La identidad de Stellar subyacente (`AGENT_SECRET_KEY`,
+   `ISSUER_SECRET_KEY`) sigue siendo una sola para todos los visitantes —
+   aislarla también habría requerido cuentas y fondos por visitante, fuera de
+   alcance para esta demo.
+2. **Aviso de cold-start de Render.** La carga del catálogo y "Iniciar
+   sesión" ahora muestran, si tardan, un aviso de que el servidor gratuito
+   puede estar despertando (30-70s) en vez de parecer roto. El umbral no es
+   el mismo para los dos: medido contra el servidor real, "Iniciar sesión"
+   ya tarda ~13s en caliente (dos llamadas reales a Stellar testnet — emitir
+   credencial y anclar Mandato), así que un umbral corto (4s, el que sí sirve
+   para el catálogo) hubiera disparado el aviso en cada sesión normal y le
+   habría restado credibilidad al aviso justo cuando hiciera falta de
+   verdad. Quedó en 20s para "Iniciar sesión", 4s para el catálogo.
+3. **Copy en lenguaje llano.** Cada una de las 5 secciones ganó un párrafo
+   corto "En criollo:" explicando qué pasa y por qué importa, sin sacar el
+   texto técnico existente — pensado para el encargado de Tellus, que va a
+   abrir el link solo, sin nadie explicando al lado.
+
+Por qué: el cambio de plan de `P-3` puso como único criterio de "listo" que
+el MVP y la landing funcionen bien para un evaluador que interactúa solo. De
+los ocho candidatos evaluados (cinco ya anotados, tres encontrados en esta
+sesión), estos tres eran los de mayor impacto para esa audiencia específica
+al menor esfuerzo — se dejó fuera, a propósito, el disco persistente de
+Render para el vault (el free tier no lo ofrece sin cambiar de plan) y el
+rediseño visual del MVP para igualarlo a la landing (esfuerzo mayor, y el
+argumento de que "resta seriedad" es débil — el usuario no lo pidió).
+
+Verificado, no solo tipeado: `pnpm typecheck`/`pnpm build` limpios, 635 tests
+sin cambios (`apps/web` sigue sin tests propios). En el navegador real
+(Claude Browser, contra `pnpm run web`): sesión → compra real
+(`73025691d189f4e13dfef3146b80f010a9c951a9002172135a6e2339384b9a8a`) →
+bitácora actualizada sola → revocación real
+(`ddf7a6dc2cf7dc511816fda4dda2076abbce57a56f7a56715f442d5c44c34a39`) sin
+errores de consola ni de servidor. El aislamiento entre visitantes se probó
+aparte, con dos cookie jars de `curl` independientes: credenciales distintas,
+bitácoras separadas (una compra en la sesión A no aparece en la B), y sin
+cookie el servidor rechaza con `"no active session"`.
+
+Pendiente: mergear `cc/mvp-tellus-usability` a `main` y pushear (a confirmar
+con el usuario). Con esto verificado, sigue pendiente lo único que le falta a
+`P-3`: mandar el mensaje de WhatsApp a Tellus con los dos links. El disco
+persistente de Render para el vault y el rediseño visual del MVP quedan
+anotados, no descartados, para retomar si hace falta.
