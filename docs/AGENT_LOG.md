@@ -1202,3 +1202,29 @@ demo) y `server.ts` no se tocaron.
 
 Pendiente: nada de esta tarea. No es un hito numerado del proyecto, así que
 ningún `BITACORA.md` de fase cambió.
+
+## 2026-09-05 (2) — main
+
+Agente: Claude Code
+
+Qué: cambio de plan de negocio de la Fase 5, a pedido explícito del usuario
+— sin tocar código. El encargado de Tellus (el referente de Stellar en Chile
+al que se le mandó la landing de la entrada anterior) se ofreció a gestionar
+la Instaward directamente, y pidió a cambio un mensaje de WhatsApp con el
+proyecto explicado, un link al MVP y un link a la landing. Como consecuencia:
+la cohorte de alumnos queda pendiente para después sin prioridad, y la demo
+grabable + el formulario de interés de Build Award no se hacen por ahora — el
+foco pasa a que el MVP (`apps/web`) y la landing (`/landing`) funcionen bien.
+
+Por qué: es exactamente lo que documenta `docs/DECISIONES.md` → `P-3`
+(decisión nueva, cross-fase por afectar la definición de "listo" de todo el
+proyecto, no solo de una fase). Documentación tocada: `ROADMAP.md` (§1 sin
+tocar a propósito — la tesis general sigue valiendo, §3 tabla de fases, §4.5
+reescrito con el cambio de plan y la definición de "listo" actualizada, §5
+tabla de riesgos), `docs/DECISIONES.md` (`P-3` nueva).
+
+Pendiente: verificar que el MVP y la landing funcionen bien de punta a punta
+(el trabajo que sigue, según lo recién priorizado) antes de que el usuario
+mande el mensaje de WhatsApp a Tellus. La cohorte de alumnos, la demo
+grabable y el formulario de Build Award quedan anotados en `P-3`, no
+descartados — retomables si el canal de Tellus no avanza.

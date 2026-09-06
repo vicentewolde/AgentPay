@@ -99,3 +99,44 @@ regulatorio o narrativo del proyecto, que Devin no tiene.
 que Devin toque sin saberlo una zona con una decisión de arquitectura
 pendiente (p. ej. el enforcement de `scope.limits` en Fase 3) es mayor que el
 costo de la disciplina de branches.
+
+### P-3 · La cohorte de alumnos, la demo grabable y el formulario de Build Award quedan sin prioridad; la Instaward se gestiona vía Tellus · `Vigente`
+**Fecha:** 2026-09-05
+
+Hasta este punto, `ROADMAP.md §4.5` definía el cierre de negocio de la Fase 5
+como tres piezas propias: correr el piloto con una cohorte real de ~60
+alumnos y la comunidad aliada, grabar una demo de punta a punta, y enviar el
+formulario de interés de Build Award en `communityfund.stellar.org`. El
+usuario informó un cambio de contexto: el encargado de Tellus —un referente
+de Stellar en Chile— se ofreció a gestionar la Instaward directamente, y a
+cambio pidió un mensaje de WhatsApp explicando el proyecto, con un link al
+MVP (`apps/web`) y un link a la landing (`apps/web/public/landing.html`, ya
+construida para este propósito exacto —
+`docs/fase-0-fundamentos/prompt-landing-yc-style.md`).
+
+**Motivo.** El camino a la Instaward ya no depende de que este proyecto arme
+su propio expediente de negocio (cohorte + demo + formulario) — depende de
+que el MVP y la landing sostengan la conversación que Tellus ya tiene
+avanzada. Seguir invirtiendo esfuerzo en la cohorte de alumnos o en grabar
+una demo ahora sería trabajo que no mueve la aguja del canal real por el que
+se está gestionando el financiamiento.
+
+**Qué cambia en la práctica.**
+
+- La cohorte de alumnos, la demo grabable, y el formulario de interés de
+  Build Award salen del camino crítico de la Fase 5 — anotados como
+  pendientes para después, sin prioridad, no descartados.
+- La definición de "listo" de la Fase 5 pasa a ser: el ciclo técnico
+  completo en testnet (ya cerrado, T16–T31), el repo público (ya resuelto),
+  el MVP funcionando bien, la landing funcionando bien, y el mensaje de
+  WhatsApp a Tellus enviado con los dos links.
+- Ningún candidato técnico nuevo se agrega — el trabajo que sigue es
+  verificar que lo que ya existe (`apps/web`, `/landing`) funcione
+  correctamente, no construir nada nuevo.
+
+**Alternativa descartada:** seguir con el plan original (cohorte + demo +
+formulario) en paralelo al canal de Tellus, por si la Instaward no se
+concreta. Se descartó por ahora — el usuario prioriza no dispersar esfuerzo
+en dos caminos de negocio a la vez; si el canal de Tellus no avanza, el plan
+original sigue disponible para retomar (nada de lo hecho hasta acá se
+pierde, ver `docs/fase-5-mandatevault/`).

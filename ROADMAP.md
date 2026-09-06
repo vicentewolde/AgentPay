@@ -106,7 +106,7 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 | 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | ✅ Completa (T9–T15) | — |
 | 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | ✅ Completa (T16–T23) | — |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ✅ Completa (T24–T26) | — |
-| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el piloto corrió con los 60 alumnos y la comunidad aliada; la postulación a SCF está enviada | 🔄 En curso (T27–T30, sin candidatos técnicos pendientes) | Fases 2–4 cerradas. Solo falta la ejecución de negocio del piloto (alumnos, comunidad, formulario) — no es un bloqueante técnico |
+| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el MVP y la landing funcionan bien de cara al mensaje a Tellus, que gestiona la Instaward | 🔄 En curso (T27–T31, sin candidatos técnicos pendientes) | Fases 2–4 cerradas. Cambio de plan `P-3` (2026-09-05): cohorte de alumnos/demo grabable/Build Award sin prioridad; falta verificar que MVP y landing funcionen bien |
 | 6 | **Después: AgentGuard + comercialización** | Qué viene si SCF financia esto — no es parte del piloto | 🔲 Sin definir, a propósito | Todo lo anterior |
 
 Las Fases 0 y 1 están cerradas. Las Fases 2–5 son el piloto que falta ejecutar.
@@ -444,27 +444,25 @@ no como algo pendiente para cerrar la fase.
 
 **Qué prueba:** que cada decisión del sistema —cada credencial emitida, cada
 intención creada, cada mandato verificado, cada compra autorizada o
-rechazada— queda como evidencia consultable y verificable en cadena. Y que el
-piloto completo corrió de verdad: con alumnos reales del curso, con la
-comunidad de la comunidad aliada, y con una demo grabable de punta a punta.
+rechazada— queda como evidencia consultable y verificable en cadena.
 
-**Esta fase es también donde se cierra el objetivo de negocio del proyecto,**
-no solo el técnico: preparar y enviar la postulación a SCF. Sobre el proceso
-real, verificado en la documentación oficial de SCF (no supuesto):
+**Cambio de plan — 2026-09-05.** Hasta acá esta fase asumía que el cierre de
+negocio pasaba por tres cosas propias: correr el piloto con una cohorte real
+de alumnos, grabar una demo, y mandar el formulario de interés de Build Award
+a `communityfund.stellar.org`. Eso cambió:
 
-- **Build Award** se postula primero con un formulario de interés en
-  `communityfund.stellar.org`; esas consultas se revisan de forma continua
-  (rolling basis), y si se cumplen los requisitos se invita a presentar a una
-  ronda abierta de SCF, con el plazo de esa ronda comunicado por correo. Es
-  decir, no hay una fecha límite fija hasta que se recibe esa invitación — el
-  formulario de interés es lo que hay que enviar cuanto antes, no algo para
-  dejar para el final. Fuente: `stellar.gitbook.io/scf-handbook/scf-awards/build-award`.
-- **Instawards** se ofrecen a través del capítulo local de Embajador Stellar,
-  no por postulación abierta estándar, y priorizan a builders activamente
-  comprometidos con su capítulo. Esto es exactamente lo que hace valiosa la
-  relación con el embajador (Embajador) y con la comunidad aliada — no es solo
-  networking, es el canal de acceso a este programa específico. Fuente:
-  `stellar.gitbook.io/scf-handbook/scf-awards/instawards`.
+- **La cohorte de alumnos queda pendiente para después, sin prioridad.** No
+  se abandona — se saca del camino crítico de esta fase.
+- **La demo grabable y el formulario de Build Award no se hacen por ahora.**
+  El camino a la Instaward ya no depende de ese formulario: el encargado de
+  Tellus (un referente de Stellar en Chile, ver `P-3` en
+  [`docs/DECISIONES.md`](../docs/DECISIONES.md)) se ofreció a gestionar la
+  Instaward directamente, y pidió en su lugar un mensaje de WhatsApp
+  explicando el proyecto, con un link al MVP y un link a la landing.
+- **Lo más importante ahora es que el MVP (`apps/web`, la demo interactiva) y
+  la landing (`apps/web/public/landing.html`, en `/landing`) funcionen bien**
+  — son las dos piezas que se van a compartir. Ver `docs/fase-0-fundamentos/prompt-landing-yc-style.md`
+  para el contexto completo de la landing ya construida para este propósito.
 
 **Arrancó — 2026-09-04 (T27).** Al empezar esta fase se le preguntó al
 usuario en qué punto estaba la ejecución de negocio del piloto (alumnos,
@@ -486,9 +484,10 @@ Mandato mismos, con su estado on-chain leído en vivo, en la misma bitácora.
 T31 conectó `policy_rail` (T22) como pagador real: el smart account de
 Soroban que la Fase 3 construyó y midió ahora paga facturas x402 de verdad,
 con sus límites comprobados por la red dentro de la misma transacción que
-mueve la plata (`docs/fase-5-mandatevault/evidencia/T27.md` a `T31.md`). Lo
-único que le falta a esta fase es la ejecución de negocio del piloto, arriba
-en esta misma sección.
+mueve la plata (`docs/fase-5-mandatevault/evidencia/T27.md` a `T31.md`). Sin
+candidatos técnicos pendientes — lo que sigue, con el cambio de plan de
+arriba, es que el MVP y la landing funcionen bien de cara al mensaje a
+Tellus.
 
 **Desglose de tareas, según se van decidiendo — no se anticipa lo que sigue:**
 
@@ -503,16 +502,24 @@ en esta misma sección.
 Detalle completo en
 [`docs/fase-5-mandatevault/`](docs/fase-5-mandatevault/).
 
-**Definición de "listo" de esta fase, y del piloto completo:**
+**Definición de "listo" de esta fase, con el cambio de plan de 2026-09-05:**
 
-- [ ] El ciclo completo —identidad, política, mandato, compra real en el
-      bazaar del embajador, evidencia registrada— corre de punta a punta en testnet.
-- [ ] Al menos una cohorte real de alumnos y al menos un miembro de la comunidad aliada
-      ejecutaron el flujo, no solo el equipo del proyecto.
-- [ ] Existe una demo grabable de punta a punta.
-- [ ] El formulario de interés de Build Award está enviado (idealmente mucho
-      antes de este punto, no al final).
-- [ ] El repo es público (ver §7).
+- [x] El ciclo completo —identidad, política, mandato, compra real en el
+      bazaar del embajador, evidencia registrada— corre de punta a punta en
+      testnet (T16–T31).
+- [x] El repo es público (ver §7).
+- [ ] El MVP (`apps/web`, la demo interactiva) funciona bien de punta a
+      punta — verificado en el navegador, no solo con tests.
+- [ ] La landing (`/landing`) funciona bien — verificado en el navegador, en
+      mobile (375px, así se abre desde WhatsApp) y desktop, con el cambio de
+      idioma EN/ES probado.
+- [ ] El mensaje de WhatsApp al encargado de Tellus está enviado, con los
+      links al MVP y a la landing.
+
+**Sin prioridad por ahora, pendiente para después (`P-3`):** la cohorte real
+de alumnos, la demo grabable, y el formulario de interés de Build Award. No
+se descartan — se sacan del camino crítico de esta fase mientras la
+Instaward se gestiona por otro canal.
 
 ### 4.6 · Fase 6 — Después: AgentGuard + comercialización 🔲 sin definir, a propósito
 
@@ -571,7 +578,8 @@ arriba — para no tener que reconstruirlo leyendo las siete otra vez.
 |---|---|---|
 | **Dependencia de el embajador** | Fase 2 (bloqueante directo), Fase 4 (bloqueante estructural) | Preguntas enviadas temprano (§4.2); construir contra el mock mientras se espera |
 | **El agente de compra es la pieza menos definida y de mayor esfuerzo** | Fase 2 | Alcance mínimo a propósito: cuatro herramientas, nada más; catálogo real diferido al final (T15) |
-| **Mecánica de consentimiento de los alumnos** | Fase 5 | Sin resolver todavía — falta decidir cómo un alumno real autoriza a "su" agente sin fricción que mate la demo |
+| **Mecánica de consentimiento de los alumnos** | Fase 5 | Sin prioridad desde `P-3` (2026-09-05) — el piloto de alumnos queda para después, no bloquea nada del camino actual |
+| **Dependencia de un tercero (Tellus) para gestionar la Instaward** | Fase 5 | Mitigado manteniendo el MVP y la landing listos para reenviar en cualquier momento, sin depender de que Tellus fije un plazo |
 | **Disciplina regulatoria** | Todo el piloto, constante | Testnet en todo momento; la ventana de 12–18 meses (§1) no es un colchón infinito |
 | **AgentGuard sin alcance** | Fase 6 | Deliberadamente no se define hasta tener evidencia real de las Fases 2–5 (§4.6) |
 | **Repo privado** | *(resuelto 2026-09-02, `P-1`)* | Monorepo público único; ver `docs/DECISIONES.md` |
