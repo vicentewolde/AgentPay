@@ -1228,3 +1228,37 @@ Pendiente: verificar que el MVP y la landing funcionen bien de punta a punta
 mande el mensaje de WhatsApp a Tellus. La cohorte de alumnos, la demo
 grabable y el formulario de Build Award quedan anotados en `P-3`, no
 descartados — retomables si el canal de Tellus no avanza.
+
+## 2026-09-05 (3) — main
+
+Agente: Claude Code
+
+Qué: cuatro rondas de feedback sobre `apps/web/public/landing.html`, ya en
+`/landing`, hechas con el usuario iterando en vivo contra el servidor local
+antes de cada publicación. Commits: `76fa5de` (reescritura completa del
+copy — de "un agente que hace X" a "infraestructura de pagos", flujo de 5
+pasos y los tres patrones movidos antes de la evidencia, sin el framing del
+Embajador), `b0511d4` (subtítulo nombrando x402 y "la red Stellar"
+explícitamente), y `ba999f2` (barra de navegación con anclas a cada sección
+más un link a GitHub — ícono y la palabra "GitHub", en el header y en el
+pie—, el ritmo claro/oscuro final portada→cómo funciona→evidencia→bazaar+
+estado→cierre resuelto con tokens de CSS (`--fg`, `--fg-2`, `--rule-c`,
+`--accent-c`) en vez de reglas `.band X` repetidas por sección, punto verde
+animado en "Stellar Testnet — live", y una pasada de inglés para que sonara
+natural en registro de negocios/startup/tech).
+
+Por qué: el usuario fue afinando la landing en base a ver cada cambio en vivo
+—titular, subtítulo, ritmo de color, tono del texto— antes de aprobar la
+publicación final. Dos pedidos puntuales quedaron marcados con evidencia
+antes de aplicarlos: nombrar "MCP" como el protocolo del bazaar contradice
+`docs/fase-2-agente-compra/DECISIONES.md` → `B-24`/`B-25` (el endpoint MCP
+del bazaar devuelve `500` en todo intento probado; el pago real siempre fue
+x402, no MCP). El usuario confirmó explícitamente que lo quería igual, solo
+para que la palabra "MCP" apareciera en la página de cara a la audiencia de
+Stellar — se aplicó tal cual, con la salvedad dicha en el momento.
+
+Pendiente: nada de esta tarea. La landing sigue sin ser un hito numerado de
+ninguna fase, así que ningún `BITACORA.md` cambió. Sigue pendiente lo que ya
+anota `P-3`: verificar que el MVP (`apps/web`) funcione bien de punta a punta
+antes de mandar el mensaje a Tellus — la landing ya quedó verificada en este
+tramo (desktop, mobile 375px, EN/ES, sin errores de consola).
