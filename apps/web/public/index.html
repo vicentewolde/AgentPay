@@ -354,23 +354,15 @@
         <span data-tr="es">Esta instrucción debe quedar en español: el intérprete del agente solo entiende español.</span>
       </p>
       <div class="row">
-        <button id="buy-btn" class="btn" disabled>
-          <span data-tr="en">Buy (classic account)</span>
-          <span data-tr="es">Comprar (cuenta clásica)</span>
-        </button>
-        <button id="buy-rail-btn" class="btn outline" disabled>
-          <span data-tr="en">Buy with policy_rail</span>
-          <span data-tr="es">Comprar con policy_rail</span>
+        <button id="buy-rail-btn" class="btn" disabled>
+          <span data-tr="en">Buy</span>
+          <span data-tr="es">Comprar</span>
         </button>
         <span class="hint">
           <span data-tr="en">Each click pays for real: 0.001 USDC per purchase.</span>
           <span data-tr="es">Cada clic paga de verdad — 0.001 USDC por compra.</span>
         </span>
       </div>
-      <p class="lead">
-        <span data-tr="en">Both buttons sign the same intent and pay the same invoice. The difference is who pays: the first, the agent's classic account; the second, policy_rail, a Soroban contract that checks perTx and perDay again inside the very transaction that moves the money. If the amount doesn't fit, the network rejects the payment and it never leaves the contract.</span>
-        <span data-tr="es">Los dos botones firman la misma intención y pagan la misma factura. La diferencia es quién paga: el primero, la cuenta clásica del agente; el segundo, <b>policy_rail</b>, un contrato de Soroban que vuelve a comprobar <code>perTx</code> y <code>perDay</code> dentro de la misma transacción que mueve la plata — si el monto no entra, la red rechaza el pago y nunca sale del contrato.</span>
-      </p>
       <ul class="steps" id="buy-steps"></ul>
       <div id="buy-status" class="status"></div>
     </div>
@@ -666,7 +658,6 @@ document.getElementById("start-btn").addEventListener("click", async () => {
     if (!body.ok) throw new Error(body.message ?? t("sessionFailed"));
     lastSession = body;
     renderSessionFacts(body);
-    document.getElementById("buy-btn").disabled = false;
     document.getElementById("buy-rail-btn").disabled = body.policyRail === null;
     document.getElementById("revoke-btn").disabled = false;
     document.getElementById("vault-btn").disabled = false;
@@ -731,7 +722,6 @@ async function runBuy(buttonId, payer) {
   await loadVault();
 }
 
-document.getElementById("buy-btn").addEventListener("click", () => runBuy("buy-btn", "classic"));
 document
   .getElementById("buy-rail-btn")
   .addEventListener("click", () => runBuy("buy-rail-btn", "policy-rail"));
