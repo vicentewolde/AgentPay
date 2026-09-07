@@ -1327,3 +1327,64 @@ con el usuario). Con esto verificado, sigue pendiente lo único que le falta a
 `P-3`: mandar el mensaje de WhatsApp a Tellus con los dos links. El disco
 persistente de Render para el vault y el rediseño visual del MVP quedan
 anotados, no descartados, para retomar si hace falta.
+
+## 2026-09-07 — main (mergeado `cc/mvp-tellus-usability`) / cc/landing-fabriq-patterns (mergeado)
+
+Agente: Claude Code
+
+Qué: siguiendo
+`docs/fase-0-fundamentos/prompt-landing-inspirado-fabriq.md` (brief de
+negocio, no técnico, escrito en otro chat), tercera ronda de cambios en
+`apps/web/public/landing.html` — patrones de presentación adaptados de un
+competidor conceptual (Agentic Fabriq), sin copiar texto ni identidad visual.
+Al empezar se mergeó primero `cc/mvp-tellus-usability` (pendiente de la
+sesión anterior) a `main`, siguiendo el protocolo de este archivo.
+
+Tres cambios, ninguno numerado como hito de fase (mismo criterio que las dos
+rondas de landing/MVP anteriores — `P-3` ya sacó cualquier candidato técnico
+nuevo de "listo" para la Fase 5):
+
+1. **Widget de "actividad reciente".** Se corrió una sesión real de punta a
+   punta contra `apps/web` (sesión → compra real pagada por `policy_rail` →
+   revocación → reintento rechazado) y se verificó cada tx hash contra
+   Horizon testnet directamente — no solo contra lo que la UI mostraba —
+   incluyendo decodificar los `operations` de los dos primeros anclajes para
+   confirmar cuál es la credencial y cuál el Mandato por orden real de
+   ejecución. Seis eventos reales, de una sola corrida, con su "hace X
+   minutos" recalculado en vivo en el navegador contra las marcas de tiempo
+   fijas — real pero congelado, como pedía el brief, no un feed simulado.
+2. **Números arriba del pliegue.** El bloque de prueba (tests, fases,
+   commits, transacciones verificables) pasó de pie de página en "Evidencia"
+   al hero, sin duplicarlo. Verificado todo de nuevo contra el repo: encontró
+   que el conteo de tests de Rust que la landing venía mostrando (21) estaba
+   mal — solo contaba `contracts/policy-rail`, le faltaban los 22 tests de
+   `contracts/agent-registry`. Real: 43 Rust + 635 TypeScript = 678.
+3. **Sección "cada era de pagos necesitó su propia capa de confianza"** —
+   línea de tiempo de 4 pasos (tarjetas físicas → online → wallets móviles →
+   pagos agénticos, el último marcado distinto) agregada después de "cómo
+   funciona", sin estadísticas de mercado inventadas.
+
+Por qué: es exactamente lo que pedía el brief — patrones de presentación, no
+producto ni código, con la misma regla dura del proyecto (todo en testnet,
+nada verificable solo "de palabra").
+
+Decisión nueva: `V-16` en `docs/fase-5-mandatevault/DECISIONES.md` (por qué
+el feed usa una sesión real corrida ahora y no un collage de hashes reales de
+sesiones distintas ya documentadas, y la corrección del conteo de Rust).
+Documentación tocada: `docs/fase-5-mandatevault/BITACORA.md` (entrada nueva,
+sin numerar).
+
+Verificado en navegador real (Claude Browser, contra `pnpm run web`): texto
+completo en inglés y español, 375px sin overflow horizontal, sin errores de
+consola. `pnpm typecheck` limpio (sin cambios de TypeScript). `cargo test`
+corrido para contar el número real de Rust regeneró snapshots no
+determinísticos de `contracts/policy-rail/test_snapshots/` (bytes de llave
+aleatorios por corrida) — descartados con `git checkout --` antes de
+commitear, no son parte de este trabajo.
+
+Pendiente: mergear (ya mergeado a `main` en esta misma sesión) y **pushear —
+a confirmar con el usuario**. Importante: el número de commits que la landing
+muestra (78) es el conteo de `main` local después de este merge; `origin/main`
+todavía tiene menos hasta que se pushee, así que alguien que compare el
+número contra GitHub ahora mismo va a ver una diferencia hasta que se
+pushee. Nada más pendiente de esta ronda.
