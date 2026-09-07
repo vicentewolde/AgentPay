@@ -22,6 +22,18 @@ Por qué: <motivo>
 Pendiente: <qué queda para la próxima sesión>
 ```
 
+## 2026-09-07 — codex/sdk-config-tests
+
+Agente: Codex
+
+Qué: se agregaron tests unitarios dedicados para `parseConfig` y
+`configFromEnv` en `packages/sdk/src/config.test.ts`.
+
+Por qué: cubrir configuraciones válidas, campos faltantes o con tipos inválidos,
+y variables de entorno ausentes o vacías, verificando `ConfigError`.
+
+Pendiente: correr `pnpm test`, abrir el PR y esperar revisión antes de mergear.
+
 ---
 
 ## 2026-09-02 — main
