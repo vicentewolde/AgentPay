@@ -444,3 +444,41 @@ plata y quién más puede decir que no.
 conoce el Mandato —ni principal, ni venue, ni `payTo`, ni vigencia firmada
 (`M-21` lo dice explícito)— así que "moverlos" habría sido perder los siete
 chequeos que el contrato no hace, a cambio de no repetir dos.
+
+### V-16 · El feed de "actividad reciente" de la landing usa una sesión real, no el archivo del vault en disco · `Vigente`
+**Fecha:** 2026-09-07
+
+`docs/fase-0-fundamentos/prompt-landing-inspirado-fabriq.md` (Cambio 1) pedía
+un widget de actividad reciente con eventos reales de MandateVault, "real pero
+congelado" antes que "en vivo pero simulado", y sugería como fuente
+`deployments/testnet.json` o el registro de `@agentpay/vault`.
+
+El archivo `data/mandate-vault.jsonl` (gitignored, runtime) sí tiene entradas
+`granted`/`anchored` reales, pero solo cubre lo que `PolicyRail` decide —no la
+emisión de la credencial, la firma del Mandato ni la revocación, que son
+llamadas aparte contra `agent_registry` y no pasan por el vault. Usar solo el
+vault habría dejado el feed incompleto contra lo que el propio brief pedía
+mostrar (credencial → mandato → pago → revocación → verificación falla).
+
+**Decisión:** en vez de eso, se corrió una sesión real de punta a punta contra
+`apps/web` (sesión, compra pagada por `policy_rail`, revocación, reintento) y
+se tomaron los seis eventos de esa única corrida, con sus tx hashes
+verificados independientemente contra Horizon testnet —no solo lo que la UI
+devolvía— incluyendo decodificar los `operations` de los dos primeros
+llamados `anchor` para confirmar cuál era la credencial y cuál el Mandato por
+orden real de ejecución, no solo por el orden del código.
+
+**Alternativa descartada:** armar el feed combinando hashes reales de
+sesiones *distintas* ya documentadas en `evidencia/T20.md`/`T25.md`/`T31.md`
+(todas reales, todas verificables por separado). Se descartó porque, aunque
+cada hash sea real, presentarlos como una sola narrativa continua habría sido
+engañoso — son de agentes, credenciales y momentos distintos. El criterio de
+"real pero congelado" del brief pesa más si la unidad congelada es una sesión
+completa, no un collage de eventos reales sueltos.
+
+**Nota aparte, encontrada al verificar los números del hero (Cambio 2):** el
+conteo de tests de Rust que la landing venía mostrando (21) estaba mal —
+`cargo test` corre dos crates (`agent-registry`: 22, `policy-rail`: 21) y la
+landing anterior solo contaba el segundo. Corregido a 43 Rust (678 en total
+con los 635 de TypeScript). No es una decisión de diseño, es un número que
+nadie había vuelto a verificar desde que `agent-registry` sumó tests propios.

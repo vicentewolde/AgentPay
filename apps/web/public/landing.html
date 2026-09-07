@@ -282,21 +282,84 @@
 
   .stats {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 28px 20px;
     margin-top: 56px;
     padding-top: 34px;
     border-top: 1px solid var(--rule-c);
   }
+  .stats.hero-stats { margin-top: 48px; padding-top: 30px; }
   .stat b {
     display: block;
     font-family: var(--serif);
     font-weight: 400;
-    font-size: clamp(2rem, 4.6vw, 3rem);
+    font-size: clamp(1.9rem, 4vw, 2.7rem);
     line-height: 1;
     color: var(--fg);
   }
   .stat span { display: block; margin-top: 10px; font-size: 12.5px; line-height: 1.4; color: var(--fg-2); }
+  @media (max-width: 640px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ---------- activity feed ---------- */
+  .feed { margin-top: 40px; }
+  .feed-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 6px 24px;
+    padding: 16px 0;
+    border-top: 1px solid var(--rule-c);
+    font-size: 14.5px;
+  }
+  .feed-row:last-child { border-bottom: 1px solid var(--rule-c); }
+  .feed-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: var(--fg); }
+  .feed-k { font-weight: 500; }
+  .feed-when { font-family: var(--mono); font-size: 12px; color: var(--fg-3); white-space: nowrap; }
+  .feed-code { font-family: var(--mono); font-size: 12px; color: var(--fg-3); white-space: nowrap; }
+  @media (max-width: 640px) {
+    .feed-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  }
+
+  /* ---------- eras timeline ---------- */
+  .eras {
+    margin-top: 40px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--rule-c);
+  }
+  .era { padding: 26px 22px 4px 0; border-right: 1px solid var(--rule-c); }
+  .era:first-child { padding-left: 0; }
+  .era:last-child { border-right: none; padding-right: 0; }
+  .era-n { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--fg-3); }
+  .era h3 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: 1.3rem;
+    line-height: 1.15;
+    margin: 10px 0 8px;
+    color: var(--fg);
+  }
+  .era p { margin: 0; font-size: 13.5px; line-height: 1.52; color: var(--fg-2); }
+  .era-now .era-n, .era-now h3 { color: var(--accent-c); }
+  .era-tag {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--accent-c);
+    border: 1px solid var(--accent-c);
+    border-radius: 20px;
+    padding: 4px 10px;
+  }
+  @media (max-width: 720px) {
+    .eras { grid-template-columns: 1fr; border-top: none; }
+    .era { border-right: none; border-top: 1px solid var(--rule-c); padding: 20px 0; }
+    .era:first-child { border-top: none; }
+  }
 
   /* ---------- merchant ---------- */
   .merchant p.big {
@@ -384,6 +447,7 @@
       </span>
     </div>
     <nav class="nav">
+      <a href="#activity"><span data-tr="en">Activity</span><span data-tr="es">Actividad</span></a>
       <a href="#how-it-works"><span data-tr="en">How it works</span><span data-tr="es">Cómo funciona</span></a>
       <a href="#evidence"><span data-tr="en">Evidence</span><span data-tr="es">Evidencia</span></a>
       <a href="#bazaar"><span data-tr="en">Bazaar</span><span data-tr="es">Bazaar</span></a>
@@ -426,7 +490,111 @@
         <span data-tr="es">Nada que instalar. Un minuto, más o menos.</span>
       </p>
     </div>
+
+    <div class="stats hero-stats">
+      <div class="stat">
+        <b id="stat-tests">678</b>
+        <span>
+          <span data-tr="en">tests, all green — 635 TypeScript, 43 Rust</span>
+          <span data-tr="es">tests, todos en verde — 635 TypeScript, 43 Rust</span>
+        </span>
+      </div>
+      <div class="stat">
+        <b>5</b>
+        <span>
+          <span data-tr="en">phases of work shipped, each with its own written evidence</span>
+          <span data-tr="es">fases de trabajo construidas, cada una con su propia evidencia escrita</span>
+        </span>
+      </div>
+      <div class="stat">
+        <b id="stat-commits">78</b>
+        <span>
+          <span data-tr="en">commits, and you can read every one of them</span>
+          <span data-tr="es">commits, y puedes leerlos todos</span>
+        </span>
+      </div>
+      <div class="stat">
+        <b>8</b>
+        <span>
+          <span data-tr="en">real testnet transactions on this page, each one checkable on Stellar Expert</span>
+          <span data-tr="es">transacciones reales de testnet en esta página, cada una comprobable en Stellar Expert</span>
+        </span>
+      </div>
+    </div>
   </header>
+</div>
+
+<div class="wrap">
+  <section id="activity">
+    <p class="eyebrow live">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span data-tr="en">Recent activity</span>
+      <span data-tr="es">Actividad reciente</span>
+    </p>
+    <h2 class="sh">
+      <span data-tr="en">One real session, start to finish.</span>
+      <span data-tr="es">Una sesión real, de principio a fin.</span>
+    </h2>
+    <p class="lead">
+      <span data-tr="en">Not a mockup and not a live simulation — a snapshot of one real run against Stellar testnet, frozen here so you can check every step yourself. Follow any "Verify" link to a public explorer; nothing here is generated for this page.</span>
+      <span data-tr="es">No es una maqueta ni una simulación en vivo — es la foto de una corrida real contra Stellar testnet, congelada acá para que revises cada paso vos mismo. Cualquier "Verificar" te lleva a un explorador público; nada de esto se generó para esta página.</span>
+    </p>
+
+    <div class="feed">
+      <div class="feed-row">
+        <div class="feed-main">
+          <span class="feed-k"><span data-tr="en">Credential issued and anchored</span><span data-tr="es">Credencial emitida y anclada</span></span>
+          <span class="feed-when" data-at="2026-09-07T01:13:57Z"></span>
+        </div>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/624aa7eb2032021cbf3136e0bd04d1e41b9fce59d6fad82c3507b75c31bf10e9" target="_blank" rel="noopener">
+          <span data-tr="en">Verify ↗</span><span data-tr="es">Verificar ↗</span>
+        </a>
+      </div>
+      <div class="feed-row">
+        <div class="feed-main">
+          <span class="feed-k"><span data-tr="en">Mandate signed and anchored</span><span data-tr="es">Mandato firmado y anclado</span></span>
+          <span class="feed-when" data-at="2026-09-07T01:14:02Z"></span>
+        </div>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/42d5fb408828ab666a5fd6813a25c056334e23d73e0a64e7742f0eeeb7852d6b" target="_blank" rel="noopener">
+          <span data-tr="en">Verify ↗</span><span data-tr="es">Verificar ↗</span>
+        </a>
+      </div>
+      <div class="feed-row">
+        <div class="feed-main">
+          <span class="feed-k"><span data-tr="en">Payment executed via x402</span><span data-tr="es">Pago ejecutado con x402</span></span>
+          <span class="feed-when" data-at="2026-09-07T01:14:17Z"></span>
+        </div>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/4806be2f76896f46544999a25cd0aa1f836dcab5a6b7217180088a0866d1968b" target="_blank" rel="noopener">
+          <span data-tr="en">Verify ↗</span><span data-tr="es">Verificar ↗</span>
+        </a>
+      </div>
+      <div class="feed-row">
+        <div class="feed-main">
+          <span class="feed-k"><span data-tr="en">Decision anchored to the payment</span><span data-tr="es">Decisión anclada al pago</span></span>
+          <span class="feed-when" data-at="2026-09-07T01:14:27Z"></span>
+        </div>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/b3158fdeee735d84e693ade3a09536d48dd23c2ce36634a27ca48324c5aa5376" target="_blank" rel="noopener">
+          <span data-tr="en">Verify ↗</span><span data-tr="es">Verificar ↗</span>
+        </a>
+      </div>
+      <div class="feed-row">
+        <div class="feed-main">
+          <span class="feed-k"><span data-tr="en">Mandate revoked, from outside the agent</span><span data-tr="es">Mandato revocado, desde afuera del agente</span></span>
+          <span class="feed-when" data-at="2026-09-07T01:14:42Z"></span>
+        </div>
+        <a class="verify" href="https://stellar.expert/explorer/testnet/tx/2b247331d3fa1b0768e0f65c94c1408e1f429d3a0c9b4b52c0804d7089081cfc" target="_blank" rel="noopener">
+          <span data-tr="en">Verify ↗</span><span data-tr="es">Verificar ↗</span>
+        </a>
+      </div>
+      <div class="feed-row">
+        <div class="feed-main">
+          <span class="feed-k"><span data-tr="en">Next purchase fails: verification reads the revoke</span><span data-tr="es">La siguiente compra falla: la verificación lee la revocación</span></span>
+          <span class="feed-when" data-at="2026-09-07T01:14:55Z"></span>
+        </div>
+        <span class="feed-code">MandateRevoked</span>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div class="band">
@@ -518,6 +686,45 @@
       <span data-tr="es">Puedes confiar en que sus compras van a ser seguras y no va a comprar nada indebido.</span>
     </p>
   </section>
+
+  <section id="eras">
+    <p class="eyebrow">
+      <span data-tr="en">Why this has to exist</span>
+      <span data-tr="es">Por qué esto tiene que existir</span>
+    </p>
+    <h2 class="sh">
+      <span data-tr="en">Every era of payments needed its own layer of trust.</span>
+      <span data-tr="es">Cada era de pagos necesitó su propia capa de confianza.</span>
+    </h2>
+    <p class="lead">
+      <span data-tr="en">Each time the person paying moved one step further from the register, payments needed a new way to prove that whoever said yes was actually allowed to.</span>
+      <span data-tr="es">Cada vez que quien pagaba se alejó un paso más de la caja, los pagos necesitaron una forma nueva de probar que quien dijo que sí de verdad tenía permiso.</span>
+    </p>
+
+    <div class="eras">
+      <div class="era">
+        <div class="era-n">01</div>
+        <h3><span data-tr="en">Physical cards</span><span data-tr="es">Tarjetas físicas</span></h3>
+        <p><span data-tr="en">A signature, in person.</span><span data-tr="es">Una firma, en persona.</span></p>
+      </div>
+      <div class="era">
+        <div class="era-n">02</div>
+        <h3><span data-tr="en">Online payments</span><span data-tr="es">Pagos online</span></h3>
+        <p><span data-tr="en">A card number and a CVV.</span><span data-tr="es">Un número de tarjeta y un CVV.</span></p>
+      </div>
+      <div class="era">
+        <div class="era-n">03</div>
+        <h3><span data-tr="en">Mobile wallets</span><span data-tr="es">Wallets móviles</span></h3>
+        <p><span data-tr="en">The owner's own biometrics.</span><span data-tr="es">La biometría del dueño.</span></p>
+      </div>
+      <div class="era era-now">
+        <div class="era-n">04</div>
+        <h3><span data-tr="en">Agentic payments</span><span data-tr="es">Pagos agénticos</span></h3>
+        <p><span data-tr="en">Need on-chain, verifiable mandates — there's no person in the room to sign or type anything.</span><span data-tr="es">Necesitan mandatos on-chain verificables — no hay ninguna persona en la sala para firmar ni tipear nada.</span></p>
+        <span class="era-tag"><span data-tr="en">What we're building</span><span data-tr="es">Lo que estamos construyendo</span></span>
+      </div>
+    </div>
+  </section>
 </div>
 </div>
 
@@ -595,30 +802,6 @@
             <span data-tr="es">Verificar ↗</span>
           </a>
         </div>
-      </div>
-    </div>
-
-    <div class="stats">
-      <div class="stat">
-        <b>656</b>
-        <span>
-          <span data-tr="en">tests, all green — 635 TypeScript, 21 Rust</span>
-          <span data-tr="es">tests, todos en verde — 635 TypeScript, 21 Rust</span>
-        </span>
-      </div>
-      <div class="stat">
-        <b>5</b>
-        <span>
-          <span data-tr="en">phases shipped and closed, each one with its own written evidence</span>
-          <span data-tr="es">fases construidas y cerradas, cada una con su propia evidencia escrita</span>
-        </span>
-      </div>
-      <div class="stat">
-        <b>31</b>
-        <span>
-          <span data-tr="en">commits, and you can read every one of them</span>
-          <span data-tr="es">commits, y puedes leerlos todos</span>
-        </span>
       </div>
     </div>
   </section>
@@ -739,7 +922,7 @@
 </div>
 
 <script>
-  /* The only script on this page: the English ⇄ Spanish switch. */
+  /* The English ⇄ Spanish switch, plus the activity feed's relative timestamps. */
   (function () {
     var root = document.documentElement;
     var titles = {
@@ -748,12 +931,42 @@
     };
     var buttons = document.querySelectorAll("[data-set-lang]");
 
+    /* Real, fixed timestamps (data-at) rendered as live relative time — the
+       events themselves are a frozen snapshot, not a simulated live feed;
+       only the "time ago" label keeps ticking, honestly, against the clock. */
+    var ES_UNITS = { second: "segundo", minute: "minuto", hour: "hora", day: "día", month: "mes", year: "año" };
+    var STEPS = [[60, "second"], [60, "minute"], [24, "hour"], [30, "day"], [12, "month"]];
+
+    function timeAgo(iso, lang) {
+      var diffSec = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+      var value = diffSec;
+      var unit = "second";
+      for (var i = 0; i < STEPS.length; i++) {
+        if (value < STEPS[i][0]) { unit = STEPS[i][1]; break; }
+        value = Math.floor(value / STEPS[i][0]);
+        unit = i + 1 < STEPS.length ? STEPS[i + 1][1] : "year";
+      }
+      if (lang === "es") {
+        return "hace " + value + " " + ES_UNITS[unit] + (value === 1 ? "" : "s");
+      }
+      return value + " " + unit + (value === 1 ? "" : "s") + " ago";
+    }
+
+    function renderFeedTimes() {
+      var lang = root.lang === "es" ? "es" : "en";
+      var nodes = document.querySelectorAll(".feed-when[data-at]");
+      for (var i = 0; i < nodes.length; i++) {
+        nodes[i].textContent = timeAgo(nodes[i].dataset.at, lang);
+      }
+    }
+
     function apply(lang) {
       root.lang = lang;
       document.title = titles[lang];
       for (var i = 0; i < buttons.length; i++) {
         buttons[i].setAttribute("aria-pressed", String(buttons[i].dataset.setLang === lang));
       }
+      renderFeedTimes();
     }
 
     for (var i = 0; i < buttons.length; i++) {
@@ -765,6 +978,7 @@
     }
 
     apply(root.lang === "es" ? "es" : "en");
+    setInterval(renderFeedTimes, 30000);
   })();
 </script>
 

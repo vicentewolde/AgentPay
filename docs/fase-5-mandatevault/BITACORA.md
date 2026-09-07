@@ -47,6 +47,51 @@ del `ROADMAP.md`) — no es trabajo de código.
 
 ---
 
+## Landing v2 — patrones de presentación (sin numerar) — 2026-09-07
+
+Tres cambios en `apps/web/public/landing.html`, a pedido del usuario
+(`docs/fase-0-fundamentos/prompt-landing-inspirado-fabriq.md`), inspirados en
+patrones de presentación de un competidor conceptual (Agentic Fabriq) — sin
+copiar texto, identidad visual ni el nombre del competidor, solo estructura.
+No es un hito numerado de la fase (mismo criterio que la landing anterior y el
+trabajo de usabilidad del MVP): `P-3` ya sacó cualquier candidato técnico
+nuevo de "listo" para esta fase.
+
+1. **Widget de "actividad reciente".** En vez de una lista de ejemplo o un
+   feed conectado en vivo, se corrió una sesión real de punta a punta contra
+   `apps/web` (sesión → compra real pagada por `policy_rail` → revocación →
+   reintento rechazado) y se verificó cada hash de transacción contra Horizon
+   testnet directamente (no solo contra lo que la UI mostraba), incluyendo
+   decodificar los `operations` de las dos primeras para confirmar que ambas
+   son llamados `anchor` al `agent_registry` — uno para la credencial, uno
+   para el Mandato, en ese orden. Los seis eventos (credencial emitida →
+   mandato firmado → pago ejecutado → decisión anclada → mandato revocado →
+   verificación falla) son de esa única corrida, con sus seis marcas de
+   tiempo reales; el "hace X minutos" de cada uno se recalcula en el
+   navegador contra esas marcas fijas, así que crece con el tiempo real en
+   vez de quedar congelado en un número falso.
+2. **Números arriba del pliegue.** El bloque de prueba (tests, fases,
+   commits, transacciones verificables) se movió del pie de la sección
+   "Evidencia" al tope del hero, sin duplicarlo. Se volvieron a contar los
+   cuatro contra el repo en el momento de escribirlos, no se reusó lo que
+   decía la versión anterior de la landing — y esa verificación encontró que
+   el número de tests de Rust que la landing venía mostrando (21) estaba mal:
+   solo contaba `contracts/policy-rail`, no `contracts/agent-registry` (22
+   tests más). El real es 43 Rust + 635 TypeScript = 678.
+3. **Sección "cada era de pagos necesitó su propia capa de confianza".** Línea
+   de tiempo de 4 pasos (tarjetas físicas → pagos online → wallets móviles →
+   pagos agénticos, este último marcado visualmente distinto) agregada
+   inmediatamente después de "cómo funciona", como extensión de esa
+   explicación — sin estadísticas de mercado inventadas, solo el argumento
+   lógico de que cada paso alejó más a quien paga de la caja.
+
+Verificado en navegador real contra `pnpm run web`: ambos idiomas, 375px y
+desktop, sin overflow horizontal, sin errores de consola. `pnpm typecheck`
+limpio (no se tocó código TypeScript). Decisión de scope registrada en
+`DECISIONES.md` → `V-16`.
+
+---
+
 ## T27 · `@agentpay/vault` — bitácora durable de cada decisión — cerrado 2026-09-04
 
 **Qué quedó funcionando, en palabras llanas.** Antes de este hito, si el
