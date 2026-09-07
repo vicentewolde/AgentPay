@@ -1528,3 +1528,34 @@ addendum a la entrada del rediseño del MVP, sin numerar).
 
 Pendiente: nada — con esto, tanto `/` como `/landing` quedan verificados
 contra el despliegue real, no solo local, y listos para el mensaje a Tellus.
+
+## 2026-09-07 (6) — main
+
+Agente: Claude Code
+
+Qué: Devin discontinuado por decisión del usuario (calidad insuficiente en su
+plan free); en su lugar, Codex (OpenAI, incluido en ChatGPT Plus) queda como
+segundo agente sobre esta carpeta, con el mismo rol acotado. Se actualizó
+`CLAUDE.md` § "Coordinación con Codex" (antes "... con Devin"), se marcó
+`P-2` como `Superada` en `docs/DECISIONES.md` y se agregó `P-4` documentando
+el reemplazo y por qué el protocolo nuevo es más estricto (bypass de
+`checkMandate` en `B-25`, colisión de branches del 2026-09-03). Se escribió
+`AGENTS.md` de cero — instrucciones propias para Codex, sin duplicar el
+índice de fases de `CLAUDE.md` — commiteado por primera vez (existía sin
+commitear, era una copia parcial de `CLAUDE.md` con "Devin" reemplazado por
+"Codex" a medias).
+
+Por qué: el usuario confirmó que no había trabajo relevante pendiente con
+Devin, así que no hubo nada que migrar o rescatar — solo actualizar la
+configuración activa.
+
+Qué NO se tocó, a propósito: las entradas históricas de este mismo archivo,
+`fase-2-agente-compra/DECISIONES.md` (`B-25`) y `fase-3-policyrail-mandato/BITACORA.md`
+que narran el trabajo real con Devin, incluido el incidente de seguridad —
+quedan como registro, no se reescribe hacia atrás (ver `P-4` para el motivo
+completo). No queda ninguna rama `devin/*` viva en el remoto (verificado con
+`git ls-remote`).
+
+Pendiente: nada de código. Cuando el usuario empiece a delegarle tareas a
+Codex, la primera sesión de Codex debería confirmar que lee `AGENTS.md` y
+sigue el prefijo `codex/<task>`.

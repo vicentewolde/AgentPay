@@ -59,7 +59,7 @@ cerrada no se reescribe hacia atrás, se supersede desde aquí.
 
 ---
 
-### P-2 · Devin (plan free) como segundo agente sobre la misma carpeta raíz · `Vigente`
+### P-2 · Devin (plan free) como segundo agente sobre la misma carpeta raíz · `Superada`
 **Fecha:** 2026-09-02
 
 Se suma Devin Desktop (plan free), apuntando a esta misma carpeta local, para
@@ -140,3 +140,72 @@ concreta. Se descartó por ahora — el usuario prioriza no dispersar esfuerzo
 en dos caminos de negocio a la vez; si el canal de Tellus no avanza, el plan
 original sigue disponible para retomar (nada de lo hecho hasta acá se
 pierde, ver `docs/fase-5-mandatevault/`).
+
+---
+
+### P-4 · Devin discontinuado; Codex (ChatGPT Plus) como segundo agente en su lugar · `Vigente`
+**Fecha:** 2026-09-07
+
+**Supersede a `P-2`.** El usuario discontinuó Devin (plan free): la calidad
+del trabajo que producía no estaba al nivel de Claude Code para este
+proyecto. No se rescata nada de lo que Devin generó — el usuario confirmó
+que no había trabajo relevante pendiente de su lado, y en la práctica no
+queda ningún artefacto vivo: no hay branches `devin/*` en el repo remoto (se
+verificó con `git ls-remote`), y la única rama que llegó a mergearse
+(`devin/guards-unit-tests`, PR #1) sigue siendo válida y no se revierte solo
+por venir de Devin.
+
+En su lugar, el usuario va a usar **Codex** (el agente de código de OpenAI,
+incluido en ChatGPT Plus) con el mismo rol: tareas mecánicas y acotadas sobre
+esta misma carpeta local, nunca decisiones de arquitectura ni nada que toque
+contratos, MandateVault, la integración con el bazaar del embajador, o la
+narrativa de SCF — ver `CLAUDE.md` § "Coordinación con Codex" para el
+protocolo completo.
+
+**Motivo, con evidencia — por qué el protocolo con Codex es más estricto que
+el que tuvo Devin, no solo un reemplazo de nombre.** La experiencia con Devin
+dejó dos incidentes documentados que informan el protocolo nuevo:
+
+1. **Un bypass de seguridad real.** La rama `devin/agent-web-frontend` se
+   borró por completo porque el adaptador que generó se saltaba
+   `checkMandate` — ver
+   [fase-2/DECISIONES.md § B-25](fase-2-agente-compra/DECISIONES.md). Es
+   la razón concreta detrás de la regla nueva de prestarle atención particular,
+   en toda revisión de un diff de Codex, a cualquier cambio a `checkMandate`,
+   al enforcement de `scope.limits`/`perDay`, o a cualquier punto de
+   autorización.
+2. **Una colisión de branches.** Devin escribió sobre `cc/t20-anchor-mandate`
+   — una rama reservada para Claude Code — causando confusión hasta que el
+   usuario pausó esa sesión y revirtió el commit (`b6bcee0`); ver
+   `docs/AGENT_LOG.md`, entradas de 2026-09-03, y
+   [fase-3/BITACORA.md](fase-3-policyrail-mandato/BITACORA.md). Es la razón
+   detrás de la regla nueva de parar y confirmar con `git log` quién escribió
+   el último commit si el branch activo no coincide con lo esperado.
+
+**Qué cambia en la práctica frente a `P-2`.**
+
+- Prefijo de branch: `codex/<task>` en vez de `devin/<task>`.
+- Nueva regla explícita de detección temprana de colisión de branches (punto
+  3 del checklist en `CLAUDE.md`), que `P-2` no tenía.
+- Nueva regla de atención reforzada, en la revisión de todo PR de Codex, a
+  cambios que toquen puntos de autorización — `P-2` solo pedía "revisar antes
+  de mergear", sin nombrar qué mirar con más cuidado.
+- El resto del protocolo (git como fuente de verdad, `AGENT_LOG.md`
+  obligatorio, alcance restringido, commitear antes de que el otro agente
+  haga `checkout`) se mantiene igual — no falló, solo cambia de nombre.
+
+**Qué NO cambia — la historia no se reescribe.** Todas las entradas de
+`docs/AGENT_LOG.md`, `fase-2-agente-compra/DECISIONES.md` (`B-25`) y
+`fase-3-policyrail-mandato/BITACORA.md` que narran el trabajo y los
+incidentes con Devin se mantienen intactas, siguiendo la misma regla de este
+archivo: no se borran entradas ni se reescribe hacia atrás el registro de
+fases cerradas. Son evidencia real de disciplina de ingeniería —el bypass se
+detectó y se corrigió— y otros documentos las referencian por fecha; borrarlas
+rompería esas referencias sin ganar nada.
+
+**Alternativa descartada:** borrar también el historial de Devin en
+`AGENT_LOG.md` y en la documentación de fases cerradas, para que el proyecto
+quede "sin rastro". Se descartó porque viola la convención que este mismo
+archivo establece en su encabezado, huerfanaría las referencias cruzadas
+existentes, y porque el incidente de seguridad detectado es, en sí mismo,
+evidencia positiva para la narrativa de SCF — no algo que convenga esconder.
