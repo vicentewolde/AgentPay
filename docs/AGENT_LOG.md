@@ -1495,3 +1495,36 @@ Pendiente: verificar que Render redeployó `/` con estos cambios antes de
 darle el link al usuario. Nada más pendiente de esta ronda — con esto,
 `apps/web` (`/`) y `apps/web/public/landing.html` (`/landing`) quedan listos
 para el mensaje de WhatsApp a Tellus (`P-3`).
+
+## 2026-09-07 (5) — main (fix pusheado, verificado en producción)
+
+Agente: Claude Code
+
+Qué: el usuario probó `https://agentpay-web.onrender.com/` antes de mandarlo
+a Tellus y reportó que el botón "Comprar" no funcionaba, ni con una
+instrucción escrita. Causa real: `POLICY_RAIL_CONTRACT_ID` nunca se había
+declarado en `render.yaml` (llegó a `.env.local` recién en T31, después de
+la última vez que se tocó ese archivo); sin esa variable `server.ts` reporta
+`policyRail: null`, y el único botón que quedó tras la simplificación de la
+sesión anterior depende completamente de que no sea `null`. El botón de
+cuenta clásica que se sacó era el que hasta ahora tapaba este hueco — nadie
+había probado el pago por `policy_rail` contra el Render real antes, solo
+local.
+
+Arreglado agregando la variable a `render.yaml` en texto plano (no
+`sync: false`): es una dirección de contrato pública, ya comprometida en
+`deployments/testnet.json` y mostrada como `pagador` en la propia demo, así
+que Render la toma sola en el próximo deploy sin pedirle nada al usuario en
+el dashboard. Pusheado (`6bd957e`) y verificado en vivo tras el redeploy:
+sesión real, `policyRail` ya no `null`, botón habilitado, pago real asentado
+(`a81befc17218006c69019be616a74fa655d9a8a7677c6819cbd4239b9fc99126`).
+
+Por qué: el bug lo encontró el usuario probando el link real antes de
+enviarlo — exactamente el paso de verificación que `P-3` pide antes de
+mandar el mensaje a Tellus, y que hizo su trabajo.
+
+Documentación tocada: `docs/fase-5-mandatevault/BITACORA.md` (segundo
+addendum a la entrada del rediseño del MVP, sin numerar).
+
+Pendiente: nada — con esto, tanto `/` como `/landing` quedan verificados
+contra el despliegue real, no solo local, y listos para el mensaje a Tellus.

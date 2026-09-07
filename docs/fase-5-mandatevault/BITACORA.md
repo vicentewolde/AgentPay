@@ -149,6 +149,31 @@ pedido: reescribir la nota de "esta instrucción debe quedar en español" para
 que el motivo apunte al bazaar, no al intérprete del agente — aplicado tal
 cual lo pidió, sin objeción, y traducido a inglés en el mismo commit.
 
+**Un bug real en producción, encontrado por el usuario probando el link
+antes de mandarlo — no por esta sesión.** Con los cambios ya mergeados y
+pusheados, el usuario probó `https://agentpay-web.onrender.com/` de punta a
+punta antes de compartirlo y el botón "Comprar" no hacía nada, ni con una
+instrucción escrita. Causa: `POLICY_RAIL_CONTRACT_ID` nunca se había
+declarado en `render.yaml` — llegó a `.env.local` recién en T31 (Fase 5),
+después de la última vez que se tocó ese archivo. `apps/web/src/server.ts`
+devuelve `policyRail: null` sin esa variable, y el único botón que quedaba
+tras simplificar la sección (`Rediseño del MVP`, arriba) depende
+completamente de que `policyRail` no sea `null` — el botón de cuenta clásica,
+que nunca la necesitó, era el que hasta ahora tapaba el hueco. Nadie lo había
+notado porque nadie había probado el pago por `policy_rail` contra el
+despliegue real de Render antes; todas las pruebas anteriores de ese camino
+fueron locales, contra `.env.local`, donde la variable sí está.
+
+Arreglado agregando la variable a `render.yaml` con su valor real
+(`CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I`) en texto plano,
+no como secreto (`sync: false`) — es una dirección de contrato pública, ya
+comprometida en `deployments/testnet.json` y mostrada como `pagador` en la
+propia demo, así que no hacía falta pedirle al usuario que la cargara a mano
+en el dashboard de Render. Verificado en vivo tras el redeploy: sesión real,
+`policyRail` ya no `null`, botón habilitado, pago real asentado
+(`a81befc17218006c69019be616a74fa655d9a8a7677c6819cbd4239b9fc99126`, pagado
+por `policy_rail`).
+
 ---
 
 ## T27 · `@agentpay/vault` — bitácora durable de cada decisión — cerrado 2026-09-04
