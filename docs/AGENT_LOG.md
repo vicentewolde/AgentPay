@@ -1461,3 +1461,37 @@ misma sesión. Un detalle menor y conocido, no arreglado a propósito: el
 `detail` de cada registro de la bitácora lo arma `server.ts` como una frase
 ya formada en español ("pago ... · ancla ..."), y queda así aunque el resto
 del panel esté en inglés — ver `V-17` para el motivo de no tocarlo.
+
+## 2026-09-07 (4) — main (mergeado `cc/mvp-landing-redesign`, pusheado)
+
+Agente: Claude Code
+
+Qué: el usuario revisó el rediseño del MVP local (`pnpm run web`) y pidió dos
+ajustes antes de aprobarlo. Primero preguntó qué diferenciaba a los dos
+botones de "Comprar" — la pregunta reveló que la sección no se explicaba
+sola; se le contestó la diferencia técnica (cuenta clásica vs. `policy_rail`,
+quién aplica el límite de gasto y dónde) y, con esa respuesta, pidió dejar
+solo el botón `policy_rail` —el que prueba que el límite lo aplica la red, no
+la app— renombrado a un simple "Comprar"/"Buy", sin el párrafo que explicaba
+una elección que ya no existe. Segundo ajuste: reescribir la nota de "esta
+instrucción debe quedar en español" para que el motivo apunte al bazaar
+("por ahora"), no al intérprete del agente, con su traducción al inglés.
+Ambos aplicados tal cual los pidió, verificados en el navegador (una compra
+real más, pagada por `policy_rail`, confirmando el pagador en los pasos de
+respuesta), y mergeados/pusheados a `origin/main` a pedido explícito del
+usuario ("mergea, pushea y publica ahora, sin esperar más instrucciones").
+
+Por qué: el usuario quería el link del MVP listo para Tellus junto con el de
+la landing, y ya había aprobado el diseño en la ronda anterior — solo
+faltaban estos dos ajustes de contenido.
+
+Documentación tocada: `docs/fase-5-mandatevault/BITACORA.md` (addendum a la
+entrada del rediseño, sin numerar). Se resincronizó de nuevo el contador de
+commits de la landing (84 → 90) antes de pushear, mismo criterio que la
+ronda anterior — cada commit de este cierre lo corre desactualizado por uno
+más hasta el commit final.
+
+Pendiente: verificar que Render redeployó `/` con estos cambios antes de
+darle el link al usuario. Nada más pendiente de esta ronda — con esto,
+`apps/web` (`/`) y `apps/web/public/landing.html` (`/landing`) quedan listos
+para el mensaje de WhatsApp a Tellus (`P-3`).
