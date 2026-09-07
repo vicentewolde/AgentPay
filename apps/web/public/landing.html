@@ -35,7 +35,7 @@
     --serif: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
     --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-    --gap: clamp(68px, 10vw, 128px);
+    --gap: clamp(52px, 7.5vw, 92px);
     /* theme tokens — a section becomes dark by adding .band, which redefines these */
     --fg: var(--ink);
     --fg-2: var(--ink-2);
@@ -109,7 +109,7 @@
   html[lang="es"] .lang button[data-set-lang="es"] { color: var(--ink); }
 
   /* ---------- hero ---------- */
-  .hero { padding: clamp(56px, 8vw, 100px) 0 clamp(52px, 7vw, 84px); }
+  .hero { padding: clamp(32px, 4.5vw, 56px) 0 clamp(40px, 6vw, 64px); }
   .eyebrow {
     font-size: 11.5px;
     font-weight: 500;
@@ -327,11 +327,11 @@
     margin-top: 40px;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
+    gap: 0 28px;
     border-top: 1px solid var(--rule-c);
   }
-  .era { padding: 26px 22px 4px 0; border-right: 1px solid var(--rule-c); }
-  .era:first-child { padding-left: 0; }
-  .era:last-child { border-right: none; padding-right: 0; }
+  .era { padding: 26px 0 4px; border-right: 1px solid var(--rule-c); }
+  .era:last-child { border-right: none; }
   .era-n { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--fg-3); }
   .era h3 {
     font-family: var(--serif);
@@ -720,8 +720,8 @@
       <div class="era era-now">
         <div class="era-n">04</div>
         <h3><span data-tr="en">Agentic payments</span><span data-tr="es">Pagos agénticos</span></h3>
-        <p><span data-tr="en">Need on-chain, verifiable mandates — there's no person in the room to sign or type anything.</span><span data-tr="es">Necesitan mandatos on-chain verificables — no hay ninguna persona en la sala para firmar ni tipear nada.</span></p>
-        <span class="era-tag"><span data-tr="en">What we're building</span><span data-tr="es">Lo que estamos construyendo</span></span>
+        <p><span data-tr="en">Need on-chain, verifiable mandates — there's no person in the room to sign or type anything.</span><span data-tr="es">Necesitan mandatos on-chain verificables.</span></p>
+        <span class="era-tag"><span data-tr="en">What we're building</span><span data-tr="es">Lo que hacemos</span></span>
       </div>
     </div>
   </section>
@@ -740,7 +740,7 @@
     </h2>
     <p class="lead">
       <span data-tr="en">Every one of these settled on Stellar testnet. Open any of them in a public explorer, nothing to trust but the chain itself.</span>
-      <span data-tr="es">Las tres quedaron asentadas en Stellar testnet. Ábrelas en un explorador público, sin tener que confiarnos nada a nosotros.</span>
+      <span data-tr="es">Las tres quedaron asentadas en Stellar testnet. Ábrelas en un explorador público.</span>
     </p>
 
     <div class="ev-list">
