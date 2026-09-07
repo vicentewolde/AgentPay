@@ -34,3 +34,11 @@ services:
         sync: false
       - key: BAZAAR_BASE_URL
         value: https://stellar-bazaar-x402.vercel.app
+      # Not a secret — a public Soroban contract address, already committed
+      # in deployments/testnet.json and shown as `pagador` on the live demo
+      # itself. Missing here (never added since T31) is exactly why the
+      # deployed site's sole "Buy" button stayed disabled: apps/web/src/
+      # server.ts reads this var and reports `policyRail: null` without it,
+      # and the MVP no longer has a classic-account button to fall back to.
+      - key: POLICY_RAIL_CONTRACT_ID
+        value: CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I
