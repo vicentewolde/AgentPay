@@ -482,3 +482,45 @@ conteo de tests de Rust que la landing venía mostrando (21) estaba mal —
 landing anterior solo contaba el segundo. Corregido a 43 Rust (678 en total
 con los 635 de TypeScript). No es una decisión de diseño, es un número que
 nadie había vuelto a verificar desde que `agent-registry` sumó tests propios.
+
+### V-17 · El contenido dinámico del MVP se traduce por diccionario cliente, no cambiando `server.ts` · `Vigente`
+**Fecha:** 2026-09-07
+
+El rediseño de `apps/web/public/index.html` (mismo lenguaje visual que
+`/landing`, bilingüe EN/ES) tenía que decidir qué hacer con el contenido que
+no es copy estático: las tarjetas del catálogo, los `facts` de sesión y
+revocación, los pasos de compra (`buy-steps`) y los registros de la
+bitácora — todo generado por JavaScript a partir de lo que devuelve la API,
+no por los `data-tr` que sí alcanzan al resto de la página.
+
+Los *labels* de los pasos de compra (`entendido`, `intent_id`, `total`,
+`recurso`, `pagador`, `settled`, `tx`, `explorer`, `vault_anchor*`) están
+fijados en `apps/web/src/server.ts` — un vocabulario chico y estable. Se
+tradujeron del lado del cliente con un diccionario (`STEP_LABEL_KEYS`) en vez
+de tocar el backend para que emita el label en el idioma de turno.
+
+**Alternativa descartada:** pasarle un parámetro de idioma a
+`/api/session/buy` y que el propio backend arme los labels ya traducidos. Se
+descartó por alcance: `server.ts` no tiene noción de idioma en ningún otro
+lado, y agregar una hoy solo para esto habría sido más superficie para un
+problema que el frontend ya resuelve solo, sin tocar ningún endpoint.
+
+**Lo que se dejó igual, a propósito:** el texto de `detail` que cada registro
+de la bitácora trae (`r.detail`, ej. "pago ... · ancla ...") lo arma
+`server.ts` como una sola cadena ya formada, en español. Traducirlo también
+por diccionario habría significado parsear texto libre en vez de una clave
+fija — fragil, y se rompe apenas alguien edite esa frase en el backend sin
+avisar. Queda en español aunque el resto del panel esté en inglés; es la
+única inconsistencia bilingüe conocida del MVP, y es menor (una palabra
+suelta dentro de un hash, visible solo tras un pago real).
+
+**Un bug real, encontrado probando el toggle de idioma, no leyendo código.**
+El primer intento no re-renderizaba nada al cambiar de idioma: el catálogo
+(lo primero que carga la página, sin que el usuario haga nada) mostraba el
+badge "REAL PAYMENT"/"PAGO REAL" en el idioma que estaba activo cuando
+`loadProducts()` corrió una sola vez al cargar, no en el que el usuario
+tuviera elegido después. Corregido cacheando la última respuesta de cada
+panel (`lastProducts`, `lastSession`, `lastBuy`, `lastVault`, `lastRevoke`) y
+re-renderizando desde esa caché al tocar EN/ES, sin volver a pegarle a un
+endpoint con efecto secundario (comprar o revocar de nuevo) solo por un clic
+de idioma.

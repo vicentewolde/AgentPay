@@ -92,6 +92,51 @@ limpio (no se tocó código TypeScript). Decisión de scope registrada en
 
 ---
 
+## Rediseño del MVP (sin numerar) — 2026-09-07
+
+`apps/web/public/index.html` (el MVP interactivo, `pnpm run web`) pasó del
+panel oscuro monoespaciado original al mismo lenguaje visual que `/landing`
+(Instrument Serif + Inter, paleta paper/ink/accent, secciones numeradas con
+divisores) — a pedido explícito del usuario. Sin cambios de fondo: los mismos
+cinco pasos, los mismos botones, la misma API. Tampoco es un hito numerado
+(mismo criterio que la landing y el trabajo de usabilidad previos).
+
+Además del rediseño visual, tres cosas de fondo:
+
+1. **Se eliminaron todos los recuadros "En criollo:".** Dos directamente (el
+   del catálogo y el de compra); los otros tres (sesión, revocar, bitácora)
+   quedaron como un párrafo simple, sin la etiqueta, con el texto recortado
+   que pidió el usuario.
+2. **Bilingüe EN/ES, inglés por defecto**, compartiendo la misma llave de
+   `localStorage` (`agentpay-lang`) que ya usa `/landing` — el idioma elegido
+   viaja entre las dos páginas. Todo el copy estático usa el mismo mecanismo
+   `data-tr` de la landing; el contenido que arma JavaScript (tarjetas del
+   catálogo, datos de sesión, pasos de compra, registros de la bitácora) se
+   traduce con un diccionario del lado del cliente en vez de tocar
+   `server.ts` — detalle completo en `DECISIONES.md` → `V-17`.
+3. **La instrucción de compra queda en español a propósito**, con una nota
+   bilingüe nueva explicando por qué: el intérprete de instrucciones del
+   agente (Fase 2) solo entiende español, así que traducir el campo de texto
+   habría roto la demo para quien lo probara en inglés sin saberlo.
+
+**Un bug real, encontrado probando el toggle de idioma, no leyendo código.**
+El catálogo (lo primero que carga la página) mostraba el badge de "pago real"
+en el idioma que estaba activo cuando cargó una sola vez, no en el que el
+usuario tuviera elegido después — nada se volvía a renderizar al cambiar de
+idioma. Corregido cacheando la última respuesta de cada panel y
+re-renderizando desde ahí al tocar EN/ES, sin repetir ninguna llamada con
+efecto secundario (comprar o revocar de nuevo) solo por cambiar de idioma.
+
+Verificado de punta a punta en el navegador contra `pnpm run web`, con
+transacciones reales: sesión → pago real con la cuenta clásica → pago real
+con `policy_rail` → bitácora → revocación real → reintento rechazado con
+`MandateRevoked` — con el idioma cambiado a mitad de camino para confirmar
+que los paneles ya renderizados se traducen solos. Sin overflow horizontal en
+375px, sin errores de consola nuevos. `pnpm typecheck` limpio (no se tocó
+TypeScript). Decisión de scope registrada en `DECISIONES.md` → `V-17`.
+
+---
+
 ## T27 · `@agentpay/vault` — bitácora durable de cada decisión — cerrado 2026-09-04
 
 **Qué quedó funcionando, en palabras llanas.** Antes de este hito, si el

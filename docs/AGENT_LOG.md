@@ -1388,3 +1388,76 @@ muestra (78) es el conteo de `main` local después de este merge; `origin/main`
 todavía tiene menos hasta que se pushee, así que alguien que compare el
 número contra GitHub ahora mismo va a ver una diferencia hasta que se
 pushee. Nada más pendiente de esta ronda.
+
+## 2026-09-07 (2) — main (varias rondas de copy en landing.html, pusheado)
+
+Agente: Claude Code
+
+Qué: siguiendo con la sesión de la landing, el usuario pidió varias rondas de
+ajuste de copy antes de aprobar la publicación: tono neutro en español (sin
+voseo, sin guion largo) para el párrafo del feed de actividad, reescritura
+del párrafo de la línea de tiempo de eras (varias iteraciones hasta llegar a
+"cada vez menos contacto"), centrado real de las 4 columnas de esa sección
+(el padding era asimétrico), ritmo vertical más ajustado en toda la página, y
+tres recortes de texto puntuales. Con el visto bueno del usuario se pusheó
+todo a `origin/main` (`da45761`) y se verificó el redeploy real en
+`https://agentpay-web.onrender.com/landing` — incluida una re-sincronización
+del número de commits del hero (78 → 84) porque el propio proceso de commitear
+y pushear sumó commits después de que ese número se hubiera escrito.
+
+Por qué: el usuario quería revisar el tono y el diseño en detalle antes de
+que este link saliera hacia Tellus — nada se publicó sin su aprobación
+explícita en cada ronda.
+
+Documentación tocada: ninguna nueva (los cambios de copy no ameritaron
+decisión de scope propia, más allá de lo ya registrado en `V-16`).
+
+Pendiente: nada de la landing. El link a publicar quedó confirmado y
+verificado en vivo.
+
+## 2026-09-07 (3) — cc/mvp-landing-redesign
+
+Agente: Claude Code
+
+Qué: a pedido del usuario, rediseño completo de `apps/web/public/index.html`
+(el MVP interactivo) para que comparta el mismo lenguaje visual que
+`/landing` — pasó de un panel oscuro monoespaciado a la misma tipografía
+editorial (Instrument Serif + Inter) y paleta clara. Sin cambios de fondo en
+la funcionalidad: los mismos cinco pasos, botones y llamadas a la API.
+Tampoco es un hito numerado (mismo criterio que la landing y la ronda de
+usabilidad previas).
+
+Además del rediseño visual, aplicando el pedido exacto del usuario: se
+eliminaron todos los recuadros "En criollo:" (dos borrados directamente, tres
+convertidos en párrafo simple con el texto recortado que dio el usuario), y
+la página ahora es bilingüe EN/ES —inglés por defecto, compartiendo la misma
+llave de `localStorage` que `/landing` para que el idioma elegido viaje entre
+las dos páginas. El contenido que arma JavaScript (catálogo, datos de sesión,
+pasos de compra, bitácora) se tradujo con un diccionario del lado del
+cliente, sin tocar `server.ts`. La instrucción de compra queda en español a
+propósito, con una nota nueva explicando por qué (el intérprete de
+instrucciones del agente, de la Fase 2, solo entiende español).
+
+Un bug real, encontrado probando el toggle de idioma: el catálogo mostraba el
+badge de "pago real" en el idioma en que había cargado una sola vez, no en el
+elegido después — nada se volvía a renderizar al cambiar de idioma. Corregido
+cacheando la última respuesta de cada panel y re-renderizando desde ahí, sin
+repetir ninguna llamada con efecto secundario solo por un clic de idioma.
+
+Decisión nueva: `V-17` en `docs/fase-5-mandatevault/DECISIONES.md`.
+Documentación tocada: `docs/fase-5-mandatevault/BITACORA.md` (entrada nueva,
+sin numerar).
+
+Verificado de punta a punta en el navegador contra `pnpm run web`, con
+transacciones reales (sesión, pago con cuenta clásica, pago con
+`policy_rail`, bitácora, revocación real, reintento rechazado), cambiando el
+idioma a mitad de camino para confirmar que los paneles ya renderizados se
+traducen solos. Sin overflow horizontal en 375px, sin errores de consola
+nuevos. `pnpm typecheck` limpio.
+
+Pendiente: mergear `cc/mvp-landing-redesign` a `main` y pushear (a confirmar
+con el usuario) — todavía no se le mostró el resultado al usuario en esta
+misma sesión. Un detalle menor y conocido, no arreglado a propósito: el
+`detail` de cada registro de la bitácora lo arma `server.ts` como una frase
+ya formada en español ("pago ... · ancla ..."), y queda así aunque el resto
+del panel esté en inglés — ver `V-17` para el motivo de no tocarlo.
