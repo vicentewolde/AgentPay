@@ -1,218 +1,567 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AgentPay — demo en vivo</title>
+<title>AgentPay — live demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<script>
+  /* Language: English by default; the stored choice (shared with /landing) is applied before paint. */
+  (function () {
+    try {
+      var saved = localStorage.getItem("agentpay-lang");
+      if (saved === "es") document.documentElement.lang = "es";
+    } catch (e) { /* storage blocked — English stays */ }
+  })();
+</script>
 <style>
   :root {
     color-scheme: light;
-    --bg: #0b0d12;
-    --panel: #12151c;
-    --panel-border: #232838;
-    --text: #e7e9ee;
-    --muted: #8a91a3;
-    --accent: #5fe3b3;
-    --accent-dim: #2f7a5f;
-    --danger: #ff6b6b;
-    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --paper: #fbfaf8;
+    --paper-2: #f2f0ea;
+    --ink: #0f1211;
+    --ink-2: #434946;
+    --ink-3: #7d8481;
+    --rule: #e3e0d9;
+    --accent: #0a7a56;
+    --accent-wash: #e9f3ee;
+    --danger: #b3261e;
+    --danger-wash: #fbeceb;
+    --serif: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   }
+
   * { box-sizing: border-box; }
+
+  html[lang="en"] [data-tr="es"],
+  html[lang="es"] [data-tr="en"] { display: none; }
+
   body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    padding: 32px 20px 80px;
-  }
-  main { max-width: 880px; margin: 0 auto; }
-  header { margin-bottom: 32px; }
-  header h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -0.01em; }
-  header p { margin: 0; color: var(--muted); max-width: 640px; }
-  section {
-    background: var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: 10px;
-    padding: 20px 22px;
-    margin-bottom: 18px;
-  }
-  section h2 {
-    margin: 0 0 4px;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-  }
-  section .lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
-  section .plain {
-    margin: 0 0 14px;
-    padding: 10px 12px;
-    border-left: 2px solid var(--accent-dim);
-    background: #0e1118;
-    border-radius: 0 6px 6px 0;
-    font-size: 13px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
     line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  section .plain b { color: var(--accent); font-weight: 600; }
-  button {
-    background: var(--accent);
-    color: #06110d;
-    border: none;
-    border-radius: 7px;
-    padding: 9px 16px;
-    font-weight: 600;
-    font-size: 14px;
+
+  .wrap { width: 100%; max-width: 880px; margin: 0 auto; padding: 0 24px 80px; }
+  @media (max-width: 480px) { .wrap { padding: 0 20px 64px; } }
+
+  a { color: var(--accent); }
+
+  /* ---------- top bar ---------- */
+  .top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 26px 0 0;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+  }
+  .mark { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); text-decoration: none; }
+  .mark .tagline { font-weight: 400; color: var(--ink-3); font-size: 12.5px; margin-left: 4px; letter-spacing: 0; }
+  .utils { display: flex; align-items: center; gap: 18px; }
+  .back { font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .back:hover { color: var(--ink); }
+  .lang { display: flex; align-items: center; gap: 8px; }
+  .lang button {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 2px 1px;
+    font-family: var(--sans);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
     cursor: pointer;
   }
-  button:disabled { background: var(--accent-dim); color: #0b0d12aa; cursor: not-allowed; }
-  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--panel-border); }
-  button.danger { background: var(--danger); color: #2a0505; }
+  .lang span { color: var(--rule); font-size: 11.5px; }
+  .lang button:hover { color: var(--ink-2); }
+  .lang button:focus-visible,
+  .back:focus-visible,
+  .btn:focus-visible,
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  html[lang="en"] .lang button[data-set-lang="en"],
+  html[lang="es"] .lang button[data-set-lang="es"] { color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: clamp(28px, 4vw, 44px) 0 clamp(28px, 4vw, 40px); }
+  .eyebrow {
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 0 var(--accent);
+    animation: live-pulse 2s ease-out infinite;
+  }
+  @keyframes live-pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); }
+    100% { box-shadow: 0 0 0 6px transparent; }
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 5.4vw, 2.9rem);
+    line-height: 1.08;
+    letter-spacing: -0.016em;
+    margin: 14px 0 0;
+  }
+  .hero .sub {
+    margin: 16px 0 0;
+    font-size: 1rem;
+    line-height: 1.55;
+    color: var(--ink-2);
+    max-width: 60ch;
+  }
+
+  /* ---------- numbered steps ---------- */
+  .mstep {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 0 24px;
+    padding: 40px 0;
+    border-top: 1px solid var(--rule);
+  }
+  .mstep .n { font-family: var(--mono); font-size: 13px; color: var(--ink-3); letter-spacing: 0.02em; }
+  .mstep h2 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.4rem, 3vw, 1.75rem);
+    line-height: 1.15;
+    letter-spacing: -0.012em;
+    margin: 0 0 10px;
+    color: var(--ink);
+  }
+  .mstep .lead { margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); max-width: 62ch; }
+  .mstep .lead code, .mstep .plain code { font-family: var(--mono); font-size: 0.92em; background: var(--paper-2); padding: 1px 5px; border-radius: 4px; }
+  .mstep .plain { margin: 0 0 18px; font-size: 14.5px; line-height: 1.6; color: var(--ink-2); max-width: 62ch; }
+  @media (max-width: 560px) {
+    .mstep { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    appearance: none;
+    display: inline-block;
+    background: var(--ink);
+    color: var(--paper);
+    border: 1px solid var(--ink);
+    text-decoration: none;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    padding: 11px 20px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  }
+  .btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+  .btn:disabled { background: var(--rule); border-color: var(--rule); color: var(--ink-3); cursor: not-allowed; transform: none; }
+  .btn.outline { background: transparent; color: var(--ink); border-color: var(--rule); }
+  .btn.outline:hover:not(:disabled) { background: var(--paper-2); border-color: var(--ink-3); color: var(--ink); }
+  .btn.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+  .btn.danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.danger:disabled { background: transparent; border-color: var(--rule); color: var(--ink-3); }
+
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .hint { color: var(--ink-3); font-size: 12.5px; }
+
   input[type="text"] {
     width: 100%;
-    background: #0b0d12;
-    border: 1px solid var(--panel-border);
-    color: var(--text);
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    color: var(--ink);
     border-radius: 7px;
-    padding: 9px 12px;
+    padding: 10px 12px;
     font-size: 14px;
-    margin-bottom: 10px;
+    font-family: var(--sans);
+    margin-bottom: 8px;
   }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 4px; }
+  input[type="text"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .field-note { margin: 0 0 14px; font-size: 12px; color: var(--ink-3); }
+
+  /* ---------- product cards ---------- */
+  .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 4px; }
   .card {
-    border: 1px solid var(--panel-border);
+    border: 1px solid var(--rule);
     border-radius: 8px;
-    padding: 12px 14px;
-    background: #0e1118;
+    padding: 14px 16px;
+    background: var(--paper);
   }
-  .card.payable { border-color: var(--accent-dim); }
-  .card h3 { margin: 0 0 4px; font-size: 14px; }
-  .card p { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
-  .card .price { font-family: var(--mono); font-size: 13px; color: var(--accent); }
+  .card.payable { border-color: var(--accent); }
+  .card h3 { margin: 0 0 5px; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+  .card p { margin: 0 0 10px; color: var(--ink-3); font-size: 12.5px; line-height: 1.45; }
+  .card .price { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
   .badge {
     display: inline-block;
     font-size: 10px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    padding: 2px 6px;
+    letter-spacing: 0.05em;
+    padding: 3px 7px;
     border-radius: 4px;
-    background: var(--accent-dim);
-    color: #cffff0;
-    margin-bottom: 6px;
+    background: var(--accent-wash);
+    color: var(--accent);
+    margin-bottom: 8px;
   }
-  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 10px 0 0; font-size: 13px; }
-  dl.facts dt { color: var(--muted); }
-  dl.facts dd { margin: 0; font-family: var(--mono); word-break: break-all; }
-  .steps { margin: 12px 0 0; padding: 0; list-style: none; font-family: var(--mono); font-size: 13px; }
-  .steps li { padding: 4px 0; border-top: 1px dashed var(--panel-border); }
+
+  /* ---------- facts / rows ---------- */
+  dl.facts { margin: 4px 0 0; }
+  dl.facts .fact-row {
+    display: grid;
+    grid-template-columns: minmax(120px, max-content) minmax(0, 1fr);
+    gap: 4px 16px;
+    padding: 9px 0;
+    border-top: 1px dashed var(--rule);
+    font-size: 13px;
+  }
+  dl.facts .fact-row:first-child { border-top: none; }
+  dl.facts dt { margin: 0; color: var(--ink-3); }
+  dl.facts dd { margin: 0; font-family: var(--mono); font-size: 12.5px; word-break: break-all; color: var(--ink); }
+
+  .steps { margin: 12px 0 0; padding: 0; list-style: none; }
+  .steps li {
+    padding: 7px 0;
+    border-top: 1px dashed var(--rule);
+    font-size: 13px;
+    font-family: var(--mono);
+    word-break: break-all;
+  }
   .steps li:first-child { border-top: none; }
-  .steps li b { color: var(--muted); font-weight: 400; }
-  .status { margin-top: 12px; font-size: 13px; }
+  .steps li b { color: var(--ink-3); font-weight: 400; }
+
+  .status { margin-top: 12px; font-size: 13.5px; }
   .status.ok { color: var(--accent); }
   .status.err { color: var(--danger); }
-  a { color: var(--accent); }
-  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+
+  @media (max-width: 480px) {
+    dl.facts .fact-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  }
 </style>
 </head>
 <body>
-<main>
-  <header>
+
+<div class="wrap">
+  <div class="top">
+    <a class="mark" href="/landing">
+      AgentPay
+      <span class="tagline">
+        <span data-tr="en">· live demo</span>
+        <span data-tr="es">· demo en vivo</span>
+      </span>
+    </a>
+    <div class="utils">
+      <div class="lang">
+        <button type="button" data-set-lang="en" aria-pressed="true">EN</button>
+        <span aria-hidden="true">/</span>
+        <button type="button" data-set-lang="es" aria-pressed="false">ES</button>
+      </div>
+      <a class="back" href="/landing">
+        <span data-tr="en">← Overview</span>
+        <span data-tr="es">← Resumen</span>
+      </a>
+    </div>
+  </div>
+
+  <header class="hero">
+    <p class="eyebrow">
+      <span class="live-dot" aria-hidden="true"></span>
+      <span data-tr="en">Stellar Testnet — live</span>
+      <span data-tr="es">Stellar Testnet en vivo</span>
+    </p>
     <h1>AgentPay</h1>
-    <p>
-      Un agente que prueba quién lo opera, qué puede gastar, y compra de
-      verdad en el bazaar de Stellar — testnet, dinero real dentro de ese
-      testnet, nada simulado.
+    <p class="sub">
+      <span data-tr="en">An agent that proves who operates it, what it can spend, and buys for real in a Stellar Bazaar on testnet.</span>
+      <span data-tr="es">Un agente que prueba quién lo opera, qué puede gastar, y compra de verdad en un Bazaar de Stellar en testnet.</span>
     </p>
   </header>
 
-  <section>
-    <h2>1 · Catálogo real del bazaar</h2>
-    <p class="lead">Leído en vivo de <code>stellar-bazaar-x402.vercel.app</code>.</p>
-    <p class="plain"><b>En criollo:</b> esto no es una lista de ejemplo — es la
-    tienda real de otro proyecto, leída ahora mismo, en este instante.</p>
-    <div id="products" class="products">Cargando…</div>
+  <section class="mstep" id="s1">
+    <div class="n">01</div>
+    <div>
+      <h2>
+        <span data-tr="en">Real bazaar catalog</span>
+        <span data-tr="es">Catálogo real del bazaar</span>
+      </h2>
+      <p class="lead">
+        <span data-tr="en">Read live from <code>stellar-bazaar-x402.vercel.app</code>.</span>
+        <span data-tr="es">Leído en vivo de <code>stellar-bazaar-x402.vercel.app</code>.</span>
+      </p>
+      <div id="products" class="products"><span data-tr="en">Loading…</span><span data-tr="es">Cargando…</span></div>
+    </div>
   </section>
 
-  <section>
-    <h2>2 · Sesión</h2>
-    <p class="lead">
-      Emite una credencial AgentPass y un Mandato, ambos firmados y anclados
-      en Stellar testnet, y arranca el agente.
-    </p>
-    <p class="plain"><b>En criollo:</b> acá el agente saca su documento de
-    identidad (quién lo controla) y su permiso de gasto (cuánto puede
-    comprar) — los dos firmados y grabados en la blockchain de Stellar, no
-    solo en esta página.</p>
-    <div class="row">
-      <button id="start-btn">Iniciar sesión</button>
+  <section class="mstep" id="s2">
+    <div class="n">02</div>
+    <div>
+      <h2>
+        <span data-tr="en">Session</span>
+        <span data-tr="es">Sesión</span>
+      </h2>
+      <p class="lead">
+        <span data-tr="en">Issues an AgentPass credential and a Mandate, both signed and anchored on Stellar testnet, and starts the agent.</span>
+        <span data-tr="es">Emite una credencial AgentPass y un Mandato, ambos firmados y anclados en Stellar testnet, y arranca el agente.</span>
+      </p>
+      <p class="plain">
+        <span data-tr="en">The agent obtains its identity credential (who controls it) and its spending permit (how much it can buy), both signed and recorded on the Stellar blockchain.</span>
+        <span data-tr="es">El agente obtiene su credencial de identidad (quién lo controla) y su permiso de gasto (cuánto puede comprar), los dos firmados y grabados en la blockchain Stellar.</span>
+      </p>
+      <div class="row">
+        <button id="start-btn" class="btn">
+          <span data-tr="en">Start session</span>
+          <span data-tr="es">Iniciar sesión</span>
+        </button>
+      </div>
+      <dl class="facts" id="session-facts" hidden></dl>
+      <div id="session-status" class="status"></div>
     </div>
-    <dl class="facts" id="session-facts" hidden></dl>
-    <div id="session-status" class="status"></div>
   </section>
 
-  <section>
-    <h2>3 · Comprar (pago real)</h2>
-    <p class="lead">
-      Solo <b>Swap Risk Quote</b> tiene un pago real conectado en esta demo —
-      el mismo que <code>pnpm run demo:pay-real</code> probó. El botón
-      "Comprar" firma la intención y ejecuta el pago x402 de verdad.
-    </p>
-    <p class="plain"><b>En criollo:</b> este botón gasta plata de verdad, en
-    la red de pruebas de Stellar — no hay nada simulado atrás del pago.</p>
-    <input id="instruction" type="text" value="Comprame un Swap Risk Quote, por favor." />
-    <div class="row">
-      <button id="buy-btn" disabled>Comprar (cuenta clásica)</button>
-      <button id="buy-rail-btn" disabled>Comprar con policy_rail</button>
-      <span class="hint">Cada clic paga de verdad — 0.001 USDC por compra.</span>
+  <section class="mstep" id="s3">
+    <div class="n">03</div>
+    <div>
+      <h2>
+        <span data-tr="en">Buy</span>
+        <span data-tr="es">Comprar</span>
+      </h2>
+      <p class="lead">
+        <span data-tr="en">From the catalog, Swap Risk Quote has a real payment connected. The "Buy" button signs the intent and executes the real x402 payment.</span>
+        <span data-tr="es">Del catálogo Swap Risk Quote tiene un pago real conectado. El botón "Comprar" firma la intención y ejecuta el pago x402 de verdad.</span>
+      </p>
+      <input id="instruction" type="text" value="Comprame un Swap Risk Quote, por favor." />
+      <p class="field-note">
+        <span data-tr="en">This instruction has to stay in Spanish — the agent's interpreter only understands Spanish text.</span>
+        <span data-tr="es">Esta instrucción debe quedar en español: el intérprete del agente solo entiende español.</span>
+      </p>
+      <div class="row">
+        <button id="buy-btn" class="btn" disabled>
+          <span data-tr="en">Buy (classic account)</span>
+          <span data-tr="es">Comprar (cuenta clásica)</span>
+        </button>
+        <button id="buy-rail-btn" class="btn outline" disabled>
+          <span data-tr="en">Buy with policy_rail</span>
+          <span data-tr="es">Comprar con policy_rail</span>
+        </button>
+        <span class="hint">
+          <span data-tr="en">Each click pays for real: 0.001 USDC per purchase.</span>
+          <span data-tr="es">Cada clic paga de verdad — 0.001 USDC por compra.</span>
+        </span>
+      </div>
+      <p class="lead">
+        <span data-tr="en">Both buttons sign the same intent and pay the same invoice. The difference is who pays: the first, the agent's classic account; the second, policy_rail, a Soroban contract that checks perTx and perDay again inside the very transaction that moves the money. If the amount doesn't fit, the network rejects the payment and it never leaves the contract.</span>
+        <span data-tr="es">Los dos botones firman la misma intención y pagan la misma factura. La diferencia es quién paga: el primero, la cuenta clásica del agente; el segundo, <b>policy_rail</b>, un contrato de Soroban que vuelve a comprobar <code>perTx</code> y <code>perDay</code> dentro de la misma transacción que mueve la plata — si el monto no entra, la red rechaza el pago y nunca sale del contrato.</span>
+      </p>
+      <ul class="steps" id="buy-steps"></ul>
+      <div id="buy-status" class="status"></div>
     </div>
-    <p class="lead">
-      Los dos botones firman la misma intención y pagan la misma factura. La
-      diferencia es quién paga: el primero, la cuenta clásica del agente; el
-      segundo, <b>policy_rail</b>, un contrato de Soroban que vuelve a
-      comprobar <code>perTx</code> y <code>perDay</code> dentro de la misma
-      transacción que mueve la plata — si el monto no entra, la red rechaza el
-      pago y nunca sale del contrato.
-    </p>
-    <ul class="steps" id="buy-steps"></ul>
-    <div id="buy-status" class="status"></div>
   </section>
 
-  <section>
-    <h2>4 · Revocar el Mandato</h2>
-    <p class="lead">
-      Corta el consentimiento del principal desde afuera del agente. La
-      credencial sigue activa — es una autoridad distinta la que se corta.
-    </p>
-    <p class="plain"><b>En criollo:</b> así se le corta el permiso al agente
-    desde afuera, al instante — ni el agente ni quien lo maneja lo puede
-    evitar. Es la garantía central de todo el proyecto.</p>
-    <div class="row">
-      <button id="revoke-btn" class="danger" disabled>Revocar Mandato</button>
+  <section class="mstep" id="s4">
+    <div class="n">04</div>
+    <div>
+      <h2>
+        <span data-tr="en">Revoke the Mandate</span>
+        <span data-tr="es">Revocar el Mandato</span>
+      </h2>
+      <p class="lead">
+        <span data-tr="en">Cancels the purchase permit from outside the agent. The credential stays active; it's a different authority being cancelled.</span>
+        <span data-tr="es">Cancela el permiso de compra desde afuera del agente. La credencial sigue activa, es una autoridad distinta la que se cancela.</span>
+      </p>
+      <p class="plain">
+        <span data-tr="en">The agent's permit gets cancelled from outside, instantly; the agent can't prevent it. That's the central guarantee of the whole project.</span>
+        <span data-tr="es">Se cancela el permiso al agente desde afuera al instante, el agente no lo puede evitar. Es la garantía central de todo el proyecto.</span>
+      </p>
+      <div class="row">
+        <button id="revoke-btn" class="btn danger" disabled>
+          <span data-tr="en">Revoke Mandate</span>
+          <span data-tr="es">Revocar Mandato</span>
+        </button>
+      </div>
+      <dl class="facts" id="revoke-facts" hidden></dl>
+      <div id="revoke-status" class="status"></div>
     </div>
-    <dl class="facts" id="revoke-facts" hidden></dl>
-    <div id="revoke-status" class="status"></div>
   </section>
 
-  <section>
-    <h2>5 · Bitácora (MandateVault)</h2>
-    <p class="lead">
-      Cada decisión de autorización — aprobada o rechazada — y el anclaje
-      on-chain de cada pago real. La cadena se verifica al vuelo; el estado
-      de cada anclaje se lee en vivo del registro, no del archivo local.
-    </p>
-    <p class="plain"><b>En criollo:</b> el historial de cada decisión y cada
-    pago, a prueba de manipulación — se puede comprobar que ninguna línea
-    vieja fue editada después de escrita.</p>
-    <div class="row">
-      <button id="vault-btn" class="secondary" disabled>Ver bitácora</button>
+  <section class="mstep" id="s5">
+    <div class="n">05</div>
+    <div>
+      <h2>
+        <span data-tr="en">Ledger (MandateVault)</span>
+        <span data-tr="es">Bitácora (MandateVault)</span>
+      </h2>
+      <p class="lead">
+        <span data-tr="en">Every authorization decision (granted or refused), and the on-chain anchor of every real payment. The chain and the status of each anchor are read live.</span>
+        <span data-tr="es">Cada decisión de autorización (aprobada o rechazada) y el anclaje on-chain de cada pago real. La cadena y el estado de cada anclaje se lee en vivo.</span>
+      </p>
+      <p class="plain">
+        <span data-tr="en">The history of every decision and every payment, tamper-evident.</span>
+        <span data-tr="es">El historial de cada decisión y cada pago, a prueba de manipulación.</span>
+      </p>
+      <div class="row">
+        <button id="vault-btn" class="btn outline" disabled>
+          <span data-tr="en">View ledger</span>
+          <span data-tr="es">Ver bitácora</span>
+        </button>
+      </div>
+      <div id="vault-chain" class="status"></div>
+      <ul class="steps" id="vault-identity"></ul>
+      <ul class="steps" id="vault-records"></ul>
     </div>
-    <div id="vault-chain" class="status"></div>
-    <ul class="steps" id="vault-identity"></ul>
-    <ul class="steps" id="vault-records"></ul>
   </section>
-</main>
+</div>
 
 <script>
+/* ---------- language ---------- */
+var root = document.documentElement;
+var TITLES = { en: "AgentPay — live demo", es: "AgentPay — demo en vivo" };
+var langButtons = document.querySelectorAll("[data-set-lang]");
+
+function lang() { return root.lang === "es" ? "es" : "en"; }
+
+function applyLang(l) {
+  root.lang = l;
+  document.title = TITLES[l];
+  for (var i = 0; i < langButtons.length; i++) {
+    langButtons[i].setAttribute("aria-pressed", String(langButtons[i].dataset.setLang === l));
+  }
+}
+for (var i = 0; i < langButtons.length; i++) {
+  langButtons[i].addEventListener("click", function () {
+    var l = this.dataset.setLang;
+    applyLang(l);
+    try { localStorage.setItem("agentpay-lang", l); } catch (e) { /* storage blocked */ }
+    refreshDynamic();
+  });
+}
+applyLang(root.lang === "es" ? "es" : "en");
+
+/* Content built by JS (product cards, session facts, buy steps, vault
+   records, revoke facts) is rendered once from whatever language was active
+   at the time. Each loader below caches its last successful response so a
+   language switch can re-render already-fetched data instead of leaving it
+   stuck in the other language — without re-hitting a stateful endpoint
+   (buying or revoking again) just because someone clicked EN/ES. */
+var lastProducts = null;
+var lastSession = null;
+var lastBuy = null;
+var lastVault = null;
+var lastRevoke = null;
+
+function refreshDynamic() {
+  if (lastProducts) renderProducts(lastProducts);
+  if (lastSession) renderSessionFacts(lastSession);
+  if (lastBuy) renderBuySteps(lastBuy);
+  if (lastVault) renderVault(lastVault);
+  if (lastRevoke) renderRevokeFacts(lastRevoke);
+}
+
+/* ---------- i18n dictionary for JS-generated content ---------- */
+var T = {
+  loading: { en: "Loading…", es: "Cargando…" },
+  catalogError: { en: "Could not read the catalog: ", es: "No se pudo leer el catálogo: " },
+  realPayment: { en: "real payment", es: "pago real" },
+  issuing: { en: "Issuing credential and mandate on testnet…", es: "Emitiendo credencial y mandato en testnet…" },
+  sessionActive: { en: "Session active.", es: "Sesión activa." },
+  sessionFailed: { en: "session start failed", es: "fallo al iniciar sesión" },
+  buying: { en: "Buying…", es: "Comprando…" },
+  paymentExecuted: { en: "Real payment executed.", es: "Pago real ejecutado." },
+  revoking: { en: "Revoking…", es: "Revocando…" },
+  revoked: { en: "Mandate revoked. The next purchase should be rejected.", es: "Mandato revocado. La próxima compra debería rechazarse." },
+  chainOk: { en: "Chain intact ✓ (%n% records)", es: "Cadena íntegra ✓ (%n% registros)" },
+  chainBroken: { en: "Chain broken at seq %n%", es: "Cadena rota en seq %n%" },
+  coldStartHint: {
+    en: " The free-tier server can take up to a minute to answer the first time (it was \"asleep\") — it hasn't crashed, it's waking up.",
+    es: " El servidor gratuito puede tardar hasta un minuto en responder la primera vez (se estaba \"durmiendo\") — no se colgó, está despertando.",
+  },
+  factCredential: { en: "credential", es: "credencial" },
+  factMandate: { en: "mandate", es: "mandato" },
+  factStatus: { en: "status", es: "estado" },
+  factVenue: { en: "venue", es: "venue" },
+  factPerTx: { en: "perTx", es: "perTx" },
+  factPerDay: { en: "perDay", es: "perDay" },
+  factTools: { en: "tools", es: "tools" },
+  factMandateRevoked: { en: "mandate revoked", es: "mandato revocado" },
+  factTx: { en: "tx", es: "tx" },
+  factCredentialLive: { en: "credential (live)", es: "credencial (en vivo)" },
+  identityCredential: { en: "credential (on-chain)", es: "credencial (en cadena)" },
+  identityMandate: { en: "mandate (on-chain)", es: "mandato (en cadena)" },
+  stateRevoked: { en: "revoked", es: "revocada" },
+  stateActive: { en: "active", es: "activa" },
+  kindGranted: { en: "granted", es: "autorizada" },
+  kindRefused: { en: "refused", es: "rechazada" },
+  kindAnchored: { en: "anchored", es: "anclada" },
+  stepUnderstood: { en: "Understood", es: "Entendido" },
+  stepIntentId: { en: "Intent ID", es: "ID de intención" },
+  stepTotal: { en: "Total", es: "Total" },
+  stepResource: { en: "Resource", es: "Recurso" },
+  stepPayer: { en: "Payer", es: "Pagador" },
+  stepSettled: { en: "Settled", es: "Liquidado" },
+  stepTx: { en: "Tx", es: "Tx" },
+  stepExplorer: { en: "Explorer", es: "Explorador" },
+  stepVaultAnchor: { en: "Vault anchor", es: "Anclaje del vault" },
+  stepVaultAnchorHash: { en: "Vault anchor hash", es: "Hash de anclaje" },
+  stepVaultAnchorTx: { en: "Vault anchor tx", es: "Tx de anclaje" },
+};
+
+function t(key, vars) {
+  var entry = T[key];
+  var text = entry ? entry[lang()] : key;
+  if (vars) {
+    for (var k in vars) text = text.replace("%" + k + "%", vars[k]);
+  }
+  return text;
+}
+
+/* Known label keys the backend's step list can emit (apps/web/src/server.ts) —
+   translated for display; the underlying data (hashes, URLs, ids) is
+   language-agnostic and left untouched. */
+var STEP_LABEL_KEYS = {
+  entendido: "stepUnderstood",
+  intent_id: "stepIntentId",
+  total: "stepTotal",
+  recurso: "stepResource",
+  pagador: "stepPayer",
+  settled: "stepSettled",
+  tx: "stepTx",
+  explorer: "stepExplorer",
+  vault_anchor: "stepVaultAnchor",
+  vault_anchor_hash: "stepVaultAnchorHash",
+  vault_anchor_tx: "stepVaultAnchorTx",
+};
+
+function translateStepLabel(rawLabel) {
+  var key = STEP_LABEL_KEYS[rawLabel];
+  return key ? t(key) : rawLabel;
+}
+
+function translateStepValue(rawLabel, value) {
+  if (rawLabel !== "vault_anchor" || lang() !== "en") return value;
+  if (value === "sin registro en el vault para este intent") return "no vault record for this intent";
+  if (value.indexOf("no se pudo anclar: ") === 0) return "could not anchor: " + value.slice("no se pudo anclar: ".length);
+  return value;
+}
+
+/* ---------- app logic ---------- */
 async function api(path, options) {
   const res = await fetch(path, options);
   return { status: res.status, body: await res.json() };
@@ -221,11 +570,14 @@ async function api(path, options) {
 function setFacts(el, entries) {
   el.innerHTML = "";
   for (const [label, value] of entries) {
+    const row = document.createElement("div");
+    row.className = "fact-row";
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
     dd.textContent = value;
-    el.append(dt, dd);
+    row.append(dt, dd);
+    el.append(row);
   }
   el.hidden = false;
 }
@@ -234,10 +586,6 @@ function setStatus(el, ok, message) {
   el.textContent = message;
   el.className = "status " + (ok ? "ok" : "err");
 }
-
-const COLD_START_HINT =
-  " El servidor gratuito puede tardar hasta un minuto en responder la " +
-  "primera vez (se estaba \"durmiendo\") — no se colgó, está despertando.";
 
 /**
  * Render's free tier sleeps after inactivity and can take 30-70s to wake up
@@ -248,64 +596,76 @@ const COLD_START_HINT =
  * `afterMs` needs to clear whatever this same request normally takes when
  * the server is already warm, or the hint fires on every ordinary click and
  * stops meaning anything: issuing + anchoring a credential and Mandate on
- * real Stellar testnet already takes ~13s warm, so "Iniciar sesión" gets a
+ * real Stellar testnet already takes ~13s warm, so "Start session" gets a
  * longer threshold than the catalog fetch (a single fast HTTP call).
  */
 function warnIfSlow(showHint, afterMs = 4000) {
-  const timer = setTimeout(() => showHint(COLD_START_HINT), afterMs);
+  const timer = setTimeout(() => showHint(t("coldStartHint")), afterMs);
   return () => clearTimeout(timer);
+}
+
+function renderProducts(body) {
+  const el = document.getElementById("products");
+  el.innerHTML = "";
+  for (const p of body.products) {
+    const card = document.createElement("div");
+    const payable = p.id === body.payableProductId;
+    card.className = "card" + (payable ? " payable" : "");
+    card.innerHTML =
+      (payable ? '<span class="badge"></span>' : "") +
+      "<h3></h3><p></p><div class=\"price\"></div>";
+    if (payable) card.querySelector(".badge").textContent = t("realPayment");
+    card.querySelector("h3").textContent = p.name;
+    card.querySelector("p").textContent = p.description;
+    card.querySelector(".price").textContent = p.price.amount + " " + p.price.asset.split(":")[0];
+    el.append(card);
+  }
 }
 
 async function loadProducts() {
   const el = document.getElementById("products");
   const cancelHint = warnIfSlow((hint) => {
-    el.textContent = "Cargando…" + hint;
+    el.textContent = t("loading") + hint;
   });
   try {
     const { body } = await api("/api/products");
     cancelHint();
     if (!body.ok) throw new Error(body.message ?? "no se pudo leer el catálogo");
-    el.innerHTML = "";
-    for (const p of body.products) {
-      const card = document.createElement("div");
-      const payable = p.id === body.payableProductId;
-      card.className = "card" + (payable ? " payable" : "");
-      card.innerHTML =
-        (payable ? '<span class="badge">pago real</span>' : "") +
-        "<h3></h3><p></p><div class=\"price\"></div>";
-      card.querySelector("h3").textContent = p.name;
-      card.querySelector("p").textContent = p.description;
-      card.querySelector(".price").textContent = p.price.amount + " " + p.price.asset.split(":")[0];
-      el.append(card);
-    }
+    lastProducts = body;
+    renderProducts(body);
   } catch (error) {
     cancelHint();
-    el.textContent = "No se pudo leer el catálogo: " + error.message;
+    el.textContent = t("catalogError") + error.message;
   }
+}
+
+function renderSessionFacts(body) {
+  setFacts(document.getElementById("session-facts"), [
+    [t("factCredential"), body.credentialHash],
+    [t("factMandate"), body.mandateHash],
+    [t("factStatus"), body.agentStatus],
+    [t("factVenue"), body.venue],
+    [t("factPerTx"), body.perTx],
+    [t("factPerDay"), body.perDay],
+    [t("factTools"), body.tools.join(", ")],
+  ]);
+  setStatus(document.getElementById("session-status"), true, t("sessionActive"));
 }
 
 document.getElementById("start-btn").addEventListener("click", async () => {
   const btn = document.getElementById("start-btn");
   const status = document.getElementById("session-status");
   btn.disabled = true;
-  setStatus(status, true, "Emitiendo credencial y mandato en testnet…");
+  setStatus(status, true, t("issuing"));
   const cancelHint = warnIfSlow((hint) => {
-    setStatus(status, true, "Emitiendo credencial y mandato en testnet…" + hint);
+    setStatus(status, true, t("issuing") + hint);
   }, 20000);
   try {
     const { body } = await api("/api/session/start", { method: "POST" });
     cancelHint();
-    if (!body.ok) throw new Error(body.message ?? "fallo al iniciar sesión");
-    setFacts(document.getElementById("session-facts"), [
-      ["credencial", body.credentialHash],
-      ["mandato", body.mandateHash],
-      ["estado", body.agentStatus],
-      ["venue", body.venue],
-      ["perTx", body.perTx],
-      ["perDay", body.perDay],
-      ["tools", body.tools.join(", ")],
-    ]);
-    setStatus(status, true, "Sesión activa.");
+    if (!body.ok) throw new Error(body.message ?? t("sessionFailed"));
+    lastSession = body;
+    renderSessionFacts(body);
     document.getElementById("buy-btn").disabled = false;
     document.getElementById("buy-rail-btn").disabled = body.policyRail === null;
     document.getElementById("revoke-btn").disabled = false;
@@ -318,6 +678,35 @@ document.getElementById("start-btn").addEventListener("click", async () => {
   }
 });
 
+function renderBuySteps(body) {
+  const stepsEl = document.getElementById("buy-steps");
+  stepsEl.innerHTML = "";
+  for (const step of body.steps ?? []) {
+    const li = document.createElement("li");
+    const value =
+      step.label === "explorer" || step.label === "recurso"
+        ? (() => {
+            const a = document.createElement("a");
+            a.href = step.value;
+            a.textContent = step.value;
+            a.target = "_blank";
+            a.rel = "noopener";
+            return a;
+          })()
+        : document.createTextNode(translateStepValue(step.label, step.value));
+    li.append(document.createElement("b"), " ");
+    li.querySelector("b").textContent = translateStepLabel(step.label) + ": ";
+    li.append(value);
+    stepsEl.append(li);
+  }
+  const status = document.getElementById("buy-status");
+  if (body.ok) {
+    setStatus(status, true, t("paymentExecuted"));
+  } else {
+    setStatus(status, false, body.code + ": " + body.message);
+  }
+}
+
 async function runBuy(buttonId, payer) {
   const btn = document.getElementById(buttonId);
   const status = document.getElementById("buy-status");
@@ -325,36 +714,15 @@ async function runBuy(buttonId, payer) {
   const instruction = document.getElementById("instruction").value;
   btn.disabled = true;
   stepsEl.innerHTML = "";
-  setStatus(status, true, "Comprando…");
+  setStatus(status, true, t("buying"));
   try {
     const { body } = await api("/api/session/buy", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instruction, payer }),
     });
-    for (const step of body.steps ?? []) {
-      const li = document.createElement("li");
-      const value =
-        step.label === "explorer" || step.label === "recurso"
-          ? (() => {
-              const a = document.createElement("a");
-              a.href = step.value;
-              a.textContent = step.value;
-              a.target = "_blank";
-              a.rel = "noopener";
-              return a;
-            })()
-          : document.createTextNode(step.value);
-      li.append(document.createElement("b"), " ");
-      li.querySelector("b").textContent = step.label + ": ";
-      li.append(value);
-      stepsEl.append(li);
-    }
-    if (body.ok) {
-      setStatus(status, true, "Pago real ejecutado.");
-    } else {
-      setStatus(status, false, body.code + ": " + body.message);
-    }
+    lastBuy = body;
+    renderBuySteps(body);
   } catch (error) {
     setStatus(status, false, error.message);
   } finally {
@@ -368,42 +736,45 @@ document
   .getElementById("buy-rail-btn")
   .addEventListener("click", () => runBuy("buy-rail-btn", "policy-rail"));
 
-const VAULT_KIND_LABELS = { granted: "autorizada", refused: "rechazada", anchored: "anclada" };
-const IDENTITY_KIND_LABELS = { credential: "credencial", mandate: "mandato" };
-
-async function loadVault() {
+function renderVault(body) {
   const chainEl = document.getElementById("vault-chain");
   const identityEl = document.getElementById("vault-identity");
   const recordsEl = document.getElementById("vault-records");
   identityEl.innerHTML = "";
   recordsEl.innerHTML = "";
-  setStatus(chainEl, true, "Cargando…");
+  setStatus(
+    chainEl,
+    body.chain.ok,
+    body.chain.ok ? t("chainOk", { n: body.records.length }) : t("chainBroken", { n: body.chain.brokenAtSeq }),
+  );
+  for (const id of body.identity ?? []) {
+    const li = document.createElement("li");
+    const label = id.kind === "credential" ? t("identityCredential") : id.kind === "mandate" ? t("identityMandate") : id.kind;
+    const b = document.createElement("b");
+    b.textContent = label + ": ";
+    li.append(b, document.createTextNode(id.revoked ? t("stateRevoked") : t("stateActive")));
+    identityEl.append(li);
+  }
+  for (const r of body.records) {
+    const li = document.createElement("li");
+    const label = r.kind === "granted" ? t("kindGranted") : r.kind === "refused" ? t("kindRefused") : r.kind === "anchored" ? t("kindAnchored") : r.kind;
+    let rest = r.intentId + " — " + r.detail;
+    if (r.kind === "anchored") rest += " — on-chain: " + r.onChainStatus;
+    const b = document.createElement("b");
+    b.textContent = "#" + r.seq + " " + label + ": ";
+    li.append(b, document.createTextNode(rest));
+    recordsEl.append(li);
+  }
+}
+
+async function loadVault() {
+  const chainEl = document.getElementById("vault-chain");
+  setStatus(chainEl, true, t("loading"));
   try {
     const { body } = await api("/api/session/vault");
     if (!body.ok) throw new Error((body.code ?? "error") + ": " + body.message);
-    setStatus(
-      chainEl,
-      body.chain.ok,
-      body.chain.ok ? "Cadena íntegra ✓ (" + body.records.length + " registros)" : "Cadena rota en seq " + body.chain.brokenAtSeq,
-    );
-    for (const id of body.identity ?? []) {
-      const li = document.createElement("li");
-      const label = IDENTITY_KIND_LABELS[id.kind] ?? id.kind;
-      const b = document.createElement("b");
-      b.textContent = label + " (en cadena): ";
-      li.append(b, document.createTextNode(id.revoked ? "revocada" : "activa"));
-      identityEl.append(li);
-    }
-    for (const r of body.records) {
-      const li = document.createElement("li");
-      const label = VAULT_KIND_LABELS[r.kind] ?? r.kind;
-      let rest = r.intentId + " — " + r.detail;
-      if (r.kind === "anchored") rest += " — on-chain: " + r.onChainStatus;
-      const b = document.createElement("b");
-      b.textContent = "#" + r.seq + " " + label + ": ";
-      li.append(b, document.createTextNode(rest));
-      recordsEl.append(li);
-    }
+    lastVault = body;
+    renderVault(body);
   } catch (error) {
     setStatus(chainEl, false, error.message);
   }
@@ -411,20 +782,25 @@ async function loadVault() {
 
 document.getElementById("vault-btn").addEventListener("click", loadVault);
 
+function renderRevokeFacts(body) {
+  setFacts(document.getElementById("revoke-facts"), [
+    [t("factMandateRevoked"), body.mandateHash],
+    [t("factTx"), body.revokeTx],
+    [t("factCredentialLive"), body.credentialStatus],
+  ]);
+  setStatus(document.getElementById("revoke-status"), true, t("revoked"));
+}
+
 document.getElementById("revoke-btn").addEventListener("click", async () => {
   const btn = document.getElementById("revoke-btn");
   const status = document.getElementById("revoke-status");
   btn.disabled = true;
-  setStatus(status, true, "Revocando…");
+  setStatus(status, true, t("revoking"));
   try {
     const { body } = await api("/api/session/revoke", { method: "POST" });
     if (!body.ok) throw new Error((body.code ?? "error") + ": " + body.message);
-    setFacts(document.getElementById("revoke-facts"), [
-      ["mandato revocado", body.mandateHash],
-      ["tx", body.revokeTx],
-      ["credencial (en vivo)", body.credentialStatus],
-    ]);
-    setStatus(status, true, "Mandato revocado. La próxima compra debería rechazarse.");
+    lastRevoke = body;
+    renderRevokeFacts(body);
   } catch (error) {
     setStatus(status, false, error.message);
     btn.disabled = false;
