@@ -135,6 +135,20 @@ que los paneles ya renderizados se traducen solos. Sin overflow horizontal en
 375px, sin errores de consola nuevos. `pnpm typecheck` limpio (no se tocó
 TypeScript). Decisión de scope registrada en `DECISIONES.md` → `V-17`.
 
+**Dos rondas de feedback del usuario, ya viendo el resultado en vivo contra
+`pnpm run web`.** Primero preguntó para qué servían los dos botones de
+compra — la pregunta en sí misma era una señal de usabilidad (si hacía falta
+explicarlo en el chat, la página no se explicaba sola). Se le contestó la
+diferencia (cuenta clásica vs. `policy_rail`, quién aplica el límite y
+dónde), y a partir de esa respuesta pidió simplificar: un solo botón
+(`policy_rail`, el que prueba que el límite lo aplica la red y no la app),
+renombrado a un simple "Comprar"/"Buy", sin el párrafo que explicaba una
+elección que ya no existe. Verificado con una compra real más, pagada por
+`policy_rail`, confirmando el pagador en los pasos de la respuesta. Segundo
+pedido: reescribir la nota de "esta instrucción debe quedar en español" para
+que el motivo apunte al bazaar, no al intérprete del agente — aplicado tal
+cual lo pidió, sin objeción, y traducido a inglés en el mismo commit.
+
 ---
 
 ## T27 · `@agentpay/vault` — bitácora durable de cada decisión — cerrado 2026-09-04
