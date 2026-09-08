@@ -1,0 +1,458 @@
+<title>Claude + Codex</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Literata:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&display=swap');
+
+  :root {
+    --ink: #14171c;
+    --ink-soft: #4b5160;
+    --paper: #f3f4f7;
+    --surface: #ffffff;
+    --line: #d9dce3;
+    --line-soft: #e6e8ee;
+    --claude: #a8641c;
+    --claude-soft: #f4e6d3;
+    --codex: #146b72;
+    --codex-soft: #dcedee;
+    --danger: #a6341f;
+    --danger-soft: #f6e1da;
+    --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    --serif: 'Literata', Georgia, 'Times New Roman', serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e8e9ed;
+      --ink-soft: #a9adba;
+      --paper: #14161b;
+      --surface: #1b1e24;
+      --line: #33363f;
+      --line-soft: #2a2d34;
+      --claude: #e0a355;
+      --claude-soft: #35291a;
+      --codex: #5fc2c9;
+      --codex-soft: #172d2f;
+      --danger: #e28468;
+      --danger-soft: #3a2119;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #e8e9ed;
+    --ink-soft: #a9adba;
+    --paper: #14161b;
+    --surface: #1b1e24;
+    --line: #33363f;
+    --line-soft: #2a2d34;
+    --claude: #e0a355;
+    --claude-soft: #35291a;
+    --codex: #5fc2c9;
+    --codex-soft: #172d2f;
+    --danger: #e28468;
+    --danger-soft: #3a2119;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    line-height: 1.6;
+  }
+
+  .page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 22px;
+    height: 1px;
+    background: var(--ink-soft);
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(30px, 5vw, 40px);
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 14px 0 12px;
+    text-wrap: balance;
+  }
+
+  .dek {
+    font-size: 17px;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 40px;
+  }
+
+  h2 {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    margin: 0 0 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  section { margin-bottom: 52px; }
+
+  p { margin: 0 0 14px; max-width: 66ch; }
+  p:last-child { margin-bottom: 0; }
+
+  code, .code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--line-soft);
+    padding: 0.12em 0.38em;
+    border-radius: 4px;
+  }
+
+  /* — roles — */
+  .roles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 620px) {
+    .roles { grid-template-columns: 1fr; }
+  }
+  .role {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 22px 24px;
+    background: var(--surface);
+  }
+  .role-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .role-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex: none;
+  }
+  .role.claude .role-dot { background: var(--claude); }
+  .role.codex .role-dot { background: var(--codex); }
+  .role-name {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .role-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin-left: auto;
+  }
+  .role dl { margin: 0; font-size: 14.5px; }
+  .role dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-top: 14px;
+  }
+  .role dt:first-child { margin-top: 0; }
+  .role dd { margin: 4px 0 0; }
+  .role.claude .role-name { color: var(--claude); }
+  .role.codex .role-name { color: var(--codex); }
+
+  /* — flow diagram — */
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 18px 8px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+  }
+
+  /* — numbered steps — */
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 0 0 24px 44px;
+    border-left: 1px solid var(--line);
+    margin-left: 13px;
+  }
+  .steps li:last-child { padding-bottom: 0; border-left-color: transparent; }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -13px;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-soft);
+  }
+  .steps .who {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .steps li.claude .who { color: var(--claude); }
+  .steps li.codex .who { color: var(--codex); }
+  .steps li.you .who { color: var(--ink); }
+  .steps p { margin: 0; font-size: 15px; }
+
+  /* — checklists — */
+  .checklist { margin: 0; padding: 0; list-style: none; }
+  .checklist li {
+    display: flex;
+    gap: 11px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 15px;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before {
+    content: "";
+    flex: none;
+    width: 15px;
+    height: 15px;
+    margin-top: 3px;
+    border-radius: 4px;
+    border: 1.5px solid var(--ink-soft);
+    background: var(--surface);
+  }
+  .checklist-group + .checklist-group { margin-top: 28px; }
+  .checklist-title {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .checklist-group.claude .checklist-title { color: var(--claude); }
+  .checklist-group.codex .checklist-title { color: var(--codex); }
+
+  /* — docs table — */
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    border-bottom: 1px solid var(--line);
+  }
+  td:first-child, th:first-child { padding-left: 0; white-space: nowrap; }
+  td:last-child, th:last-child { padding-right: 0; }
+  .tablewrap { overflow-x: auto; }
+
+  /* — rules — */
+  .rules { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .rules li {
+    display: flex;
+    gap: 12px;
+    font-size: 15px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .rules .n {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+    flex: none;
+    padding-top: 2px;
+  }
+
+  /* — callout — */
+  .callout {
+    background: var(--danger-soft);
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line));
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .callout .eyebrow { color: var(--danger); }
+  .callout .eyebrow::before { background: var(--danger); }
+  .callout p { font-size: 14.5px; }
+  .callout p:first-of-type { margin-top: 10px; }
+
+  footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+</style>
+
+<div class="page">
+
+  <div class="eyebrow">AgentPay · protocolo de coordinación</div>
+  <h1>Claude Code y Codex, trabajando en el mismo repo</h1>
+  <p class="dek">
+    Cómo se dividen el trabajo, cómo se enteran de los cambios del otro, y qué
+    hacés vos en cada punto del ciclo. Reemplaza al protocolo que existía con
+    Devin (<code>docs/DECISIONES.md § P-4, P-5</code>).
+  </p>
+
+  <section>
+    <h2>Quién hace qué</h2>
+    <div class="roles">
+      <div class="role claude">
+        <div class="role-head">
+          <span class="role-dot"></span>
+          <span class="role-name">Claude Code</span>
+          <span class="role-tag">rama cc/&lt;feature&gt;</span>
+        </div>
+        <dl>
+          <dt>Rol</dt>
+          <dd>Agente principal. Arquitectura, contratos, y todo lo que requiere el contexto completo del proyecto.</dd>
+          <dt>Siempre suyo</dt>
+          <dd>AgentPass, PolicyRail, Mandato, <code>checkMandate</code>, MandateVault, la integración con el bazaar del embajador, y la narrativa de la postulación a Stellar Community Fund.</dd>
+          <dt>Revisa</dt>
+          <dd>Todo PR de Codex — diff completo y tests, en un worktree aislado — antes de mergear.</dd>
+        </dl>
+      </div>
+      <div class="role codex">
+        <div class="role-head">
+          <span class="role-dot"></span>
+          <span class="role-name">Codex</span>
+          <span class="role-tag">rama codex/&lt;task&gt;</span>
+        </div>
+        <dl>
+          <dt>Rol</dt>
+          <dd>Agente secundario, incluido en ChatGPT Plus. Tareas mecánicas y cerradas, ya acotadas antes de dárselas.</dd>
+          <dt>Nunca sin permiso</dt>
+          <dd>Nada que toque un punto de autorización, un contrato, o la narrativa de SCF — no tiene ese contexto.</dd>
+          <dt>Trabaja en</dt>
+          <dd><code>~/dev/AgentPay-codex</code>, un worktree separado — nunca la carpeta que usás vos.</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>El ciclo completo</h2>
+    <div class="diagram">
+      <pre class="mermaid">
+flowchart TD
+    A["Claude Code cierra un hito en main"] --> B["git push origin main"]
+    B --> C["Codex: git fetch + checkout -B codex/&lt;task&gt; origin/main"]
+    C --> D["Codex trabaja en su worktree y abre un PR"]
+    D --> E{"Claude Code revisa el diff + corre los tests"}
+    E -- cambios necesarios --> C
+    E -- aprobado --> F["Merge a main + push"]
+    F --> A
+      </pre>
+    </div>
+    <p>
+      El punto de encuentro es siempre <code>origin/main</code> en GitHub — nunca
+      el disco. Ninguno de los dos agentes "se entera" del otro en vivo; se
+      entera la próxima vez que hace <code>fetch</code>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Qué hacés vos, en cada punto</h2>
+
+    <div class="checklist-group claude">
+      <div class="checklist-title">Cuando trabajás con Claude Code</div>
+      <ul class="checklist">
+        <li>Al cerrar un hito, confirmá que mergeé a <code>main</code> y pusheé a <code>origin</code> — si más tarde le vas a dar algo a Codex, necesita ver esto.</li>
+        <li>Si algo te suena a decisión de arquitectura en vez de tarea mecánica, decímelo — eso se queda acá, no se delega.</li>
+      </ul>
+    </div>
+
+    <div class="checklist-group codex">
+      <div class="checklist-title">Cuando le delegás algo a Codex</div>
+      <ul class="checklist">
+        <li>Dale una tarea chica y ya acotada — nunca una decisión abierta.</li>
+        <li>Cuando abra un PR, no lo mergees vos — traémelo a Claude Code para revisión primero.</li>
+        <li>Si edité <code>docs/DECISIONES.md</code> recientemente, preguntame si eso ya está reflejado en <code>AGENTS.md</code> — son archivos distintos, y Codex solo lee el segundo.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <h2>Documentos clave</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Archivo</th><th>Para qué sirve</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>CLAUDE.md</code></td><td>Instrucciones que lee Claude Code. Índice completo de fases.</td></tr>
+          <tr><td><code>AGENTS.md</code></td><td>Instrucciones que lee Codex. No duplica el índice de fases — apunta a <code>CLAUDE.md</code>.</td></tr>
+          <tr><td><code>docs/AGENT_LOG.md</code></td><td>Bitácora corta y compartida: qué se hizo, en qué rama, qué falta. La lee cualquiera de los dos al arrancar.</td></tr>
+          <tr><td><code>docs/DECISIONES.md</code></td><td>Registro histórico de decisiones (<code>P-1</code>…). No se relee solo — si algo de ahí debe cambiarle el comportamiento a Codex, hay que llevarlo a <code>AGENTS.md</code> también.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Reglas de oro</h2>
+    <ul class="rules">
+      <li><span class="n">01</span><span>Git es la única fuente de verdad. Nada está "sincronizado" solo porque el disco es el mismo, o porque alguien lo dijo en el chat.</span></li>
+      <li><span class="n">02</span><span>Cada agente en su propia carpeta: <code>~/dev/AgentPay</code> para vos y Claude Code, <code>~/dev/AgentPay-codex</code> para Codex. Nunca se cruzan.</span></li>
+      <li><span class="n">03</span><span>Ningún PR se mergea sin revisión — diff completo y tests corridos, con atención reforzada a cualquier cosa cerca de <code>checkMandate</code> o el enforcement de límites.</span></li>
+      <li><span class="n">04</span><span>Toda sesión cierra con una entrada en <code>docs/AGENT_LOG.md</code>: rama, qué, por qué, qué falta. No es opcional.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="callout">
+      <div class="eyebrow">Por qué las reglas son estrictas</div>
+      <p>
+        El agente anterior en el rol de Codex (Devin) generó, en una rama que
+        terminó borrada por completo, un adaptador que se saltaba
+        <code>checkMandate</code> — un bypass de seguridad real, no
+        hipotético (<code>docs/fase-2-agente-compra/DECISIONES.md § B-25</code>).
+      </p>
+      <p>
+        Y dos veces distintas —una con Devin, una con Codex— la carpeta
+        compartida quedó parada en la rama equivocada al terminar una tarea.
+        La regla de las carpetas separadas (<code>P-5</code>) existe porque la
+        disciplina sola falló dos veces.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    docs/DECISIONES.md § P-4, P-5 · docs/AGENT_LOG.md · última actualización 2026-09-08
+  </footer>
+
+</div>

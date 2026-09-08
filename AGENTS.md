@@ -18,7 +18,11 @@ en la carpeta compartida ya rompió la sesión de otro agente dos veces (ver
 `docs/DECISIONES.md § P-5`); en tu propio worktree, tus cambios de rama no
 pueden afectar la carpeta de nadie más. Protocolo completo y motivo:
 [CLAUDE.md § "Coordinación con Codex"](CLAUDE.md),
-[docs/DECISIONES.md § P-4 y P-5](docs/DECISIONES.md).
+[docs/DECISIONES.md § P-4 y P-5](docs/DECISIONES.md). Hay también un resumen
+visual del mismo protocolo en
+[docs/fase-0-fundamentos/metodologia-claude-codex.html](docs/fase-0-fundamentos/metodologia-claude-codex.html)
+(abrilo en un navegador, no como texto plano) — no agrega reglas nuevas, es
+la misma información en formato más rápido de repasar.
 
 **Nunca tuyo, sin visto bueno explícito del usuario o de Claude Code
 primero:** los contratos (AgentPass, PolicyRail, Mandato), `checkMandate` y
