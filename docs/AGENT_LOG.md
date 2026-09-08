@@ -1559,3 +1559,35 @@ completo). No queda ninguna rama `devin/*` viva en el remoto (verificado con
 Pendiente: nada de código. Cuando el usuario empiece a delegarle tareas a
 Codex, la primera sesión de Codex debería confirmar que lee `AGENTS.md` y
 sigue el prefijo `codex/<task>`.
+
+## 2026-09-08 — main
+
+Agente: Claude Code
+
+Qué: se revisó la primera tarea de prueba de Codex —
+[PR #2](https://github.com/vicentewolde/AgentPay/pull/2), tests para
+`parseConfig`/`configFromEnv` en `packages/sdk/src/config.test.ts`. Diff
+limpio (solo ese archivo + su propia entrada de `AGENT_LOG.md`), 18 tests
+nuevos, 34/34 verificados en worktree aislado. Todavía sin mergear —
+decisión pendiente del usuario.
+
+Se confirmó el mismo problema que hubo con Devin: al terminar su tarea,
+Codex dejó la carpeta compartida (`~/dev/AgentPay`) parada en
+`codex/sdk-config-tests` en vez de `main`. Sin consecuencias esta vez
+(working tree limpio), pero es la segunda vez que pasa por la misma causa
+raíz — compartir la carpeta física entre agentes. Se resolvió de forma
+estructural, no solo con disciplina: se creó un worktree de git separado y
+permanente para Codex, `~/dev/AgentPay-codex` (`git worktree add --detach`),
+para que un `checkout` suyo no pueda tocar nunca más esta carpeta. Ver
+[docs/DECISIONES.md § P-5](DECISIONES.md). `CLAUDE.md` y `AGENTS.md`
+actualizados para reflejarlo.
+
+Por qué: dos incidentes con la misma causa raíz (Devin 2026-09-03, Codex
+2026-09-07) son un patrón — la solución de fondo es eliminar la carpeta
+compartida, no pedirle a cada sesión que recuerde una regla más.
+
+Pendiente: el usuario tiene que reconfigurar el proyecto de Codex en
+ChatGPT para que apunte a `~/dev/AgentPay-codex`, no a `~/dev/AgentPay`.
+Decidir si se mergea el PR #2. Confirmar en la próxima tarea de Codex que el
+worktree nuevo funciona como se espera (arranca de `origin/main`, no dejó
+huella en la carpeta principal).

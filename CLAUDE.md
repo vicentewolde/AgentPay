@@ -66,36 +66,34 @@ imposible de saltar por prompt injection.
 
 ## Coordinación con Codex — protocolo obligatorio, no opcional
 
-Codex (OpenAI, incluido en ChatGPT Plus) trabaja como segundo agente sobre
-esta misma carpeta local, en tareas mecánicas y acotadas. Reemplaza a Devin,
-discontinuado por calidad insuficiente en su plan free — ver
-[docs/DECISIONES.md § P-4](docs/DECISIONES.md), que también deja registrado
-por qué el protocolo con Codex es más estricto que el que tuvo Devin: con
-Devin hubo un bypass de seguridad real en una rama huérfana (`checkMandate`,
-ver [fase-2/DECISIONES.md § B-25](docs/fase-2-agente-compra/DECISIONES.md)) y
-un episodio de colisión de branches (ver `docs/AGENT_LOG.md`, entradas de
-2026-09-03). Lo que sigue es el checklist que **toda sesión de Claude Code
-corre, siempre**, para que ninguna de las dos herramientas pise trabajo de la
-otra ni pierda contexto:
+Codex (OpenAI, incluido en ChatGPT Plus) trabaja como segundo agente, en
+tareas mecánicas y acotadas. Reemplaza a Devin, discontinuado por calidad
+insuficiente en su plan free — ver [docs/DECISIONES.md § P-4](docs/DECISIONES.md),
+que también deja registrado por qué el protocolo con Codex es más estricto
+que el que tuvo Devin: con Devin hubo un bypass de seguridad real en una rama
+huérfana (`checkMandate`, ver
+[fase-2/DECISIONES.md § B-25](docs/fase-2-agente-compra/DECISIONES.md)) y dos
+episodios de colisión de branches por compartir la misma carpeta de disco —
+uno con Devin (`docs/AGENT_LOG.md`, 2026-09-03) y otro con Codex
+(`docs/AGENT_LOG.md`, 2026-09-07). Por eso Codex opera en su propio
+**worktree** (`~/dev/AgentPay-codex`), no en esta carpeta — ver
+[docs/DECISIONES.md § P-5](docs/DECISIONES.md). Lo que sigue es el checklist
+que **toda sesión de Claude Code corre, siempre**, para que ninguna de las
+dos herramientas pise trabajo de la otra ni pierda contexto:
 
 1. **Antes de tocar cualquier archivo:** `git status` y `git log --oneline -10`.
-   La carpeta se comparte en vivo con Codex; nada se asume "sincronizado" solo
-   porque el disco es el mismo. Si hay cambios sin commitear que no son tuyos
-   de esta sesión, no los pises — investigá primero (regla general de este
-   proyecto, ver arriba).
+   Codex trabaja en su propio worktree, pero comparte el mismo historial de
+   git — nada se asume "al día" solo porque `origin/main` no cambió desde acá.
 2. **Leé [docs/AGENT_LOG.md](docs/AGENT_LOG.md) primero.** Dice qué pasó la
    última vez, en qué branch, y qué falta — de cualquiera de los dos agentes.
 3. **Todo el trabajo de Claude Code va en una rama `cc/<feature>`, y todo el
-   de Codex en `codex/<task>` — nunca directo a `main`.** Si al arrancar una
-   sesión el branch activo no coincide con lo que `AGENT_LOG.md` dice que
-   dejaste, o el último commit no es tuyo, **pará y confirmá con `git log`
-   quién lo escribió antes de seguir** — así se evita repetir la colisión de
-   branches que ya pasó una vez. Al cerrar el hito, mergeá a `main`
-   (fast-forward si se puede) y borrá la rama.
-4. **Antes de delegarle una tarea a Codex, o si Codex va a hacer `checkout` en
-   esta carpeta:** commiteá cualquier cambio propio pendiente. Un `checkout`
-   ajeno arrastra ediciones sin commitear a la branch equivocada — ya pasó con
-   Devin (ver `AGENT_LOG.md`, entrada de `devin/guards-unit-tests`).
+   de Codex en `codex/<task>` — nunca directo a `main`.** Al cerrar el hito,
+   mergeá a `main` (fast-forward si se puede) y borrá la rama.
+4. **Antes de delegarle una tarea a Codex:** no hace falta commitear nada
+   propio pendiente por el riesgo de que un `checkout` ajeno lo arrastre —
+   worktrees separados ya lo resuelven (`P-5`). Sí conviene pushear cualquier
+   cosa que Codex necesite ver en `origin/main` antes de arrancarlo, porque su
+   worktree parte de ahí, no de tu carpeta.
 5. **Todo PR o diff que venga de Codex se revisa antes de mergear** — diff
    completo y tests corridos, idealmente en un worktree aislado. Nunca se
    mergea a ciegas. Prestá atención particular a cualquier cambio, directo o

@@ -209,3 +209,49 @@ quede "sin rastro". Se descartó porque viola la convención que este mismo
 archivo establece en su encabezado, huerfanaría las referencias cruzadas
 existentes, y porque el incidente de seguridad detectado es, en sí mismo,
 evidencia positiva para la narrativa de SCF — no algo que convenga esconder.
+
+---
+
+### P-5 · Codex trabaja en su propio worktree, no en la carpeta compartida · `Vigente`
+**Fecha:** 2026-09-08
+
+`P-2` y `P-4` asumían que el segundo agente opera sobre la misma carpeta
+local que Claude Code y el usuario (`~/dev/AgentPay`), con reglas de
+disciplina (commitear antes de delegar, parar si el branch activo no
+coincide) para evitar que un `checkout` de un agente arrastre el estado de
+otro. Esa disciplina falló dos veces en la práctica: primero con Devin
+(`docs/AGENT_LOG.md`, 2026-09-03 — un `checkout` de Devin arrastró ediciones
+sin commitear de Claude Code a la rama `devin/guards-unit-tests`) y después
+con Codex (`docs/AGENT_LOG.md`, 2026-09-07 (6) y sesión siguiente — la
+primera tarea de prueba dejó la carpeta compartida parada en
+`codex/sdk-config-tests` en vez de `main`). Dos incidentes con la misma causa
+raíz —carpeta física compartida— son un patrón, no mala suerte puntual.
+
+**Qué cambia.** Codex pasa a operar en `~/dev/AgentPay-codex`, un **worktree
+de git** separado (`git worktree add --detach ~/dev/AgentPay-codex main`):
+carpeta de disco distinta, mismo `.git` y el mismo historial de commits. La
+configuración del proyecto en Codex/ChatGPT apunta a esa carpeta, no a
+`~/dev/AgentPay`. Codex arranca cada tarea con `git fetch origin` y
+`git checkout -B codex/<task> origin/main`, así siempre parte del último
+`main` pusheado, no de lo que haya quedado en su worktree de la tarea
+anterior.
+
+**Motivo.** Un worktree resuelve el problema de raíz en vez de depender de
+que alguien recuerde aplicar una regla en el momento exacto: dos carpetas de
+disco distintas no pueden pisarse mutuamente el `checkout`, sin importar qué
+tan apurada esté la sesión. Es la misma técnica que ya se usaba para revisar
+los PRs de Devin y Codex antes de mergear (worktree temporal, borrado al
+terminar) — acá se vuelve permanente para el propio trabajo de Codex, no solo
+para revisarlo.
+
+**Qué NO cambia.** Git sigue siendo la única fuente de verdad; `AGENT_LOG.md`
+sigue siendo obligatorio; todo PR de Codex se sigue revisando antes de
+mergear, con la misma atención reforzada a puntos de autorización que dejó
+`P-4`. Lo único que se elimina es la coordinación de checkouts en disco,
+porque deja de ser necesaria.
+
+**Alternativa descartada:** mantener la carpeta compartida y agregar más
+disciplina (por ejemplo, un hook de git que bloquee el `checkout` si hay
+cambios ajenos sin commitear). Se descartó porque agrega complejidad
+mantenible a cambio de resolver un problema que un worktree elimina por
+completo, sin hooks ni pasos adicionales que alguien pueda saltarse.

@@ -9,11 +9,16 @@ cambia con cada fase; si lo copiáramos acá quedaría desactualizado. Leé
 ## Tu rol acá: agente secundario, alcance acotado
 
 Claude Code es el agente principal de este proyecto. Vos operás como segundo
-agente sobre la misma carpeta local, para tareas mecánicas y cerradas —
-boilerplate, tests, scaffolding, documentación, refactors puntuales, scripts
-auxiliares. Protocolo completo y motivo:
+agente, para tareas mecánicas y cerradas — boilerplate, tests, scaffolding,
+documentación, refactors puntuales, scripts auxiliares. Trabajás en tu propio
+**worktree** de este mismo repositorio (`~/dev/AgentPay-codex`), no en la
+carpeta que usan el usuario y Claude Code (`~/dev/AgentPay`) — carpetas de
+disco distintas, mismo historial de git. Esto existe porque hacer `checkout`
+en la carpeta compartida ya rompió la sesión de otro agente dos veces (ver
+`docs/DECISIONES.md § P-5`); en tu propio worktree, tus cambios de rama no
+pueden afectar la carpeta de nadie más. Protocolo completo y motivo:
 [CLAUDE.md § "Coordinación con Codex"](CLAUDE.md),
-[docs/DECISIONES.md § P-4](docs/DECISIONES.md).
+[docs/DECISIONES.md § P-4 y P-5](docs/DECISIONES.md).
 
 **Nunca tuyo, sin visto bueno explícito del usuario o de Claude Code
 primero:** los contratos (AgentPass, PolicyRail, Mandato), `checkMandate` y
@@ -31,14 +36,14 @@ alguien con el contexto completo lo pida explícitamente.
 
 ## Antes de tocar cualquier archivo
 
-1. `git status` y `git log --oneline -10`. La carpeta se comparte en vivo con
-   Claude Code; nada está "sincronizado" solo porque el disco es el mismo.
-2. Leé [docs/AGENT_LOG.md](docs/AGENT_LOG.md) — qué pasó la última vez, en qué
+1. Confirmá que estás en `~/dev/AgentPay-codex`, no en `~/dev/AgentPay` —
+   `pwd` primero. Si por algún motivo tu proyecto apunta a la carpeta
+   compartida, pará y avisá antes de tocar nada.
+2. `git fetch origin` y arrancá tu rama desde el `main` remoto más reciente,
+   no desde lo que haya quedado en el worktree de una tarea anterior:
+   `git checkout -B codex/<task> origin/main`.
+3. Leé [docs/AGENT_LOG.md](docs/AGENT_LOG.md) — qué pasó la última vez, en qué
    branch, qué falta.
-3. Si el branch activo no coincide con lo que `AGENT_LOG.md` dice que quedó, o
-   el último commit no es tuyo ni del usuario, **parate y confirmá con
-   `git log` quién lo escribió antes de seguir** — ya pasó una colisión de
-   branches una vez (Devin escribiendo sobre una rama de Claude Code).
 
 ## Reglas de trabajo
 
@@ -48,9 +53,10 @@ alguien con el contexto completo lo pida explícitamente.
 2. **Tareas chicas y cerradas.** Nada de refactors grandes ni decisiones de
    arquitectura por tu cuenta — eso se resuelve con el usuario o Claude Code
    antes de delegarte la tarea ya acotada.
-3. **No dejes cambios sin commitear al terminar.** Si vas a hacer `checkout`
-   a otra rama o dejar la sesión, commiteá primero — un `checkout` tuyo puede
-   arrastrar ediciones ajenas sin commitear a tu propia rama.
+3. **No dejes cambios sin commitear entre tareas.** Aunque tu worktree es
+   tuyo, empezar la próxima tarea con algo sin commitear del hito anterior es
+   la misma clase de error que causó las colisiones que llevaron a este
+   setup — commiteá o descartá antes de hacer `checkout -B` de nuevo.
 4. **Seguí las convenciones existentes del proyecto:**
    - Errores tipados y distinguibles vía `AgentPassError` + `code`. Nunca
      `throw new Error("...")` genérico, nunca `undefined` en un fallo.
