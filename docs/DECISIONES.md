@@ -366,3 +366,33 @@ identidad, superficie con más riesgo de disputas de propiedad intelectual
 que una librería genérica) sin ninguna desventaja práctica frente a MIT
 para este caso — y por la compatibilidad directa con la licencia que ya
 usa el bazaar del embajador.
+
+---
+
+### P-8 · Nombre de marca elegido: TirevPay — todavía sin ejecutar el rename · `Vigente`
+**Fecha:** 2026-09-09
+
+El usuario pidió un nombre minimalista de dos sílabas, con `.com`
+disponible, para la marca pública del proyecto. Se investigaron 55+
+candidatos vía `whois`/RDAP contra el registro real (no adivinado) — la
+inmensa mayoría de combinaciones cortas y pronunciables ya están
+registradas en `.com` (fenómeno de mercado, no mala suerte con estos
+nombres puntuales). El usuario confirmó **TirevPay**, con `tirevpay.com`
+verificado como disponible.
+
+**Qué NO se hizo todavía, a propósito.** No se renombró el repo de GitHub,
+los paquetes (`@agentpass/*`, `@agentpay/*`), `render.yaml` (nombre del
+servicio `agentpay-web`), la landing, el README, ni ningún texto de
+`apps/web`. Es un cambio de superficie muy grande (afecta links ya
+compartidos con Tellus, el nombre del servicio en Render, y potencialmente
+los scopes de npm si algún paquete ya se publicó) que merece su propia
+sesión dedicada, no hacerse de pasada mientras se construía otra cosa
+(T34, conectar wallet). El nombre interno del proyecto (`AgentPay`,
+`@agentpass/*`) sigue siendo el que aparece en todo el código y la
+documentación hasta que se decida ejecutar el rename.
+
+**Alternativa descartada:** ninguna — es una decisión de nombre, no de
+arquitectura. Se registra acá para que ninguna sesión futura, de
+cualquiera de los dos agentes, se confunda si el usuario menciona
+"TirevPay" en una conversación mientras el código todavía dice
+"AgentPay".

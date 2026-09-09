@@ -258,6 +258,7 @@
     dl.facts .fact-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   }
 </style>
+<script src="https://unpkg.com/@stellar/freighter-api@6.0.1/build/index.min.js"></script>
 </head>
 <body>
 
@@ -295,6 +296,32 @@
       <span data-tr="es">Un agente que prueba quién lo opera, qué puede gastar, y compra de verdad en un Bazaar de Stellar en testnet.</span>
     </p>
   </header>
+
+  <section class="mstep" id="s0">
+    <div class="n">00</div>
+    <div>
+      <h2>
+        <span data-tr="en">Connect wallet</span>
+        <span data-tr="es">Conectar wallet</span>
+      </h2>
+      <p class="lead">
+        <span data-tr="en">Sign a one-time message with Freighter to prove you control that Stellar account — no secret key ever leaves your wallet.</span>
+        <span data-tr="es">Firmá un mensaje de un solo uso con Freighter para probar que controlás esa cuenta de Stellar — ninguna llave secreta sale de tu wallet.</span>
+      </p>
+      <p class="plain">
+        <span data-tr="en">This is real Web3 interaction: Freighter itself asks you to approve the signature, and the server checks it cryptographically against the address you claim.</span>
+        <span data-tr="es">Esto es interacción Web3 real: Freighter te pide aprobar la firma, y el servidor la verifica criptográficamente contra la dirección que decís tener.</span>
+      </p>
+      <div class="row">
+        <button id="wallet-btn" class="btn">
+          <span data-tr="en">Connect Freighter</span>
+          <span data-tr="es">Conectar Freighter</span>
+        </button>
+      </div>
+      <dl class="facts" id="wallet-facts" hidden></dl>
+      <div id="wallet-status" class="status"></div>
+    </div>
+  </section>
 
   <section class="mstep" id="s1">
     <div class="n">01</div>
@@ -495,6 +522,17 @@ var T = {
   factMandateRevoked: { en: "mandate revoked", es: "mandato revocado" },
   factTx: { en: "tx", es: "tx" },
   factCredentialLive: { en: "credential (live)", es: "credencial (en vivo)" },
+  factWalletAddress: { en: "wallet address", es: "dirección de wallet" },
+  walletMissing: {
+    en: "Freighter not found. Install it from freighter.app and reload this page.",
+    es: "No se encontró Freighter. Instalalo desde freighter.app y recargá esta página.",
+  },
+  walletRequesting: { en: "Requesting access…", es: "Pidiendo acceso…" },
+  walletSigning: { en: "Sign the message in Freighter…", es: "Firmá el mensaje en Freighter…" },
+  walletVerifying: { en: "Verifying signature…", es: "Verificando firma…" },
+  walletConnected: { en: "Wallet connected and verified.", es: "Wallet conectada y verificada." },
+  walletFailed: { en: "Could not connect wallet: ", es: "No se pudo conectar la wallet: " },
+  walletRejected: { en: "Connection cancelled in Freighter.", es: "Conexión cancelada en Freighter." },
   identityCredential: { en: "credential (on-chain)", es: "credencial (en cadena)" },
   identityMandate: { en: "mandate (on-chain)", es: "mandato (en cadena)" },
   stateRevoked: { en: "revoked", es: "revocada" },
@@ -632,7 +670,7 @@ async function loadProducts() {
 }
 
 function renderSessionFacts(body) {
-  setFacts(document.getElementById("session-facts"), [
+  var facts = [
     [t("factCredential"), body.credentialHash],
     [t("factMandate"), body.mandateHash],
     [t("factStatus"), body.agentStatus],
@@ -640,9 +678,78 @@ function renderSessionFacts(body) {
     [t("factPerTx"), body.perTx],
     [t("factPerDay"), body.perDay],
     [t("factTools"), body.tools.join(", ")],
-  ]);
+  ];
+  if (body.walletAddress) facts.splice(2, 0, [t("factWalletAddress"), body.walletAddress]);
+  setFacts(document.getElementById("session-facts"), facts);
   setStatus(document.getElementById("session-status"), true, t("sessionActive"));
 }
+
+/** Freighter's `signMessage` can return the signature as a base64 string or
+    as byte-array-like data (its own type union allows either) — normalise
+    either shape to the base64 string the server's SEP-0053 check expects. */
+function signedMessageToBase64(signedMessage) {
+  if (typeof signedMessage === "string") return signedMessage;
+  var bytes = new Uint8Array(Object.values(signedMessage));
+  var binary = "";
+  for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+document.getElementById("wallet-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("wallet-btn");
+  const status = document.getElementById("wallet-status");
+  if (typeof freighterApi === "undefined") {
+    setStatus(status, false, t("walletMissing"));
+    return;
+  }
+  btn.disabled = true;
+  try {
+    // `requestAccess()` waits for a response from the extension's content
+    // script and never resolves or rejects if there is none — checked here
+    // first, since `isConnected()` answers quickly either way (found by
+    // testing this against a browser with no Freighter installed, not by
+    // reading its docs).
+    const presence = await freighterApi.isConnected();
+    if (!presence.isConnected) {
+      setStatus(status, false, t("walletMissing"));
+      return;
+    }
+
+    setStatus(status, true, t("walletRequesting"));
+    const access = await freighterApi.requestAccess();
+    if (access.error) throw new Error(access.error);
+    const address = access.address;
+
+    const { body: challenge } = await api("/api/wallet/challenge", { method: "POST" });
+    if (!challenge.ok) throw new Error(challenge.message || "no challenge");
+
+    setStatus(status, true, t("walletSigning"));
+    const signed = await freighterApi.signMessage(challenge.message, {
+      address: address,
+      networkPassphrase: "Test SDF Network ; September 2015",
+    });
+    if (signed.error) throw new Error(signed.error);
+
+    setStatus(status, true, t("walletVerifying"));
+    const { body: verified } = await api("/api/wallet/verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        address: address,
+        nonce: challenge.nonce,
+        signature: signedMessageToBase64(signed.signedMessage),
+      }),
+    });
+    if (!verified.ok) throw new Error(verified.message || "verification failed");
+
+    setFacts(document.getElementById("wallet-facts"), [[t("factWalletAddress"), verified.address]]);
+    setStatus(status, true, t("walletConnected"));
+  } catch (error) {
+    setStatus(status, false, t("walletFailed") + error.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById("start-btn").addEventListener("click", async () => {
   const btn = document.getElementById("start-btn");

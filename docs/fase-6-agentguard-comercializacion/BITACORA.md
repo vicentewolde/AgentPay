@@ -12,16 +12,20 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-09 · **Último hito cerrado:** T33 · **Fase 6: en curso**
+**Fecha:** 2026-09-09 · **Último hito cerrado:** T34 · **Fase 6: en curso**
 
-El vault de `apps/web` ya no vive en un archivo del disco efímero de
-Render — vive en Postgres, y se verificó en vivo que sobrevive a que el
-proceso de Node se reinicie a mitad de una sesión (T33). `apps/web` sigue
-compartiendo una sola identidad Stellar entre todos los visitantes — T32
-construyó la pieza criptográfica que lo resuelve (derivación determinística
-de llaves por tenant), pero todavía no está cableada dentro de `apps/web`:
-falta decidir un modelo de onboarding/fondeo por tenant antes de dar ese
-paso (`C-6`).
+Un visitante ya puede conectar una wallet Stellar real (Freighter) y
+probar criptográficamente que la controla, sin que su llave secreta salga
+nunca de la wallet (T34) — la primera interacción Web3 genuina del
+proyecto de cara al usuario, más allá de las transacciones que el agente
+ya hacía en su nombre. Esa wallet le da a cada visitante un `tenant_id`
+estable en el vault de Postgres (T33), así que su historial persiste entre
+visitas, no solo entre reinicios del servidor. Lo que todavía falta,
+anotado a propósito y no construido: que la wallet conectada firme de
+verdad el Mandato (necesita extender la verificación de la Fase 3, `C-8`),
+y que cada tenant tenga su propia cuenta Stellar fondeada en vez de
+compartir `AGENT_SECRET_KEY` (bloqueado por el faucet manual de USDC de
+Circle, `C-11`).
 
 ### Progreso
 
@@ -29,6 +33,7 @@ paso (`C-6`).
 |---|---|---|
 | T32 | `@agentpay/tenancy`: deriva un par de llaves Stellar (agente + issuer) por tenant desde un único seed maestro, vía SEP-0005/BIP-44 | ✅ cerrado 2026-09-09 |
 | T33 | `MandateVault` sobre Postgres, reemplaza el JSONL en disco efímero de Render; cableado en `apps/web` | ✅ cerrado 2026-09-09 |
+| T34 | Conectar wallet (Freighter) con verificación criptográfica real (SEP-0053); da a cada wallet un `tenant_id` estable en el vault | ✅ cerrado 2026-09-09 |
 
 ---
 
@@ -187,4 +192,89 @@ funcione — mismo patrón que `POLICY_RAIL_CONTRACT_ID` en su momento, pero
 esta sí es secreta (`sync: false`). Siguiente decisión, sin resolver
 todavía: el modelo de onboarding/fondeo para darle a cada tenant real su
 propia identidad Stellar (`C-6`).
+
+## T34 · Conectar wallet (Freighter) — interacción Web3 real — cerrado 2026-09-09
+
+**Qué quedó funcionando, en palabras llanas.** El usuario pidió que un
+visitante nuevo tenga que registrarse con su wallet, con interacción Web3
+de verdad, no un formulario disfrazado. Ahora la página tiene un primer
+paso — "Conectar wallet" — donde alguien con la extensión Freighter
+instalada firma un mensaje de un solo uso para probar que controla esa
+cuenta de Stellar. La wallet nunca revela su llave secreta; el servidor
+verifica la firma con criptografía real (el mismo estándar, SEP-0053, que
+usan las wallets de Stellar para "probá que sos vos" fuera de una
+transacción). Quien conecta la misma wallet dos veces cae siempre en el
+mismo lugar de la bitácora (T33) — su historial ya no depende de la cookie
+al azar de una sola visita.
+
+**Lo que esto NO hace todavía, dicho en voz alta.** La wallet conectada
+todavía no es quien firma el Mandato — eso sigue siendo la llave de la
+plataforma. Y el agente todavía gasta desde la cuenta compartida, no desde
+una cuenta propia de cada tenant. Los dos huecos están anotados con su
+motivo técnico exacto, no ignorados — ver `DECISIONES.md → C-8` y `C-11`.
+
+**Cómo quedó construido.** `verifyStellarMessage` (`apps/web/src/wallet/`)
+implementa SEP-0053 de punta a punta: `sha256("Stellar Signed Message:\n" +
+mensaje)`, verificado como firma Ed25519 cruda contra la dirección
+reclamada. `POST /api/wallet/challenge` emite un nonce de un solo uso;
+`POST /api/wallet/verify` lo consume, verifica la firma, y si es válida
+fija la cookie de sesión a `walletTenantId(address)` —
+`sha256(dirección)` reacomodado con guiones para tener la forma de un UUID
+(`C-9`)— así la misma wallet siempre vuelve al mismo `tenant_id`. El
+frontend carga `@stellar/freighter-api` (el build UMD oficial, vía CDN, sin
+paso de build) en vez de un kit multi-wallet completo — de los kits
+disponibles, Freighter es el único wallet de Stellar que este piloto
+necesita hoy; sumar más queda anotado, no descartado.
+
+**Dos bugs reales, ninguno encontrado leyendo documentación.** Primero:
+`Keypair.sign()` de `@stellar/stellar-sdk` devuelve un `Uint8Array` plano,
+no un `Buffer` de Node — llamarle `.toString("base64")` directo no falla,
+pero tampoco hace lo que parece; hay que envolverlo en `Buffer.from(...)`
+primero. Encontrado porque el propio test de la firma de referencia fallaba
+sin ningún mensaje de error obvio. Segundo, más serio: `requestAccess()` de
+Freighter espera una respuesta de la extensión del navegador y **nunca
+resuelve ni rechaza** si no hay ninguna instalada — el botón se queda
+colgado para siempre, sin ningún error visible. Encontrado clickeando el
+botón real en un navegador sin la extensión, no leyendo la API. Se
+corrigió llamando primero a `isConnected()` (que sí responde rápido en los
+dos casos) y solo pidiendo acceso si devuelve `true`. Detalle completo en
+`DECISIONES.md → C-10`.
+
+**Evidencia técnica.** 5 tests nuevos en `apps/web` — la primera cobertura
+de tests que tiene esta app (`apps/web` no tenía tests propios hasta este
+hito, exactamente como quedó anotado en el BITACORA de la Fase 4). `pnpm
+typecheck`/`pnpm build` (monorepo completo) limpios.
+
+**Verificado en vivo, dos veces.** Primero, el camino feliz: se generó un
+keypair de prueba y se firmó un challenge real exactamente como lo haría
+Freighter (sin atajos del servidor), verificado contra el servidor real
+—incluidos los dos casos de seguridad (reusar un nonce ya gastado, y una
+firma de una wallet distinta a la que dice ser), los dos rechazados
+correctamente— y confirmando que la misma wallet, en dos conexiones
+separadas, siempre cae en el mismo `tenant_id`. Segundo, el camino sin
+wallet instalada: clickeando el botón real en una pestaña nueva del
+navegador (Claude Browser, sin la extensión Freighter), apareció
+correctamente "Freighter not found..." sin colgarse — confirma el arreglo
+del segundo bug. Ver `evidencia/T34.md`.
+
+**Por qué esta forma y no otra.** El usuario pidió explícitamente "que
+haya interacción Web3" al decidir entre wallet propia o creada — conectar
+una wallet real y verificarla criptográficamente es la forma más genuina
+de eso, sin inventar una capa de cuentas propia que compita con lo que
+Stellar ya resuelve.
+
+Documentación tocada: `docs/DECISIONES.md` (`P-8`, el nombre "TirevPay" —
+sin ejecutar el rename todavía), `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md`, `DECISIONES.md` `C-8` a `C-11`, `evidencia/T34.md`).
+Archivos nuevos: `apps/web/src/wallet/verify-message.ts` (+ test),
+`apps/web/vitest.config.ts`. Archivos tocados: `apps/web/src/server.ts`,
+`apps/web/public/index.html`, `apps/web/package.json`.
+
+Pendiente: mergear `cc/wallet-connect` a `main` y pushear (a confirmar con
+el usuario). Sin resolver todavía, a propósito: extender `verifyMandate`
+para aceptar una firma SEP-0053 como alternativa (haría a la wallet
+conectada la firmante real del Mandato, `C-8`); dar a cada tenant su
+propia cuenta Stellar fondeada (`C-11`, bloqueado por el faucet manual de
+USDC de Circle); y el rename completo a "TirevPay" (`P-8`), todavía sin
+ejecutar en ningún archivo.
 

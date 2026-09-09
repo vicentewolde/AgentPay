@@ -7,20 +7,27 @@
  * step. Every secret (`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`) stays here;
  * the browser only ever sees JSON responses.
  *
- * One demo session per browser, held in memory and keyed by a random cookie
- * — this is still not a real multi-tenant app (every session signs with the
- * same `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY`, so two visitors share one
- * Stellar identity), but two people clicking through the demo at the same
- * time no longer stomp on each other's in-memory state or spend ledger.
- * Clicking "Iniciar" issues a fresh credential and Mandate, exactly like
- * `pnpm demo` does on every run.
+ * One demo session per browser, held in memory and keyed by a cookie — this
+ * is still not a real multi-tenant app (every session signs with the same
+ * `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY`, so two visitors share one Stellar
+ * identity), but two people clicking through the demo at the same time no
+ * longer stomp on each other's in-memory state or spend ledger. Clicking
+ * "Iniciar" issues a fresh credential and Mandate, exactly like `pnpm demo`
+ * does on every run.
+ *
+ * T34 adds real wallet-connect: a visitor who signs a one-time challenge
+ * with Freighter (SEP-0053, verified server-side without ever seeing their
+ * secret key) gets a cookie derived from their wallet address instead of a
+ * random one, so the same wallet reconnecting lands on the same MandateVault
+ * `tenant_id`. It does not yet change who signs the credential or the
+ * Mandate — see `walletAddressBySession`'s docstring for why.
  *
  * The one product this can actually pay for is `swap-risk-quote` — the same
  * one `scripts/demo-real-payment.ts` (T24) proved end to end. The catalogue
  * shows the bazaar's other real products too, read-only, rather than
  * pretending every one of them is a verified payment path.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -58,6 +65,8 @@ import {
   withVault,
   type PolicyRail,
 } from "@agentpay/agent";
+
+import { verifyStellarMessage } from "./wallet/verify-message.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const ENV_PATH = resolve(REPO_ROOT, ".env.local");
@@ -146,6 +155,41 @@ const SESSION_COOKIE = "agentpay_sid";
 // way back in so a forged cookie can't be used as another visitor's
 // `tenantId` when reading or writing their rows in `vault_records`.
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ---- Wallet connect (T34) -------------------------------------------------
+
+/** Nonces this server issued and hasn't consumed yet, with when they expire. */
+const walletChallenges = new Map<string, number>();
+const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;
+
+/**
+ * The wallet address behind each session, once `/api/wallet/verify` accepts
+ * its signature. Shown back to the visitor as proof of a real connection —
+ * not yet the key that signs the credential or the Mandate (see
+ * `docs/fase-6-agentguard-comercializacion/DECISIONES.md`): that still needs
+ * `verifyMandate` to accept a SEP-0053-wrapped signature as an alternative to
+ * the AgentPass JWS profile, a change to Fase 3's closed verification code
+ * that deserves its own review before it lands.
+ */
+const walletAddressBySession = new Map<string, string>();
+
+function challengeMessage(nonce: string): string {
+  return `TirevPay quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
+}
+
+/**
+ * A stable, cookie-safe id derived from a wallet address, so the same wallet
+ * reconnecting always lands on the same MandateVault `tenant_id` (T33)
+ * instead of a fresh random one per visit. Not a real UUID v5 (no
+ * namespace/version bits) — just `sha256(address)` reshaped to satisfy
+ * `SESSION_ID_RE`, since nothing downstream needs RFC 4122 compliance, only
+ * a stable, collision-resistant string shaped like the ones `randomUUID()`
+ * already produces.
+ */
+function walletTenantId(address: string): string {
+  const hex = createHash("sha256").update(address, "utf8").digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
 
 function parseCookies(header: string | undefined): Map<string, string> {
   const cookies = new Map<string, string>();
@@ -633,6 +677,46 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     return;
   }
 
+  if (req.method === "POST" && pathname === "/api/wallet/challenge") {
+    const nonce = randomUUID();
+    walletChallenges.set(nonce, Date.now() + WALLET_CHALLENGE_TTL_MS);
+    sendJson(res, 200, { ok: true, nonce, message: challengeMessage(nonce) });
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/wallet/verify") {
+    const body = await readJsonBody(req);
+    const address = typeof body.address === "string" ? body.address : undefined;
+    const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
+    const signature = typeof body.signature === "string" ? body.signature : undefined;
+    const expiresAt = nonce === undefined ? undefined : walletChallenges.get(nonce);
+
+    if (address === undefined || nonce === undefined || signature === undefined || expiresAt === undefined) {
+      sendJson(res, 400, {
+        ok: false,
+        code: "InvalidArguments",
+        message: "falta address, nonce o signature, o el nonce ya se usó",
+      });
+      return;
+    }
+    walletChallenges.delete(nonce); // single-use, whether or not it verifies below
+
+    if (Date.now() > expiresAt) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "el challenge venció — pedí uno nuevo" });
+      return;
+    }
+    if (!verifyStellarMessage(address, challengeMessage(nonce), signature)) {
+      sendJson(res, 400, { ok: false, code: "InvalidSignature", message: "la firma no corresponde a esa wallet" });
+      return;
+    }
+
+    const sessionId = walletTenantId(address);
+    walletAddressBySession.set(sessionId, address);
+    withSessionCookie(res, sessionId);
+    sendJson(res, 200, { ok: true, address });
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/api/session/start") {
     try {
       const sessionId = readSessionId(req) ?? randomUUID();
@@ -649,6 +733,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         perTx: `${started.scope.limits.perTx} ${started.scope.limits.currency}`,
         perDay: `${started.scope.limits.perDay} ${started.scope.limits.currency}`,
         policyRail: started.railContractId ?? null,
+        walletAddress: walletAddressBySession.get(sessionId) ?? null,
       });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });

@@ -173,3 +173,103 @@ de base de datos para serializar entre procesos también. Se descartó por
 alcance — el pilot corre una sola instancia de `apps/web` a la vez; resolver
 la concurrencia entre procesos es la misma pregunta que "más de una
 instancia de Render" abre en general, no algo específico de este hito.
+
+### C-8 · Conectar la wallet ata la identidad del vault, no todavía quién firma el Mandato · `Vigente`
+**Fecha:** 2026-09-09 (T34)
+
+El usuario pidió interacción Web3 real al registrarse — conectar una wallet
+o crear una nueva. T34 conecta una wallet real (Freighter) y verifica
+criptográficamente que el visitante la controla, pero **no** cambia quién
+firma la credencial ni el Mandato — eso sigue siendo `ISSUER_SECRET_KEY`/
+`AGENT_SECRET_KEY`, igual que antes de este hito.
+
+**Motivo, con el límite técnico real detrás.** Para que la wallet conectada
+fuera de verdad el "principal" que firma el Mandato, la firma del documento
+tendría que ser un `Ed25519` crudo hecho por esa wallet — pero las wallets
+(por diseño, para que un sitio no pueda hacerte firmar a ciegas una
+transacción disfrazada de mensaje) no exponen firma cruda: exponen
+`signMessage` (SEP-0043), que envuelve el mensaje con el prefijo
+`"Stellar Signed Message:\n"` y lo hashea con SHA-256 antes de firmar
+(SEP-0053). `verifyMandate` (Fase 3, cerrada) no sabe verificar esa forma —
+espera el perfil JWS propio de AgentPass. Extender esa verificación para
+aceptar una firma SEP-0053 como alternativa válida es un cambio real al
+esquema de firma de una fase cerrada, y merece su propia revisión explícita
+con el usuario antes de tocarlo — no se hizo de pasada en este hito.
+
+**Qué sí se resolvió con esto.** La identidad del **tenant** (para efectos
+de la bitácora de MandateVault, T33) ahora puede ser la wallet conectada en
+vez de una cookie aleatoria por visita — ver `C-9`. Es progreso real hacia
+multi-tenancy sin tocar la superficie de firma cerrada.
+
+**Alternativa descartada:** firmar el Mandato con la llave de la plataforma
+pero declarando `principal` como la wallet conectada. Se descartó de
+inmediato — `checkMandate`/`verifyMandate` comparan que quien firmó
+coincida con quien el documento dice ser (`SignerMismatch`); mentir sobre
+quién firmó sería el mismo tipo de bypass que `B-25` (Fase 2) ya documentó
+como inaceptable, solo que introducido a propósito en vez de por un bug.
+
+### C-9 · El `tenant_id` de una wallet conectada es determinístico, no un UUID aleatorio · `Vigente`
+**Fecha:** 2026-09-09 (T34)
+
+`walletTenantId(address)` deriva el `tenant_id`/cookie de sesión de un
+visitante conectado como `sha256(address)` recortado y reacomodado con
+guiones para tener la misma forma que un UUID — no un UUID v5 real (sin
+bits de versión/variante), y no un `randomUUID()`.
+
+**Motivo.** Sin esto, cada visita —incluso de la misma wallet— generaría un
+`tenant_id` nuevo (como pasaba antes de este hito), y la bitácora de
+MandateVault de un usuario que vuelve nunca se encontraría a sí misma.
+Con la derivación determinística, conectar la misma wallet dos veces —
+verificado en vivo, dos veces— cae siempre en el mismo `tenant_id`, así
+que su historial persiste entre visitas, no solo entre reinicios del
+servidor (que ya resolvía T33).
+
+**Alternativa descartada:** una tabla `wallet_sessions` en Postgres que
+mapee `address → session_id` aleatorio, generado una vez y reusado después.
+Se descartó por innecesaria — un hash determinístico da la misma garantía
+(mismo input, mismo output, siempre) sin una tabla ni una consulta extra
+antes de poder emitir la cookie.
+
+### C-10 · `isConnected()` se llama antes que `requestAccess()`, nunca al revés · `Vigente`
+**Fecha:** 2026-09-09 (T34)
+
+El flujo de conexión llama primero a `freighterApi.isConnected()` y solo
+sigue a `requestAccess()` si devuelve `true`.
+
+**Motivo, con el bug real encontrado probando contra un navegador sin la
+extensión instalada — no leyendo la documentación de Freighter.**
+`requestAccess()` espera una respuesta de la extensión vía mensajería del
+navegador; si no hay ninguna extensión escuchando, esa promesa **nunca se
+resuelve ni rechaza** — cuelga el botón para siempre, sin ningún mensaje de
+error. `isConnected()`, en cambio, responde rápido en los dos casos.
+Encontrado corriendo la página real sin Freighter instalado y viendo el
+botón quedarse colgado, no por inspección de código.
+
+**Alternativa descartada:** envolver `requestAccess()` en un timeout
+propio (ej. `Promise.race` con un `setTimeout` de unos segundos). Se
+descartó porque agrega un número mágico (¿cuántos segundos son
+"razonables" para que alguien apruebe en su wallet?) a cambio de resolver
+un problema que `isConnected()` ya resuelve gratis y sin inventar nada.
+
+### C-11 · Deferred, sin construir todavía: una cuenta Stellar propia y fondeada por tenant · `Vigente`
+**Fecha:** 2026-09-09 (T34)
+
+`@agentpay/tenancy` (T32) sigue sin cablearse dentro de `apps/web` — cada
+tenant, wallet conectada o no, sigue gastando desde la cuenta compartida
+`AGENT_SECRET_KEY`.
+
+**Motivo — el bloqueante real no es de código, es de un tercero.**
+`scripts/fund-usdc-trustline.ts` (Fase 4) ya documentaba esto: la
+trustline de USDC se puede abrir por script, pero el **saldo** de USDC
+solo se puede cargar a mano, en el faucet de testnet de Circle (un
+formulario web de terceros, no una API). Derivar y fondear con XLM una
+cuenta nueva por tenant es automatizable (Friendbot); dejarla con USDC de
+verdad para que pueda comprar algo, no — necesitaría una pantalla nueva
+("tu wallet no tiene USDC todavía, andá a este faucet") que todavía no se
+diseñó ni se le mostró al usuario.
+
+**Alternativa descartada:** lanzar el fondeo automático igual, aceptando
+que el primer intento de compra de cada tenant nuevo falle por falta de
+saldo. Se descartó porque enviar a alguien a probar el producto y que
+falle en el primer clic, sin explicación, es peor que no ofrecer la cuenta
+propia todavía — mejor un hueco anotado que una demo rota.

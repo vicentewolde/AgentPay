@@ -1734,3 +1734,45 @@ todavía, a propósito (`C-6`): darle a cada tenant real su propia identidad
 Stellar (`@agentpay/tenancy`, T32) necesita decidir antes un modelo de
 onboarding/fondeo — es la próxima conversación pendiente con el usuario,
 no algo para resolver sin su input.
+
+## 2026-09-09 (4) — main (mergeado P-6/T32/P-7/T33) / cc/wallet-connect
+
+Agente: Claude Code
+
+Qué: el usuario confirmó cargar `DATABASE_URL` en Render y pidió mergear y
+pushear todo — `cc/multi-tenant-vault` y `cc/postgres-vault` se mergearon a
+`main` con fast-forward y se pusheó a `origin` (`3ac4ffc..caafba7`). Ramas
+borradas. Después, dos pedidos más: (1) un nombre de marca de 2 sílabas con
+`.com` disponible — se investigaron 55+ candidatos vía `whois`/RDAP real
+contra el registro, todos tomados en `.com` puro; se encontró disponibilidad
+real con un prefijo (`gettirev.com`, `tirevpay.com`, etc.) y en `.io` sin
+prefijo. El usuario confirmó **TirevPay** — registrado como `P-8`, sin
+ejecutar el rename del código/repo todavía (fuera de alcance de esta
+sesión, decisión aparte). (2) Conectar wallet al registrarse, con
+interacción Web3 real — se cerró **T34**: Freighter, verificación
+criptográfica SEP-0053 del lado del servidor, `tenant_id` determinístico
+por wallet para el vault de T33. Dos bugs reales encontrados probando
+contra un navegador real sin la extensión instalada (no leyendo
+documentación): `Keypair.sign()` devuelve `Uint8Array`, no `Buffer` de
+Node; y `requestAccess()` de Freighter cuelga para siempre sin extensión
+instalada, arreglado llamando `isConnected()` primero. Detalle completo en
+`docs/fase-6-agentguard-comercializacion/BITACORA.md` y `DECISIONES.md`
+(`C-8` a `C-11`).
+
+Por qué: el usuario pidió explícitamente que hubiera interacción Web3 real
+al decidir entre "wallet propia o creada" — conectar y verificar
+criptográficamente una wallet real es la forma más genuina de eso.
+
+Documentación tocada: `docs/DECISIONES.md` (`P-8`),
+`docs/fase-6-agentguard-comercializacion/` completa (T34). Archivos
+nuevos: `apps/web/src/wallet/` (+ test), `apps/web/vitest.config.ts`.
+Archivos tocados: `apps/web/src/server.ts`, `apps/web/public/index.html`,
+`apps/web/package.json`.
+
+Pendiente: mergear `cc/wallet-connect` a `main` y pushear (a confirmar con
+el usuario). Sin resolver todavía, a propósito: que la wallet conectada
+firme de verdad el Mandato (necesita extender `verifyMandate` de la Fase
+3, `C-8` — cambio a superficie de firma cerrada, requiere su propia
+conversación antes de tocarlo); una cuenta Stellar propia y fondeada por
+tenant (`C-11`, bloqueado por el faucet manual de USDC de Circle); y el
+rename completo a "TirevPay" (`P-8`).
