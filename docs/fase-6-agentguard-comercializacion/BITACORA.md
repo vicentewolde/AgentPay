@@ -278,3 +278,25 @@ propia cuenta Stellar fondeada (`C-11`, bloqueado por el faucet manual de
 USDC de Circle); y el rename completo a "TirevPay" (`P-8`), todavía sin
 ejecutar en ningún archivo.
 
+---
+
+## Fix de producción: el vault de Postgres no conectaba desde Render (sin numerar) — 2026-09-09
+
+El usuario probó `apps/web` real en Render tras el deploy de T33/T34 y
+"Iniciar sesión" falló con "could not reach or initialise the vault's
+Postgres database" — el mismo código conectaba sin problema en local
+contra la misma base de Supabase. Causa: Supabase exige TLS para
+conexiones externas y `pg` no lo negocia solo; hacía falta pasar
+`ssl: { rejectUnauthorized: false }` al `Pool`. De paso se encontró que el
+error real nunca llegaba a ningún lado —ni a los logs del servidor ni a la
+respuesta HTTP— así que también se agregó `console.error` en el punto de
+la falla y `details.cause` en el error, mostrado ahora en la página.
+Detalle completo, con la alternativa descartada, en `DECISIONES.md → C-12`.
+
+Verificado: conexión explícita con SSL probada contra la base real antes
+de aplicar el cambio (sigue conectando igual en local, sin regresión), los
+5 tests de integración del vault y los 17 rápidos siguen en verde, `pnpm
+typecheck`/`pnpm build` (monorepo completo) limpios. No se pudo verificar
+todavía contra el Render real —el usuario tiene que redesplegar y probar
+de nuevo—, a diferencia del resto de los hitos de esta fase.
+

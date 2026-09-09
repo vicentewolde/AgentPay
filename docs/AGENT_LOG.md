@@ -1776,3 +1776,43 @@ firme de verdad el Mandato (necesita extender `verifyMandate` de la Fase
 conversación antes de tocarlo); una cuenta Stellar propia y fondeada por
 tenant (`C-11`, bloqueado por el faucet manual de USDC de Circle); y el
 rename completo a "TirevPay" (`P-8`).
+
+## 2026-09-09 (5) — cc/fix-postgres-ssl (mergeada)
+
+Agente: Claude Code
+
+Qué: el usuario probó `apps/web` en Render tras el deploy de T33/T34 y
+"Iniciar sesión" falló con un error genérico de Postgres — el mismo código
+conectaba bien en local contra la misma base de Supabase. Causa: Supabase
+exige TLS para conexiones externas; `createPostgresMandateVault` no se lo
+pedía a `pg` explícitamente. Se agregó `ssl: { rejectUnauthorized: false }`
+al `Pool`, verificado antes contra la base real que sigue conectando sin
+problema en local. De paso: el error real nunca se veía en ningún lado
+—ni logs del servidor ni respuesta HTTP—; ahora se loguea con
+`console.error` y viaja en `details.cause`, mostrado en la página.
+
+También, el usuario respondió las tres preguntas pendientes de la sesión
+anterior: (1) sí, hay que hacer que la wallet firme de verdad el Mandato
+—próximo hito—; (2) el fondeo automático por tenant queda descartado como
+requisito propio: se asume que quien conecta su wallet **ya tiene** USDC
+de testnet cargado de antes, lo cual simplifica bastante `C-11`; (3) no
+tocar más el nombre "TirevPay" — no convenció, va a pedir ideas nuevas más
+adelante.
+
+Por qué: es un bug de producción bloqueante, encontrado por el usuario
+probando el link real — se resolvió antes de seguir con cualquier hito
+nuevo.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md` addendum sin numerar, `DECISIONES.md` `C-12`). Archivos
+tocados: `packages/vault/src/postgres-vault.ts`,
+`apps/web/public/index.html`.
+
+Pendiente: el usuario tiene que redesplegar en Render y confirmar que
+"Iniciar sesión" ya funciona — no se pudo verificar contra el Render real
+desde acá. Con la respuesta a (2) ya no hace falta diseñar una pantalla de
+"cargá USDC acá" antes de cablear `@agentpay/tenancy` (T32) — el requisito
+pasa a ser una precondición del usuario, no algo que el producto tenga que
+resolver. Siguiente hito confirmado: que la wallet conectada firme de
+verdad el Mandato (`C-8` — necesita extender `verifyMandate` de la Fase 3,
+avisado con evidencia antes de tocarlo, no en silencio).

@@ -273,3 +273,38 @@ que el primer intento de compra de cada tenant nuevo falle por falta de
 saldo. Se descartó porque enviar a alguien a probar el producto y que
 falle en el primer clic, sin explicación, es peor que no ofrecer la cuenta
 propia todavía — mejor un hueco anotado que una demo rota.
+
+### C-12 · El pool de Postgres pide SSL explícitamente, sin verificar la CA · `Vigente`
+**Fecha:** 2026-09-09
+
+`createPostgresMandateVault` pasa `ssl: { rejectUnauthorized: false }` a su
+`Pool` de `pg` — antes no pasaba ninguna opción de `ssl`.
+
+**Motivo, con el bug real en producción que lo disparó.** El usuario probó
+`apps/web` desplegado en Render y "Iniciar sesión" falló con "could not
+reach or initialise the vault's Postgres database" — el mismo código que
+en local (contra la misma base de Supabase) funcionaba sin problema.
+Supabase exige TLS para conexiones externas; `pg` no lo negocia solo a
+partir de una cadena `postgresql://` común, y el paquete de autoridades
+certificadoras que trae Node por defecto no incluye la cadena de Supabase
+— por eso hace falta `rejectUnauthorized: false` (sigue siendo una
+conexión cifrada; lo que se salta es la verificación de la CA, no el
+cifrado en sí). Es el mismo ajuste que documentan casi todas las guías de
+"conectar Supabase desde Render/Vercel/Heroku". Verificado localmente
+antes de aplicarlo: conecta igual con la opción puesta, así que no hay
+riesgo de regresión en desarrollo.
+
+**Nota de higiene, en el mismo cambio.** El error real que causó esto
+nunca llegaba a ningún lado — ni a los logs del servidor (nada llamaba a
+`console.error`) ni a la respuesta HTTP (`details` no llevaba el mensaje
+de la causa). Se agregó `console.error` en el punto exacto de la falla y
+se sumó `details.cause` al error, que ahora también se muestra en la
+página (`apps/web/public/index.html`) — la próxima vez que algo similar
+falle, no va a hacer falta adivinar ni pedir los logs de Render a ciegas.
+
+**Alternativa descartada:** verificar la CA de verdad, cargando el
+certificado raíz de Supabase explícitamente. Se descartó por ahora —
+agrega un archivo más para mantener sincronizado si Supabase rota su CA,
+a cambio de una garantía que no cambia el riesgo real del proyecto (los
+datos que viajan por acá son la bitácora de un piloto en testnet, no
+información sensible de producción).

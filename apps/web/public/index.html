@@ -762,7 +762,10 @@ document.getElementById("start-btn").addEventListener("click", async () => {
   try {
     const { body } = await api("/api/session/start", { method: "POST" });
     cancelHint();
-    if (!body.ok) throw new Error(body.message ?? t("sessionFailed"));
+    if (!body.ok) {
+      var detail = body.details && body.details.cause;
+      throw new Error((body.message ?? t("sessionFailed")) + (detail ? " — " + detail : ""));
+    }
     lastSession = body;
     renderSessionFacts(body);
     document.getElementById("buy-rail-btn").disabled = body.policyRail === null;

@@ -60,20 +60,44 @@ const CREATE_TABLE_SQL = `
  */
 export async function createPostgresMandateVault(options: PostgresMandateVaultOptions): Promise<MandateVault> {
   const { connectionString, tenantId } = options;
-  const pool = new Pool({ connectionString });
+  // Supabase (this project's documented choice, .env.example) requires TLS
+  // for external connections; `pg` does not negotiate it on its own from a
+  // plain `postgresql://` string. `rejectUnauthorized: false` skips CA
+  // verification, not encryption itself — the same trade-off every popular
+  // guide for connecting to Supabase from Render/Vercel/Heroku makes,
+  // because Node's default CA bundle does not ship Supabase's chain.
+  const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
 
   try {
     await pool.query(CREATE_TABLE_SQL);
   } catch (error) {
+    // The underlying driver error (wrong password, SSL required, host
+    // unreachable, ...) used to vanish here — logged nowhere, shown nowhere.
+    // Both the server log (for a host like Render, where that's the only
+    // place to look) and the details this bubbles up to the caller now carry
+    // the real message, not just this function's own generic one.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[vault] could not reach or initialise Postgres: ${message}`);
     throw new AgentPassError("ConfigError", "could not reach or initialise the vault's Postgres database", {
       cause: error,
+      details: { cause: message },
     });
   }
 
-  const { rows } = await pool.query<VaultRow>(
-    "select seq, prev_hash, hash, entry from vault_records where tenant_id = $1 order by seq asc",
-    [tenantId],
-  );
+  let rows: readonly VaultRow[];
+  try {
+    ({ rows } = await pool.query<VaultRow>(
+      "select seq, prev_hash, hash, entry from vault_records where tenant_id = $1 order by seq asc",
+      [tenantId],
+    ));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[vault] could not load vault_records for tenant ${tenantId}: ${message}`);
+    throw new AgentPassError("ConfigError", "could not read this tenant's vault records from Postgres", {
+      cause: error,
+      details: { cause: message },
+    });
+  }
 
   const records: VaultRecord[] = rows.map((row) => ({
     seq: row.seq,
