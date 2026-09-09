@@ -26,10 +26,13 @@ imposible de saltar por prompt injection.
 | [docs/fase-4-mandategate/ARQUITECTURA.md](docs/fase-4-mandategate/ARQUITECTURA.md) | Mapa técnico de la Fase 4: el módulo de pago x402, identidades resueltas contra tráfico real |
 | [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24–T26 cerrados.** Estado actual y qué sigue |
 | [docs/fase-4-mandategate/DECISIONES.md](docs/fase-4-mandategate/DECISIONES.md) | Decisiones de la Fase 4 (prefijo `G-`) |
-| [docs/fase-5-mandatevault/CONTEXTO.md](docs/fase-5-mandatevault/CONTEXTO.md) | **Fase en curso.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
+| [docs/fase-5-mandatevault/CONTEXTO.md](docs/fase-5-mandatevault/CONTEXTO.md) | **Cerrada.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
 | [docs/fase-5-mandatevault/ARQUITECTURA.md](docs/fase-5-mandatevault/ARQUITECTURA.md) | Mapa técnico de la Fase 5: el paquete `@agentpay/vault`, la cadena de hashes, el seam de `policyRail?` |
-| [docs/fase-5-mandatevault/BITACORA.md](docs/fase-5-mandatevault/BITACORA.md) | **T27–T31 cerrados.** Estado actual y qué sigue |
+| [docs/fase-5-mandatevault/BITACORA.md](docs/fase-5-mandatevault/BITACORA.md) | **Cerrada, T27–T31.** Estado actual y qué se hizo en cada hito |
 | [docs/fase-5-mandatevault/DECISIONES.md](docs/fase-5-mandatevault/DECISIONES.md) | Decisiones de la Fase 5 (prefijo `V-`) |
+| [docs/fase-6-agentguard-comercializacion/CONTEXTO.md](docs/fase-6-agentguard-comercializacion/CONTEXTO.md) | **Fase en curso, iniciada 2026-09-09.** Qué prueba la mitad de "comercialización", qué sigue sin alcance (AgentGuard) y por qué |
+| [docs/fase-6-agentguard-comercializacion/BITACORA.md](docs/fase-6-agentguard-comercializacion/BITACORA.md) | Bitácora hito a hito, empieza en T32 |
+| [docs/fase-6-agentguard-comercializacion/DECISIONES.md](docs/fase-6-agentguard-comercializacion/DECISIONES.md) | Decisiones de la Fase 6 (prefijo `C-`) |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Codex: qué se hizo, en qué branch, qué queda pendiente |
 | [docs/fase-0-fundamentos/metodologia-claude-codex.html](docs/fase-0-fundamentos/metodologia-claude-codex.html) | Resumen visual del protocolo de coordinación Claude Code ↔ Codex — roles, el ciclo vía git, qué hace el usuario en cada punto. Abrir en el navegador |
 | [README.md](README.md) | Cómo correr el proyecto |
@@ -58,12 +61,16 @@ imposible de saltar por prompt injection.
    `DECISIONES.md` → `G-12`. **MandateVault entró en alcance el 2026-09-04, a
    pedido explícito del usuario** — Fase 5, ver `ROADMAP.md` §4.5. `policy_rail`
    como pagador real en testnet entró en alcance el 2026-09-04 (T31), también a
-   pedido explícito del usuario. Sigue fuera:
-   la ejecución de negocio del piloto (cohorte de alumnos, comunidad aliada,
-   demo grabable, formulario de Build Award) todavía no arrancó y no es
-   trabajo de código; cualquier cosa en mainnet o con rieles fiat. Si el
-   trabajo actual parece pedir algo de lo que sigue fuera: anótalo y déjalo
-   sin construir.
+   pedido explícito del usuario. **Convertir el piloto en un producto
+   integrable por terceros (multi-tenancy, superficie de API, publicación de
+   paquetes) entró en alcance el 2026-09-09, a pedido explícito del
+   usuario** — Fase 6, ver `docs/DECISIONES.md` → `P-6` y
+   `docs/fase-6-agentguard-comercializacion/`. Sigue fuera: AgentGuard
+   (monitoreo/kill-switch en tiempo de ejecución) sin alcance definido; la
+   cohorte de alumnos, comunidad aliada, demo grabable y formulario de Build
+   Award, sin prioridad desde `P-3`; cualquier cosa en mainnet o con rieles
+   fiat. Si el trabajo actual parece pedir algo de lo que sigue fuera:
+   anótalo y déjalo sin construir.
 
 ## Coordinación con Codex — protocolo obligatorio, no opcional
 

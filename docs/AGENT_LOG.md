@@ -1603,3 +1603,46 @@ ChatGPT para que apunte a `~/dev/AgentPay-codex`, no a `~/dev/AgentPay`.
 Decidir si se mergea el PR #2. Confirmar en la próxima tarea de Codex que el
 worktree nuevo funciona como se espera (arranca de `origin/main`, no dejó
 huella en la carpeta principal).
+
+## 2026-09-09 — cc/multi-tenant-vault
+
+Agente: Claude Code
+
+Qué: el usuario confirmó que el MVP y la landing ya se enviaron a Tellus
+(criterio de "listo" de `P-3`) y pidió explícitamente seguir construyendo
+AgentPay como un producto real —buscando partners piloto en testnet—
+mientras se espera la revisión de la Instaward de SCF. Antes de tocar
+código se corrieron cuatro investigaciones paralelas con fuentes
+verificables (competencia —incluida "Meta Muse", lanzado el 8-sep-2026—,
+mercado/cliente objetivo, requisitos técnicos, finanzas/funding),
+presentadas como un plan de 60 días. Se registró la decisión como `P-6` en
+`docs/DECISIONES.md`, se actualizó `ROADMAP.md` (Fase 5 pasa a completa,
+Fase 6 pasa de "sin definir" a "en curso"), y se creó
+`docs/fase-6-agentguard-comercializacion/` completa, siguiendo el mismo
+patrón de las fases anteriores.
+
+Con las tres primeras acciones del plan confirmadas por el usuario, se
+cerró T32 —primer hito de la Fase 6—: `@agentpay/tenancy`, un paquete
+nuevo que deriva un par de llaves Stellar (agente + issuer) por tenant
+desde un único seed maestro vía SEP-0005/BIP-44, resolviendo el bloqueante
+identificado en la investigación (`apps/web` comparte hoy una sola
+identidad entre todos los visitantes). 9 tests nuevos (644 en total),
+`pnpm typecheck`/`pnpm build` (monorepo completo) limpios. Detalle
+completo, con las decisiones de diseño (`C-1` a `C-4`), en
+`docs/fase-6-agentguard-comercializacion/BITACORA.md` y `DECISIONES.md`.
+
+Por qué: el hallazgo más urgente de la investigación técnica fue que la
+falta de multi-tenancy es un riesgo de integridad del piloto (fondos e
+identidad compartidos entre partners), no solo un problema de escala — de
+ahí que sea el primer hito, antes que la superficie de API o la
+publicación de paquetes.
+
+Pendiente: mergear `cc/multi-tenant-vault` a `main` y pushear (a confirmar
+con el usuario). El paquete todavía no está cableado dentro de `apps/web`
+— falta decidir dónde vive el seed maestro (gestor de secretos) y migrar
+el vault de JSONL a persistencia real (Postgres), ambos pendientes de que
+el usuario provisione las cuentas correspondientes. Falta también: redactar
+el post técnico de la Semana 1–3 del plan de GTM, y el usuario va a
+preguntarle a Tellus a fin de esta semana por el monto real de la
+Instaward y si Vellar compite por el mismo fondeo (riesgo anotado en la
+investigación de competencia).

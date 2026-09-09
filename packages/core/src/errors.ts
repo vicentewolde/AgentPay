@@ -113,7 +113,9 @@ export type AgentPassErrorCode =
   /** The mandate's `grant.payTo` does not list the account the venue asks to be paid. */
   | "TermsPayeeNotAllowed"
   /** A `MandateVault` file is not well-formed JSON Lines of vault records. */
-  | "VaultCorrupted";
+  | "VaultCorrupted"
+  /** A tenant index is negative, non-integer, or outside BIP-32's hardened range. */
+  | "InvalidTenantIndex";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;
