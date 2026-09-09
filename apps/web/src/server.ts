@@ -41,7 +41,7 @@ import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 import { anchorMandate, createMandate, revokeMandate, type AnchoredMandate } from "@agentpay/mandate";
-import { createFileMandateVault, type MandateVault } from "@agentpay/vault";
+import { createPostgresMandateVault, type MandateVault } from "@agentpay/vault";
 
 import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, VenueId } from "@agentpay/agent";
 import {
@@ -143,8 +143,8 @@ const sessions = new Map<string, DemoSession>();
 
 const SESSION_COOKIE = "agentpay_sid";
 // Only ever set by this server (see `randomUUID()` below) — validated on the
-// way back in so a forged cookie can't be used to build a path elsewhere on
-// disk (`vaultPathFor` interpolates it directly into a file name).
+// way back in so a forged cookie can't be used as another visitor's
+// `tenantId` when reading or writing their rows in `vault_records`.
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function parseCookies(header: string | undefined): Map<string, string> {
@@ -172,15 +172,6 @@ function getSession(req: IncomingMessage): DemoSession | undefined {
 
 function withSessionCookie(res: ServerResponse, sessionId: string): void {
   res.setHeader("set-cookie", `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax`);
-}
-
-/**
- * Each visitor's own append-only log — otherwise two people clicking through
- * the demo at once would share one `perDay` counter and one bitácora. Only
- * used when the operator hasn't pinned `MANDATE_VAULT_PATH` explicitly.
- */
-function vaultPathFor(sessionId: string): string {
-  return resolve(REPO_ROOT, `data/mandate-vault-${sessionId}.jsonl`);
 }
 
 function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
@@ -284,7 +275,10 @@ async function startSession(sessionId: string): Promise<DemoSession> {
   // 402) record the same intentId once, not twice. A MandateVault satisfies
   // SpendLedger structurally (T27), so it drops in wherever the ledger did;
   // withVault additionally keeps every refusal, not just every grant.
-  const vault = createFileMandateVault({ path: env.get("MANDATE_VAULT_PATH") ?? vaultPathFor(sessionId) });
+  const vault = await createPostgresMandateVault({
+    connectionString: requireEnv(env, "DATABASE_URL"),
+    tenantId: sessionId,
+  });
   const policyRail = withVault(createLocalPolicyRail({ ledger: vault }), vault);
 
   const agent = await createAgent({

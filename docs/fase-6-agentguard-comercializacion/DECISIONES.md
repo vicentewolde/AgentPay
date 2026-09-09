@@ -87,3 +87,89 @@ en todo el monorepo vía resoluciones de pnpm. Se descartó por alcance —
 resuelve un problema que ni siquiera se manifestó (los tests de este hito
 no necesitaron ningún objeto `Keypair` de `stellar-hd-wallet`) a cambio de
 fijar una dependencia transitiva de un paquete de terceros.
+
+### C-5 · La columna `entry` es `json`, no `jsonb` · `Vigente`
+**Fecha:** 2026-09-09 (T33)
+
+`vault_records.entry` en Postgres se declaró `json`, después de que la
+primera versión (`jsonb`) hiciera fallar `verify()` en el propio test de
+integración del hito, no en teoría.
+
+**Motivo, con el bug real encontrado.** `computeHash` recalcula sobre
+`JSON.stringify({ seq, prevHash, entry })` — sensible al orden de las
+claves. Postgres's `jsonb` normaliza el objeto al guardarlo (no promete
+preservar el orden de inserción de las claves), mientras que `json`
+preserva el texto exacto que se le dio. Con `jsonb`, un registro escrito y
+después releído en una instancia nueva (exactamente lo que pasa después de
+un reinicio) podía volver con las claves en otro orden — mismo contenido,
+`JSON.stringify` distinto, hash recalculado distinto, `verify()` reportando
+manipulación que nunca ocurrió. El test
+`"survives being reconstructed — the exact scenario a Render restart
+forces"` lo encontró de inmediato contra la base real.
+
+**Alternativa descartada:** una función de hash con serialización canónica
+(claves ordenadas alfabéticamente) en vez de cambiar el tipo de columna. Se
+descartó porque `computeHash` ya es una pieza probada y compartida con el
+backend de archivo (`createFileMandateVault`) — cambiarla habría invalidado
+retroactivamente cualquier hash ya calculado y anclado on-chain (T28), y el
+backend de archivo nunca tuvo este problema porque `JSON.parse`/
+`JSON.stringify` de Node sí preservan el orden de las claves de punta a
+punta. Cambiar la columna de Postgres es la corrección más chica que no
+toca nada ya cerrado.
+
+### C-6 · T33 mantiene el modelo de tenancy por sesión; la identidad Stellar propia por tenant queda para un hito aparte · `Vigente`
+**Fecha:** 2026-09-09 (T33)
+
+`createPostgresMandateVault` se cableó en `apps/web` usando el mismo
+`sessionId` que ya identificaba cada visitante (antes, la clave de un
+archivo JSONL; ahora, la columna `tenant_id`). Ninguna cuenta Stellar nueva
+se deriva todavía con `@agentpay/tenancy` (T32) dentro de `apps/web` — todos
+los visitantes siguen firmando con `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY`
+compartidos.
+
+**Motivo.** El problema identificado con más urgencia en la investigación de
+`P-6` tenía dos mitades independientes: (a) el vault se borra en cada
+reinicio de Render (arreglado acá, T33) y (b) los visitantes comparten
+fondos e identidad (sigue sin resolver). Resolver (b) de verdad exige
+decidir antes un modelo de onboarding —¿se fondea automáticamente una
+cuenta nueva por tenant vía Friendbot + trustline de USDC en el momento en
+que se crea?, ¿qué dispara "esto es un tenant nuevo" en vez de "otra visita
+anónima"?— que todavía no se conversó con el usuario. Separar (a) de (b)
+deja lista la pieza de infraestructura (persistencia real) sin bloquearla
+en una decisión de producto que merece su propia conversación, siguiendo el
+mismo criterio que ya usó `G-8` en la Fase 4 (documentar un hueco conocido
+en vez de resolverlo apurado).
+
+**Alternativa descartada:** cablear `@agentpay/tenancy` en el mismo hito,
+asumiendo un fondeo automático vía Friendbot para cada tenant nuevo. Se
+descartó porque es una decisión de producto (qué cuenta como "tenant", cómo
+se fondea, qué pasa si el fondeo falla a mitad de un flujo) que el usuario
+no había visto todavía — construirla sin esa conversación arriesgaba
+resolver la pregunta equivocada.
+
+### C-7 · Las escrituras del vault de Postgres se serializan con una cola de promesas dentro del proceso · `Vigente`
+**Fecha:** 2026-09-09 (T33)
+
+`createPostgresMandateVault` encadena cada `append()` sobre el resultado del
+anterior (`writeQueue = writeQueue.then(...)`), en vez de dejar que dos
+llamadas concurrentes corran su `INSERT` en paralelo.
+
+**Motivo.** A diferencia del backend de archivo (`V-7`), cuya escritura es
+enteramente síncrona y por lo tanto atómica dentro de un tick del event
+loop, acá el `INSERT` es async — hay un punto real de suspensión
+(`await pool.query(...)`) entre leer `records.length` (para calcular `seq`)
+y confirmar la escritura. Sin serializar, dos llamadas a `record()` que se
+superpongan podrían calcular el mismo `seq`/`prevHash` y competir por la
+misma fila, violando la restricción `primary key (tenant_id, seq)` de forma
+impredecible en vez de en orden. La cola de promesas garantiza que la
+segunda llamada empiece a leer `records.length` recién después de que la
+primera ya empujó su registro — mismo límite ya documentado que el resto
+del proyecto acepta (durable dentro de un proceso, no entre más de uno
+escribiendo el mismo `tenant_id` a la vez), ahora aplicado a un backend
+async.
+
+**Alternativa descartada:** un `SELECT ... FOR UPDATE`/transacción a nivel
+de base de datos para serializar entre procesos también. Se descartó por
+alcance — el pilot corre una sola instancia de `apps/web` a la vez; resolver
+la concurrencia entre procesos es la misma pregunta que "más de una
+instancia de Render" abre en general, no algo específico de este hito.

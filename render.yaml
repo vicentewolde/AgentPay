@@ -32,6 +32,12 @@ services:
         sync: false
       - key: AGENT_REGISTRY_CONTRACT_ID
         sync: false
+      # T33 — a Postgres connection string (e.g. Supabase). Required: without
+      # it the MandateVault has nowhere durable to write, which is exactly
+      # the bug this hito fixes (the old JSONL file lived on Render's
+      # ephemeral disk and was wiped on every redeploy).
+      - key: DATABASE_URL
+        sync: false
       - key: BAZAAR_BASE_URL
         value: https://stellar-bazaar-x402.vercel.app
       # Not a secret — a public Soroban contract address, already committed

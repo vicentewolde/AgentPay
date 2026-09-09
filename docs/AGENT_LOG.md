@@ -1677,3 +1677,60 @@ copyright en `LICENSE`/`README.md` — hoy dice "Vicente Wolde", derivado de
 Mergear `cc/apache-license` a `main` (a confirmar con el usuario) — puede
 mergearse independiente de `cc/multi-tenant-vault`, que sigue esperando la
 cuenta de Supabase del usuario para continuar.
+
+## 2026-09-09 (3) — cc/postgres-vault (antes cc/apache-license, renombrada)
+
+Agente: Claude Code
+
+Qué: el usuario ya tenía cuenta de Supabase — se la ayudó a configurar
+paso a paso (incluido resolver dos intentos fallidos de conexión: primero
+copió solo la plantilla con `[YOUR-PASSWORD]` literal, después copió solo
+la contraseña sola en vez de la cadena completa; se resolvió tomando la
+contraseña del portapapeles del usuario vía `pbpaste` y armando la cadena
+de conexión del lado del agente, sin que el valor pasara nunca por el
+chat). Con `DATABASE_URL` verificado y conectando, se cerró **T33**:
+`createPostgresMandateVault` en `@agentpay/vault`, cableado en `apps/web`,
+reemplaza el archivo JSONL que vivía en el disco efímero de Render. Se
+renombró la rama `cc/apache-license` a `cc/postgres-vault` porque terminó
+conteniendo también este hito, apilado por orden de creación.
+
+**Un bug real, encontrado por el propio test de integración de este hito
+contra la base real, no leyendo documentación.** La primera versión
+guardaba cada entrada en una columna `jsonb`; Postgres no promete
+preservar el orden de las claves de un objeto en esa columna, y el hash de
+cada registro depende de ese orden — un registro escrito y releído en una
+instancia nueva podía volver con el hash desincronizado, aunque el
+contenido fuera idéntico. Cambiar la columna a `json` (preserva el texto
+exacto) lo resolvió. Detalle en `docs/fase-6-agentguard-comercializacion/DECISIONES.md → C-5`.
+
+**Verificado en vivo, no solo con tests:** sesión real contra `apps/web`
+local apuntando a la Supabase real del piloto, compra real pagada por
+`policy_rail` (tx `5598a34543e0ca61a2715fe1f33f494e2fc74fa1d85d4ed731b0051f990299fb`),
+se mató el proceso del servidor a propósito (`preview_stop`) simulando un
+redeploy de Render, se lo volvió a levantar, y con la misma cookie las dos
+entradas de antes del reinicio seguían en la bitácora con la cadena
+íntegra — la prueba exacta de que el bug original (evidencia que se
+perdía en cada reinicio) está resuelto.
+
+Por qué: era el hallazgo más urgente de la investigación de `P-6` — sin
+esto, cualquier partner piloto real perdería su evidencia en el primer
+redeploy, sin aviso.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md` T33, `DECISIONES.md` `C-5` a `C-7`, `evidencia/T33.md`).
+Archivos nuevos: `packages/vault/src/internal/amount.ts`,
+`packages/vault/src/postgres-vault.ts` (+ test de integración),
+`packages/vault/vitest.integration.config.ts`. Archivos tocados:
+`packages/vault/src/vault.ts`, `packages/vault/src/index.ts`,
+`packages/vault/package.json`, `apps/web/src/server.ts`, `.env.example`,
+`.gitignore`, `render.yaml`.
+
+Pendiente: mergear `cc/postgres-vault` a `main` y pushear (a confirmar con
+el usuario) — sigue apilada sobre `cc/multi-tenant-vault` (`P-6`/T32), así
+que las dos se mergean juntas. El usuario tiene que cargar `DATABASE_URL`
+en el dashboard de Render antes del próximo deploy — es secreta
+(`sync: false`), a diferencia de `POLICY_RAIL_CONTRACT_ID`. Sin resolver
+todavía, a propósito (`C-6`): darle a cada tenant real su propia identidad
+Stellar (`@agentpay/tenancy`, T32) necesita decidir antes un modelo de
+onboarding/fondeo — es la próxima conversación pendiente con el usuario,
+no algo para resolver sin su input.

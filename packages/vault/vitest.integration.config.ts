@@ -2,6 +2,8 @@ import { fileURLToPath } from "node:url";
 
 import { defineConfig } from "vitest/config";
 
+// The live-database suite. Needs DATABASE_URL in .env.local — kept out of
+// `pnpm test` so the fast suite stays fast and runnable without a Postgres.
 export default defineConfig({
   resolve: {
     alias: {
@@ -10,7 +12,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts"],
-    exclude: ["src/**/*.integration.test.ts"],
+    include: ["src/**/*.integration.test.ts"],
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
+    fileParallelism: false,
   },
 });

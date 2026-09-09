@@ -12,20 +12,23 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-09 · **Último hito cerrado:** T32 · **Fase 6: en curso**
+**Fecha:** 2026-09-09 · **Último hito cerrado:** T33 · **Fase 6: en curso**
 
-`apps/web` sigue compartiendo una sola identidad Stellar entre todos los
-visitantes — T32 construyó la pieza criptográfica que lo resuelve
-(derivación determinística de llaves por tenant), pero todavía no está
-cableada dentro de `apps/web`: falta migrar el vault a persistencia real
-(Postgres) y mover el seed maestro a un gestor de secretos antes de que
-esto reemplace las dos claves fijas actuales.
+El vault de `apps/web` ya no vive en un archivo del disco efímero de
+Render — vive en Postgres, y se verificó en vivo que sobrevive a que el
+proceso de Node se reinicie a mitad de una sesión (T33). `apps/web` sigue
+compartiendo una sola identidad Stellar entre todos los visitantes — T32
+construyó la pieza criptográfica que lo resuelve (derivación determinística
+de llaves por tenant), pero todavía no está cableada dentro de `apps/web`:
+falta decidir un modelo de onboarding/fondeo por tenant antes de dar ese
+paso (`C-6`).
 
 ### Progreso
 
 | Hito | Qué es | Estado |
 |---|---|---|
 | T32 | `@agentpay/tenancy`: deriva un par de llaves Stellar (agente + issuer) por tenant desde un único seed maestro, vía SEP-0005/BIP-44 | ✅ cerrado 2026-09-09 |
+| T33 | `MandateVault` sobre Postgres, reemplaza el JSONL en disco efímero de Render; cableado en `apps/web` | ✅ cerrado 2026-09-09 |
 
 ---
 
@@ -109,4 +112,79 @@ del copyright, en `docs/DECISIONES.md → P-7`.
 No es un hito numerado — es un fix de higiene legal encontrado en el
 camino, sin código de producto de por medio. `pnpm typecheck` y
 `cargo check` (los dos crates) verificados limpios después del cambio.
+
+## T33 · MandateVault sobre Postgres — cerrado 2026-09-09
+
+**Qué quedó funcionando, en palabras llanas.** Antes de este hito, si el
+servidor de `apps/web` se reiniciaba a mitad de una visita —exactamente lo
+que le pasa en Render cada vez que se redespliega, o cuando el plan
+gratuito lo apaga por inactividad—, la bitácora de esa visita desaparecía
+por completo: el archivo vivía en un disco que Render borra en cada
+reinicio. Ahora la bitácora vive en una base de datos real (Postgres, hoy
+en Supabase) que no se borra con el servidor. Se probó en vivo, no solo en
+teoría: sesión real, compra real pagada por `policy_rail`, se mató el
+proceso del servidor a propósito, se lo volvió a levantar, y las dos
+entradas de antes del reinicio seguían ahí, con la cadena de hashes
+íntegra.
+
+**Un bug real, encontrado por el propio test de integración, no leyendo
+documentación.** La primera versión guardaba cada entrada en una columna
+`jsonb` — y `verify()` empezó a reportar manipulación donde no la había.
+La causa: `jsonb` de Postgres no promete conservar el orden de las claves
+de un objeto al guardarlo, y el hash de cada registro se calcula sobre
+`JSON.stringify(entry)`, que sí depende de ese orden. Bastaba que Postgres
+reordenara las claves al guardar para que, al releer el registro en un
+proceso nuevo, el hash recalculado no coincidiera con el guardado —
+exactamente el síntoma que `verify()` está diseñado para detectar, pero
+disparado por una particularidad de Postgres, no por una edición real.
+Cambiar la columna a `json` (que sí preserva el texto exacto) lo resolvió.
+Detalle completo en `DECISIONES.md → C-5`.
+
+**Cómo quedó construido.** `createPostgresMandateVault` (paquete
+`@agentpay/vault`) implementa el mismo contrato `MandateVault` que
+`createFileMandateVault` — mismos ocho métodos, misma bitácora encadenada
+por hash — reusando además sus mismas funciones puras de aritmética y
+hashing (`packages/vault/src/internal/amount.ts`, separadas del archivo
+original en este mismo hito para que ninguna de las dos implementaciones
+pudiera divergir por accidente). Al construirse, crea su propia tabla
+(`vault_records`) si hace falta y carga en memoria todas las filas del
+`tenant_id` pedido — igual que el backend de archivo carga su archivo
+entero al arrancar — así que `list()`, `head()` y `verify()` siguen siendo
+síncronos como el resto del proyecto ya espera. `apps/web` pasó a usarlo en
+`startSession`, con el mismo `sessionId` de cookie que antes nombraba el
+archivo — ver `DECISIONES.md → C-6` para por qué el hito se detiene ahí y
+no le da todavía a cada tenant su propia identidad Stellar (T32 sigue sin
+cablear).
+
+**Evidencia técnica.** 5 tests de integración nuevos, corridos contra la
+base real de Supabase del piloto (no una base de prueba separada): que
+graba y suma montos, que deduplica por `intentId`, que refusals y anclajes
+conviven en la misma cadena, que **sobrevive reconstruirse** —el escenario
+exacto de este hito— y que dos tenants nunca se pisan. Cada test crea su
+propio `tenant_id` al azar y borra sus propias filas al terminar, para no
+dejar basura en la base real. `pnpm typecheck`/`pnpm build` (monorepo
+completo) y la suite rápida (649 tests) limpios. Ver `evidencia/T33.md`
+para las salidas completas, incluida la secuencia de verificación en vivo
+(iniciar → comprar → matar el servidor → levantarlo → confirmar que la
+bitácora sigue ahí).
+
+Documentación tocada: `docs/DECISIONES.md` (sin cambios — es de fase),
+`docs/fase-6-agentguard-comercializacion/` (`BITACORA.md`, `DECISIONES.md`
+`C-5` a `C-7`, `evidencia/T33.md`). Archivos nuevos:
+`packages/vault/src/internal/amount.ts`, `packages/vault/src/postgres-vault.ts`
+(+ test de integración), `packages/vault/vitest.integration.config.ts`.
+Archivos tocados: `packages/vault/src/vault.ts` (sin cambio de
+comportamiento, solo la extracción), `packages/vault/src/index.ts`,
+`packages/vault/package.json`, `apps/web/src/server.ts` (`vaultPathFor`
+eliminada), `.env.example`, `.gitignore` (entrada de `/data/` eliminada,
+ya sin uso), `render.yaml` (`DATABASE_URL` nueva, secreta).
+
+Pendiente: mergear `cc/postgres-vault` a `main` y pushear (a confirmar con
+el usuario) — esta rama sigue apilada sobre `cc/multi-tenant-vault`
+(`P-6`/T32), así que ambas se mergean juntas. El usuario tiene que cargar
+`DATABASE_URL` en el dashboard de Render antes de que el próximo deploy
+funcione — mismo patrón que `POLICY_RAIL_CONTRACT_ID` en su momento, pero
+esta sí es secreta (`sync: false`). Siguiente decisión, sin resolver
+todavía: el modelo de onboarding/fondeo para darle a cada tenant real su
+propia identidad Stellar (`C-6`).
 

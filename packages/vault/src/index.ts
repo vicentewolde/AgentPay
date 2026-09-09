@@ -14,3 +14,4 @@ export {
   type VaultRefusedEntry,
   type VaultVerification,
 } from "./vault.js";
+export { createPostgresMandateVault, type PostgresMandateVaultOptions } from "./postgres-vault.js";

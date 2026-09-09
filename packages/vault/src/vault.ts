@@ -27,42 +27,12 @@
  * milestone (T28), not this one: this file only has to make the claim
  * checkable, not yet checked by anyone but the vault's own owner.
  */
-import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
-import { AgentPassError, decimalAmountSchema } from "@agentpass/core";
+import { AgentPassError } from "@agentpass/core";
 
-/** Stellar carries seven decimal places — same scale `apps/agent`'s amount arithmetic uses. */
-const AMOUNT_DECIMALS = 7;
-const SCALE = 10_000_000n;
-
-function invalidAmount(value: unknown): AgentPassError {
-  return new AgentPassError("InvalidAmount", `"${String(value)}" is not a usable amount`, {
-    details: { value: String(value) },
-  });
-}
-
-/** @throws AgentPassError `InvalidAmount` for anything the credential schema would not accept. */
-function scaleAmount(value: string): bigint {
-  const parsed = decimalAmountSchema.safeParse(value);
-  if (!parsed.success) throw invalidAmount(value);
-  const [whole, fraction = ""] = parsed.data.split(".") as [string, string?];
-  const padded = `${fraction}0000000`.slice(0, AMOUNT_DECIMALS);
-  return BigInt(whole) * SCALE + BigInt(padded);
-}
-
-function unscaleAmount(scaled: bigint): string {
-  const whole = scaled / SCALE;
-  const fraction = (scaled % SCALE).toString().padStart(AMOUNT_DECIMALS, "0");
-  return `${whole}.${fraction}`;
-}
-
-/** `YYYY-MM-DD`, in UTC — the same day boundary `SpendLedger` uses. */
-function utcDayKey(at: Date): string {
-  const iso = at.toISOString();
-  return iso.slice(0, iso.indexOf("T"));
-}
+import { computeHash, scaleAmount, unscaleAmount, utcDayKey } from "./internal/amount.js";
 
 export interface VaultGrantedEntry {
   readonly kind: "granted";
@@ -162,10 +132,6 @@ export interface MandateVault {
 
   /** Recomputes every hash from the stored entries and confirms none were edited after the fact. */
   verify(): VaultVerification;
-}
-
-function computeHash(seq: number, prevHash: string, entry: VaultEntry): string {
-  return createHash("sha256").update(JSON.stringify({ seq, prevHash, entry }), "utf8").digest("hex");
 }
 
 /** @throws AgentPassError `VaultCorrupted` for a file that is not well-formed JSON Lines of {@link VaultRecord}s. */
