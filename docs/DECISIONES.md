@@ -255,3 +255,73 @@ disciplina (por ejemplo, un hook de git que bloquee el `checkout` si hay
 cambios ajenos sin commitear). Se descartó porque agrega complejidad
 mantenible a cambio de resolver un problema que un worktree elimina por
 completo, sin hooks ni pasos adicionales que alguien pueda saltarse.
+
+---
+
+### P-6 · El piloto pasa a construirse como producto real, buscando partners en testnet, mientras se espera la resolución de SCF · `Vigente`
+**Fecha:** 2026-09-09
+
+El MVP y la landing (criterio de "listo" de `P-3`) ya se enviaron a Tellus.
+Mientras se espera su revisión y la eventual gestión de la Instaward ante el
+Stellar Community Fund (ventana estimada: revisión sep-oct 2026, fondos
+posibles nov 2026), el usuario pidió explícitamente seguir construyendo
+AgentPay como un producto real — no solo una demo para una postulación —
+para empezar a conseguir reuniones con clientes o partners que prueben sus
+funcionalidades, siempre en Stellar testnet.
+
+**Esto no reabre `P-3` ni contradice ninguna decisión previa.**
+`ROADMAP.md §4.6` (Fase 6 — "Después: AgentGuard + comercialización") ya
+decía, desde antes de la Fase 2, que esa fase se diseña **recién cuando las
+Fases 2-5 den evidencia real sobre la que apoyarse** — ese momento llegó: las
+cinco fases técnicas están cerradas (T1-T31) y el mensaje a Tellus ya salió.
+Este giro es la ejecución de ese punto del plan, no una decisión nueva sobre
+la marcha.
+
+**Investigación previa a cualquier código, con la misma disciplina que el
+resto del proyecto.** Antes de tocar nada se corrieron cuatro investigaciones
+paralelas con fuentes verificables: panorama competitivo (incluida la
+pregunta explícita del usuario sobre si "Meta Muse" —lanzado el 8-sep-2026—
+es competencia u oportunidad), mercado y cliente objetivo, requisitos
+técnicos de productización, y evaluación financiera/funding. Resultado
+consolidado y presentado al usuario como un plan de 60 días (artefacto
+`AgentPay: De Piloto a Producto`, 2026-09-09):
+
+- **Meta Muse no es competidor** — es un agente de consumo con aprobación
+  humana en cada compra sensible, sin identidad de agente ni mandato ni
+  enforcement on-chain. Es señal de demanda de mercado, no una amenaza.
+- **El competidor real es `Vellar`**, un proyecto nativo de Stellar con casi
+  la misma tesis que PolicyRail ("dale a tu agente un presupuesto, no tus
+  llaves"), en la misma cadena, el mismo protocolo (x402) y el mismo estadio
+  (testnet) — sin evidencia pública de una bitácora encadenada por hash
+  anclada on-chain equivalente a MandateVault. Queda pendiente verificar con
+  Tellus si compite por el mismo fondeo del embajador.
+- **Segmento de cliente priorizado:** el ecosistema de developers y comercios
+  que ya construyen sobre x402 dentro de Stellar (el bazaar del embajador,
+  equipos de hackathons como Cards402/clevercon/TollPay) — no el mercado
+  masivo de "agentic commerce" ni los frameworks genéricos de agentes, ya
+  disputados por competidores financiados muy por encima de lo que un
+  fundador solo puede igualar ($5-48M).
+- **Hoja de ruta técnica priorizada**, sin tocar `checkMandate` ni el
+  enforcement de `scope.limits`/`perDay`: multi-tenancy vía derivación
+  determinística de llaves Stellar (SEP-0005/BIP-44) desde un único seed
+  maestro, persistencia real del vault (hoy se borra en cada redeploy de
+  Render), superficie de API para terceros, y un boceto de billing sin
+  construir cobro real todavía. Costo de infraestructura estimado al final:
+  ~$7-15 USD/mes.
+- **Sin formalizar la SpA todavía** — mantenerla activa costaría ~$25-45
+  USD/mes de contabilidad sin que hoy exista una razón legal que lo exija
+  (actividad 100% testnet, sin custodia de fondos reales de terceros).
+
+**Qué sigue igual.** Presupuesto techo de $200 USD/mes, todo en Stellar
+testnet (nada de mainnet ni rieles fiat), el protocolo de coordinación con
+Codex, y el criterio de cerrar cada hito con revisión antes de encadenar el
+siguiente.
+
+**Alternativa descartada:** seguir esperando la resolución de SCF antes de
+invertir más trabajo, o mantener el alcance de `P-3` (solo MVP + landing)
+como definición de "listo" indefinida. Se descartó porque el usuario evaluó
+que el tiempo de espera (semanas, no días) es tiempo de construcción
+desperdiciado, y porque el propio `ROADMAP.md` ya anticipaba este punto de
+partida — no hacerlo ahora sería posponer sin motivo un trabajo que el plan
+original siempre calificó como "el siguiente paso natural" una vez cerradas
+las Fases 2-5.

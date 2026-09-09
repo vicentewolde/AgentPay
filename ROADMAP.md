@@ -10,7 +10,7 @@
 > cualquiera —humano o Claude Code— que necesite entender el proyecto entero
 > antes de tocar una fase específica.
 
-Última revisión: 2026-09-04 · Fase actual: **Fase 5, en curso (T27–T30) — sin candidatos técnicos pendientes** — Fases 2, 3 y 4 completas (T9–T26)
+Última revisión: 2026-09-09 · Fase actual: **Fase 6, en curso** — producto real buscando partners piloto en testnet, mientras se espera la resolución de la Instaward de SCF (ver `P-6` en [docs/DECISIONES.md](docs/DECISIONES.md)) — Fases 1 a 5 completas (T1–T31)
 
 ---
 
@@ -106,11 +106,12 @@ las decisiones estratégicas que llevaron al código, y para SCF eso es evidenci
 | 2 | **Agente mínimo de compra** | Un agente puede leer un catálogo real y producir una intención de compra firmada y trazable a su credencial, y ese poder se le puede quitar sin tocarlo | ✅ Completa (T9–T15) | — |
 | 3 | **PolicyRail + Mandato** | El límite de gasto vive en infraestructura, no en el prompt; el consentimiento del principal es una estructura firmada, no una casilla marcada | ✅ Completa (T16–T23) | — |
 | 4 | **MandateGate** | La cadena completa —identidad, política, mandato— funciona dentro del checkout **real** de un comercio on-chain existente | ✅ Completa (T24–T26) | — |
-| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el MVP y la landing funcionan bien de cara al mensaje a Tellus, que gestiona la Instaward | 🔄 En curso (T27–T31, sin candidatos técnicos pendientes) | Fases 2–4 cerradas. Cambio de plan `P-3` (2026-09-05): cohorte de alumnos/demo grabable/Build Award sin prioridad; falta verificar que MVP y landing funcionen bien |
-| 6 | **Después: AgentGuard + comercialización** | Qué viene si SCF financia esto — no es parte del piloto | 🔲 Sin definir, a propósito | Todo lo anterior |
+| 5 | **MandateVault + cierre de piloto** | Cada decisión del sistema queda como evidencia verificable; el MVP y la landing funcionan bien de cara al mensaje a Tellus, que gestiona la Instaward | ✅ Completa (T27–T31) — mensaje a Tellus enviado 2026-09-08 | — |
+| 6 | **Después: AgentGuard + comercialización** | Convertir el piloto en un producto real con partners en testnet, mientras se espera la resolución de SCF | 🔄 En curso, iniciada 2026-09-09 (`P-6`) | Ninguno técnico — depende de decisiones de negocio y del propio ritmo del founder |
 
-Las Fases 0 y 1 están cerradas. Las Fases 2–5 son el piloto que falta ejecutar.
-La Fase 6 es deliberadamente un signo de interrogación — ver §4.6.
+Las Fases 0 a 5 están cerradas — el piloto técnico completo.
+La Fase 6 arrancó el 2026-09-09 por la mitad de "comercialización"; la mitad
+de AgentGuard sigue deliberadamente sin alcance — ver §4.6.
 
 ---
 
@@ -440,7 +441,7 @@ y corregidas contra el log real, no supuestas. Sigue llamando
 esa integración no era parte de T26 y queda como trabajo opcional futuro,
 no como algo pendiente para cerrar la fase.
 
-### 4.5 · Fase 5 — MandateVault + cierre del piloto 🔄 en curso
+### 4.5 · Fase 5 — MandateVault + cierre del piloto ✅ completa
 
 **Qué prueba:** que cada decisión del sistema —cada credencial emitida, cada
 intención creada, cada mandato verificado, cada compra autorizada o
@@ -508,25 +509,40 @@ Detalle completo en
       bazaar del embajador, evidencia registrada— corre de punta a punta en
       testnet (T16–T31).
 - [x] El repo es público (ver §7).
-- [ ] El MVP (`apps/web`, la demo interactiva) funciona bien de punta a
+- [x] El MVP (`apps/web`, la demo interactiva) funciona bien de punta a
       punta — verificado en el navegador, no solo con tests.
-- [ ] La landing (`/landing`) funciona bien — verificado en el navegador, en
+- [x] La landing (`/landing`) funciona bien — verificado en el navegador, en
       mobile (375px, así se abre desde WhatsApp) y desktop, con el cambio de
       idioma EN/ES probado.
-- [ ] El mensaje de WhatsApp al encargado de Tellus está enviado, con los
-      links al MVP y a la landing.
+- [x] El mensaje de WhatsApp al encargado de Tellus está enviado, con los
+      links al MVP y a la landing (2026-09-08).
 
 **Sin prioridad por ahora, pendiente para después (`P-3`):** la cohorte real
 de alumnos, la demo grabable, y el formulario de interés de Build Award. No
 se descartan — se sacan del camino crítico de esta fase mientras la
 Instaward se gestiona por otro canal.
 
-### 4.6 · Fase 6 — Después: AgentGuard + comercialización 🔲 sin definir, a propósito
+### 4.6 · Fase 6 — Después: AgentGuard + comercialización 🔄 en curso, iniciada 2026-09-09
 
-Esta fase existe en el plan por una razón distinta a las anteriores: para que
-quede escrito, desde ahora, que **no se construye durante el piloto**. Si en
-cualquier punto de las Fases 2–5 el trabajo empieza a pedir algo de esta
-sección, la respuesta correcta es anotarlo aquí y seguir de largo — igual que
+Esta fase se reservó, desde el diseño original del proyecto, para diseñarse
+**recién cuando las Fases 2–5 dieran evidencia real sobre la que apoyarse**
+(ver el párrafo original abajo, que se conserva sin reescribir). Ese momento
+llegó: las cinco fases técnicas están cerradas y el mensaje a Tellus ya
+salió. A pedido explícito del usuario, mientras se espera la resolución de
+la Instaward de SCF, la fase arrancó — no con AgentGuard todavía (sigue sin
+alcance definido, ver más abajo), sino con la mitad de "comercialización":
+convertir el piloto en un producto que terceros puedan integrar, con
+partners reales en testnet. Ver `P-6` en
+[docs/DECISIONES.md](docs/DECISIONES.md) y el detalle completo (panorama
+competitivo, mercado, hoja de ruta técnica, plan financiero) en el plan de
+trabajo "AgentPay: De Piloto a Producto" (2026-09-09).
+
+**Texto original de esta sección, vigente para la parte de AgentGuard —
+todavía sin alcance definido.** Esta fase existe en el plan por una razón
+distinta a las anteriores: para que quede escrito, desde ahora, que **no se
+construye durante el piloto**. Si en cualquier punto de las Fases 2–5 el
+trabajo empieza a pedir algo de esta sección, la respuesta correcta es
+anotarlo aquí y seguir de largo — igual que
 `docs/fase-1-agentpass/CONTEXTO.md` ya establece para PolicyRail/Mandato/MandateGate/
 MandateVault respecto de AgentPass.
 
