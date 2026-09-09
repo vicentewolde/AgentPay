@@ -325,3 +325,44 @@ desperdiciado, y porque el propio `ROADMAP.md` ya anticipaba este punto de
 partida — no hacerlo ahora sería posponer sin motivo un trabajo que el plan
 original siempre calificó como "el siguiente paso natural" una vez cerradas
 las Fases 2-5.
+
+---
+
+### P-7 · El repo tiene licencia explícita (Apache-2.0) · `Vigente`
+**Fecha:** 2026-09-09
+
+Hasta este punto el repo era público pero no tenía ningún archivo `LICENSE`
+ni campo `license` en ningún `package.json`/`Cargo.toml` — legalmente,
+"todos los derechos reservados" por defecto, pese a estar visible en
+GitHub. Se agregó `LICENSE` (Apache License 2.0) en la raíz, `"license":
+"Apache-2.0"` en el `package.json` raíz, y `license = "Apache-2.0"` en los
+dos `Cargo.toml` de `contracts/`.
+
+**Motivo.** Se encontró al preparar el contenido de difusión técnica de la
+Fase 6 (`P-6`): la táctica de GTM recomendada por la investigación —ofrecer
+integrar AgentPay como capa de mandato/auditoría a otros equipos que ya
+construyen sobre x402 en Stellar (hackathons, el bazaar del embajador)—
+necesita que esos equipos puedan legalmente usar o integrar el código.
+"Público en GitHub" no es lo mismo que "con permiso de uso" — sin una
+licencia explícita, cualquiera que lo integrara estaría expuesto. Apache-2.0
+se eligió por ser la misma licencia que ya usa el bazaar del embajador
+(`stellar-bazaar-x402`, ver `docs/fase-2-agente-compra/DECISIONES.md → B-25`)
+y buena parte del ecosistema x402/Stellar investigado (`stellar-hd-wallet`,
+entre otros) — reduce fricción de compatibilidad de licencias para
+cualquiera que quiera combinar ambos.
+
+**Nota sobre el titular del copyright.** El texto de la licencia y el
+`README.md` citan "Vicente Wolde" (derivado del `git config user.name` de
+este repo) como titular — no se inventó un nombre distinto, pero tampoco se
+confirmó con el usuario. Si en el futuro la SpA en trámite (`P-6`) se
+constituye con una razón social distinta, esta nota queda como el lugar
+donde corregirlo, actualizando `LICENSE` y `README.md` sin necesidad de una
+decisión nueva.
+
+**Alternativa descartada:** MIT, la licencia permisiva más común en
+proyectos chicos. Se descartó porque Apache-2.0 agrega una concesión de
+patentes explícita (relevante para un proyecto que toca pagos e
+identidad, superficie con más riesgo de disputas de propiedad intelectual
+que una librería genérica) sin ninguna desventaja práctica frente a MIT
+para este caso — y por la compatibilidad directa con la licencia que ya
+usa el bazaar del embajador.

@@ -238,3 +238,7 @@ pnpm run demo:pay-real -- --payer=policy-rail
 
 `pnpm run web` puts both behind buttons, alongside the MandateVault log that
 records every decision and anchors each payment on chain.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).

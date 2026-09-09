@@ -93,3 +93,20 @@ con el usuario). Siguiente: cablear `@agentpay/tenancy` dentro de
 antes dónde vive el seed maestro (gestor de secretos) y dónde persiste el
 índice de cada tenant — probablemente junto con la migración del vault de
 JSONL a Postgres, ya que ambas cosas necesitan la misma tabla de tenants.
+
+---
+
+## Licencia del repo (sin numerar) — 2026-09-09
+
+Al preparar el contenido de difusión técnica (`P-6`, semana 3 del plan de
+GTM) se encontró que el repo, pese a ser público, no tenía ninguna licencia
+explícita — "todos los derechos reservados" por defecto. Se agregó
+`LICENSE` (Apache-2.0) en la raíz, más el campo `license` en el
+`package.json` raíz y en los dos `Cargo.toml` de `contracts/`. Detalle
+completo, con la alternativa descartada (MIT) y la nota sobre el titular
+del copyright, en `docs/DECISIONES.md → P-7`.
+
+No es un hito numerado — es un fix de higiene legal encontrado en el
+camino, sin código de producto de por medio. `pnpm typecheck` y
+`cargo check` (los dos crates) verificados limpios después del cambio.
+

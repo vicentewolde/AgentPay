@@ -1646,3 +1646,34 @@ el post técnico de la Semana 1–3 del plan de GTM, y el usuario va a
 preguntarle a Tellus a fin de esta semana por el monto real de la
 Instaward y si Vellar compite por el mismo fondeo (riesgo anotado en la
 investigación de competencia).
+
+## 2026-09-09 (2) — cc/apache-license
+
+Agente: Claude Code
+
+Qué: se redactó el thread técnico de la Semana 3 del plan de GTM (entregado
+al usuario como archivo, no publicado — pidió esperar). Al prepararlo se
+encontró que el repo, público desde `P-1`, nunca tuvo una licencia
+explícita — "todos los derechos reservados" por defecto, lo cual contradice
+la propia táctica de GTM de pedirle a otros equipos que integren el código.
+El usuario confirmó agregar Apache-2.0. Se agregó `LICENSE` en la raíz, el
+campo `license` en el `package.json` raíz y en los dos `Cargo.toml` de
+`contracts/`. Rama creada sobre `cc/multi-tenant-vault` (no sobre `main`)
+para que las decisiones `P-6`/`P-7` en `docs/DECISIONES.md` no colisionen
+al numerarse en paralelo.
+
+Por qué: es un bloqueante legal, no técnico, para el mismo plan que `P-6`
+puso en marcha — se lo señaló al usuario en vez de publicar el thread o
+seguir con la integración de terceros sin resolverlo primero.
+
+Documentación tocada: `docs/DECISIONES.md` (`P-7` nueva),
+`docs/fase-6-agentguard-comercializacion/BITACORA.md` (addendum sin
+numerar), `README.md` (sección "License" nueva). Verificado: `pnpm
+typecheck` y `cargo check` (los dos crates) limpios tras el cambio.
+
+Pendiente: el usuario tiene que confirmar el nombre del titular del
+copyright en `LICENSE`/`README.md` — hoy dice "Vicente Wolde", derivado de
+`git config user.name`, sin confirmación explícita (ver la nota en `P-7`).
+Mergear `cc/apache-license` a `main` (a confirmar con el usuario) — puede
+mergearse independiente de `cc/multi-tenant-vault`, que sigue esperando la
+cuenta de Supabase del usuario para continuar.
