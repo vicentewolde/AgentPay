@@ -369,7 +369,7 @@ usa el bazaar del embajador.
 
 ---
 
-### P-8 · Nombre de marca elegido: TirevPay — todavía sin ejecutar el rename · `Vigente`
+### P-8 · Nombre de marca elegido: TirevPay — todavía sin ejecutar el rename · `Superada por P-9`
 **Fecha:** 2026-09-09
 
 El usuario pidió un nombre minimalista de dos sílabas, con `.com`
@@ -396,3 +396,32 @@ arquitectura. Se registra acá para que ninguna sesión futura, de
 cualquiera de los dos agentes, se confunda si el usuario menciona
 "TirevPay" en una conversación mientras el código todavía dice
 "AgentPay".
+
+---
+
+### P-9 · El nombre de marca es VynGent · `Vigente` — supersede a `P-8`
+**Fecha:** 2026-09-10
+
+El usuario descartó "TirevPay" ("no me convenció") y eligió **VynGent**.
+Todo lo que `P-8` dejó explícitamente sin hacer sigue sin hacerse, por las
+mismas razones: el repo de GitHub, los paquetes (`@agentpass/*`,
+`@agentpay/*`), el nombre del servicio en Render (`agentpay-web`), la
+landing y el README siguen diciendo "AgentPay". Ejecutar ese rename es una
+tarea propia y deliberada — afecta links ya compartidos con Tellus y el
+nombre del servicio desplegado — no algo para hacer de pasada.
+
+**Qué sí se cambió acá, y por qué sólo eso.** "TirevPay" aparecía en
+exactamente **un** lugar del código: el mensaje que la wallet firma al
+conectarse (`challengeMessage`, `apps/web/src/server.ts`) — texto que el
+usuario ve dentro de Freighter al aprobar la firma. Ese string quedó en
+"VynGent". Las otras 15 apariciones del nombre viejo están en
+documentación **histórica** (`AGENT_LOG.md`, este archivo, las bitácoras y
+la evidencia de T34) y no se tocan: este archivo establece en su propio
+encabezado que no se reescribe hacia atrás, y esas entradas son el
+registro de qué se decidió cuándo.
+
+**Alternativa descartada:** aplicar el rename completo ahora que hay un
+nombre definitivo. Se descartó por el mismo motivo que en `P-8` y porque
+el usuario eligió `T36` (blindar `apps/web`) como el trabajo siguiente —
+el rename compite por la misma superficie (`apps/web`) y conviene hacerlo
+después, sobre código que ya tenga tests.

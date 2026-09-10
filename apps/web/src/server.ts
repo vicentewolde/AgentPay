@@ -199,7 +199,7 @@ const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;
 const walletAddressBySession = new Map<string, string>();
 
 function challengeMessage(nonce: string): string {
-  return `TirevPay quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
+  return `VynGent quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
 }
 
 /**
