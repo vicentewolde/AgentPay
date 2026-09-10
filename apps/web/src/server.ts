@@ -34,7 +34,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { CredentialRequest, Scope } from "@agentpass/core";
+import type { AgentPassCredential, CredentialRequest, Scope } from "@agentpass/core";
 import {
   AgentPassError,
   credentialRequestSchema,
@@ -45,7 +45,9 @@ import {
 import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
+import { createDirectory, type Directory, type MandateRecord } from "@agentpay/directory";
 import {
+  agentPayMandateSchema,
   anchorMandate,
   mandateChallengeMessage,
   prepareWalletAnchor,
@@ -73,7 +75,9 @@ import {
 } from "@agentpay/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
+import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
+import { ensureSharedAgentIdentity, ensureVisitorTenant } from "./shared-identity.js";
 import {
   PENDING_WALLET_SESSION_TTL_MS,
   SESSION_COOKIE,
@@ -82,7 +86,6 @@ import {
   createExpiringStore,
   isValidSessionId,
   parseCookies,
-  walletTenantId,
 } from "./wallet-session.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
@@ -173,12 +176,23 @@ interface PendingWalletSession {
   readonly agentpass: AgentPass;
   readonly issuedCredentialJws: string;
   readonly credentialHash: string;
+  /** The credential's own anchor transaction (`IssuedCredential.transactionHash`) — needed to persist it (T39). */
+  readonly credentialAnchorTx: string;
+  /** The unsigned document, for its `validFrom`/`validUntil`/`issuer`/`credentialSubject.principal` — persisted alongside the mandate (T39). */
+  readonly credential: AgentPassCredential;
   readonly issuerSecret: string;
   readonly mandate: AgentPayMandate;
   readonly walletAddress: string;
   readonly agentKeypair: Keypair;
   readonly demoScope: CredentialRequest;
   readonly baseUrl: string;
+  /**
+   * This tenant's previous mandate, if it had one — expired or revoked, or
+   * `startSession` would have rehydrated instead of reaching this branch at
+   * all. Carried through so `wallet-anchor` can record the new mandate as a
+   * renewal (`supersedesId`) rather than an orphan (T39).
+   */
+  readonly supersedes: MandateRecord | undefined;
   /** Set once `/api/session/wallet-consent` verifies the SEP-0053 signature. */
   signature?: string;
   /** Set once the anchor transaction is prepared — names which one `wallet-anchor` finishes. */
@@ -240,6 +254,23 @@ async function readScope(): Promise<CredentialRequest> {
 /** This server's own `.env.local`, with `process.env` behind it — see `env.ts`. */
 function readEnv(): Promise<Map<string, string>> {
   return readEnvFrom(ENV_PATH);
+}
+
+// ---- Persistent directory (T39) --------------------------------------------
+
+/**
+ * Held across requests, unlike `agentpass`/the vault above (each of those is
+ * rebuilt per request — not touched here, out of scope for this milestone).
+ * A `Directory`'s `Pool` is meant to outlive a single request the way any
+ * connection pool is; recreating it per call would re-run the thirteen
+ * `create table if not exists` statements on every single API call for no
+ * benefit. One promise, memoised: the first caller pays for opening the pool
+ * and initialising the schema, everyone after just awaits the same result.
+ */
+let directoryPromise: Promise<Directory> | undefined;
+function getDirectory(env: ReadonlyMap<string, string>): Promise<Directory> {
+  directoryPromise ??= createDirectory({ connectionString: requireEnv(env, "DATABASE_URL") });
+  return directoryPromise;
 }
 
 interface FinishSessionParams {
@@ -320,6 +351,49 @@ export type StartSessionResult =
  * own anchor transaction, which cannot happen inside this one request.
  * `/api/session/wallet-consent` and `/api/session/wallet-anchor` finish it.
  */
+/**
+ * Rebuilds a `DemoSession`'s mandate half from what the directory persisted
+ * — the piece rehydration needs and issuing a fresh Mandate produces fresh,
+ * so it only exists on this path. Parses `document` back through
+ * `agentPayMandateSchema` rather than trusting the stored `Record<string,
+ * unknown>` blindly: the directory only promises to store bytes faithfully
+ * (`C-5`'s `json`-not-`jsonb` reasoning), not that they still describe a
+ * well-formed Mandate.
+ *
+ * @throws AgentPassError `ConfigError` if the stored document does not parse,
+ * or if a wallet-signed mandate record is missing its signature — either
+ * would mean this row was never actually completed, which should be
+ * unreachable (`recordMandate` is only ever called after a real SEP-0053
+ * signature came back), but a rehydration path must fail loud rather than
+ * silently hand a purchase engine a mandate that cannot be used.
+ */
+function mandateFromRecord(
+  record: MandateRecord,
+  walletAddress: string,
+): { readonly mandate: DemoSessionMandate; readonly mandateSource: MandateSource } {
+  const parsed = agentPayMandateSchema.safeParse(record.document);
+  if (!parsed.success) {
+    throw new AgentPassError("ConfigError", "a persisted mandate's document does not match the expected shape", {
+      details: { mandateHash: record.mandateHash, issues: parsed.error.issues.map((issue) => issue.message) },
+    });
+  }
+  if (record.signature === null) {
+    throw new AgentPassError("ConfigError", "a persisted wallet-signed mandate is missing its signature", {
+      details: { mandateHash: record.mandateHash },
+    });
+  }
+  return {
+    mandate: {
+      hash: record.mandateHash,
+      mandate: parsed.data,
+      transactionHash: record.anchorTx,
+      principalAddress: walletAddress,
+      signature: record.signature,
+    },
+    mandateSource: { mandate: parsed.data, signature: record.signature },
+  };
+}
+
 async function startSession(sessionId: string): Promise<StartSessionResult> {
   const env = await readEnv();
   const issuer = requireSecretKey(env, "ISSUER_SECRET_KEY");
@@ -341,59 +415,110 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
   const now = new Date();
   const walletAddress = walletAddressBySession.get(sessionId);
 
+  if (walletAddress !== undefined) {
+    // T39: `sessionId` is this tenant's own id in `@agentpay/directory`
+    // (set by `/api/wallet/verify`) — check whether it already has a live
+    // credential and mandate before issuing anything new. This is the check
+    // that makes "volver desde otro navegador" not mint a fresh identity.
+    const directory = await getDirectory(env);
+    const [latestCredential, activeMandates, latestMandate] = await Promise.all([
+      directory.findLatestCredential(sessionId),
+      directory.listActiveMandates(sessionId, now),
+      directory.findLatestMandate(sessionId),
+    ]);
+    const decision = decideRehydration({ latestCredential, activeMandates, latestMandate });
+
+    if (decision.kind === "rehydrate") {
+      const { mandate, mandateSource } = mandateFromRecord(decision.mandate, walletAddress);
+      const session = await finishSession({
+        sessionId,
+        env,
+        agentpass,
+        agentKeypair,
+        demoScope,
+        baseUrl,
+        issuedCredentialJws: decision.credential.jws,
+        credentialHash: decision.credential.credentialHash,
+        issuerSecret,
+        mandate,
+        mandateSource,
+        walletAddress,
+      });
+      return { kind: "ready", session };
+    }
+
+    // No active mandate for this tenant — issue fresh documents, same as
+    // before T39, carrying `decision.supersedes` so `wallet-anchor` can
+    // record the new mandate as a renewal rather than an orphan.
+    const { credential, mandate: mandateDocument } = buildSessionDocuments({
+      issuerAddress: issuer.publicKey(),
+      agentAddress: agentKeypair.publicKey(),
+      walletAddress,
+      scope: demoScope,
+      registryContractId: agentpass.config.contractId,
+      now,
+      validUntil: new Date(now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000),
+    });
+    const issued = await agentpass.issue({ credential, issuer });
+
+    // A wallet is connected — it must anchor its own Mandate as issuer,
+    // which needs it registered first (`M-17`, automated here — `C-8`).
+    await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
+
+    pendingWalletSessions.set(sessionId, {
+      agentpass,
+      issuedCredentialJws: issued.jws,
+      credentialHash: issued.hash,
+      credentialAnchorTx: issued.transactionHash,
+      credential,
+      issuerSecret,
+      mandate: mandateDocument,
+      walletAddress,
+      agentKeypair,
+      demoScope,
+      baseUrl,
+      supersedes: decision.supersedes,
+    });
+
+    return { kind: "pending-wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
+  }
+
+  // Classic (platform-signed) path — unchanged since T35. Deliberately not
+  // persisted to the directory (`evidencia/T39.md`): there is no wallet here
+  // to prove control on a later visit, so "volver desde otro navegador" does
+  // not apply the same way, and this stays the ephemeral demo path it always was.
   const { credential, mandate: mandateDocument } = buildSessionDocuments({
     issuerAddress: issuer.publicKey(),
     agentAddress: agentKeypair.publicKey(),
-    walletAddress,
+    walletAddress: undefined,
     scope: demoScope,
     registryContractId: agentpass.config.contractId,
     now,
     validUntil: new Date(now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000),
   });
   const issued = await agentpass.issue({ credential, issuer });
-
-  if (walletAddress === undefined) {
-    const anchoredMandate = await anchorMandate(agentpass, { mandate: mandateDocument, principal: issuer });
-    const session = await finishSession({
-      sessionId,
-      env,
-      agentpass,
-      agentKeypair,
-      demoScope,
-      baseUrl,
-      issuedCredentialJws: issued.jws,
-      credentialHash: issued.hash,
-      issuerSecret,
-      mandate: {
-        hash: anchoredMandate.hash,
-        mandate: anchoredMandate.mandate,
-        transactionHash: anchoredMandate.transactionHash,
-        principalAddress: issuer.publicKey(),
-        signature: undefined,
-      },
-      mandateSource: anchoredMandate.jws,
-      walletAddress: undefined,
-    });
-    return { kind: "ready", session };
-  }
-
-  // A wallet is connected — it must anchor its own Mandate as issuer, which
-  // needs it registered first (`M-17`, automated here — `C-8`).
-  await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
-
-  pendingWalletSessions.set(sessionId, {
+  const anchoredMandate = await anchorMandate(agentpass, { mandate: mandateDocument, principal: issuer });
+  const session = await finishSession({
+    sessionId,
+    env,
     agentpass,
-    issuedCredentialJws: issued.jws,
-    credentialHash: issued.hash,
-    issuerSecret,
-    mandate: mandateDocument,
-    walletAddress,
     agentKeypair,
     demoScope,
     baseUrl,
+    issuedCredentialJws: issued.jws,
+    credentialHash: issued.hash,
+    issuerSecret,
+    mandate: {
+      hash: anchoredMandate.hash,
+      mandate: anchoredMandate.mandate,
+      transactionHash: anchoredMandate.transactionHash,
+      principalAddress: issuer.publicKey(),
+      signature: undefined,
+    },
+    mandateSource: anchoredMandate.jws,
+    walletAddress: undefined,
   });
-
-  return { kind: "pending-wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
+  return { kind: "ready", session };
 }
 
 interface Step {
@@ -772,10 +897,33 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
 
-    const sessionId = walletTenantId(address);
-    walletAddressBySession.set(sessionId, address);
-    withSessionCookie(res, sessionId);
-    sendJson(res, 200, { ok: true, address });
+    // T39: the session id is now this wallet's real tenant id in
+    // `@agentpay/directory` — not `sha256(address)` (`C-25`/`D4`) — resolved
+    // (or created, on this wallet's very first connection) here, once, so
+    // every later request can find the same tenant by cookie alone.
+    try {
+      const env = await readEnv();
+      const directory = await getDirectory(env);
+      const agentAddress = requireSecretKey(env, "AGENT_SECRET_KEY").publicKey();
+
+      const { partnerId } = await ensureSharedAgentIdentity(directory, agentAddress);
+      const [principal, tenant] = await Promise.all([
+        directory.upsertPrincipal({ address, did: stellarAddressToDid(address, "testnet") }),
+        ensureVisitorTenant(directory, partnerId, address),
+      ]);
+      await directory.bindPrincipal({
+        tenantId: tenant.id,
+        principalId: principal.id,
+        proofNonce: nonce,
+        proofSignature: signature,
+      });
+
+      walletAddressBySession.set(tenant.id, address);
+      withSessionCookie(res, tenant.id);
+      sendJson(res, 200, { ok: true, address });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
     return;
   }
 
@@ -866,6 +1014,41 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     try {
       const transactionHash = await pending.agentpass.submitSigned(requestId, signedXdr);
       const env = await readEnv();
+
+      // T39: persist now that both documents are genuinely anchored — before
+      // `finishSession`, so an unrelated failure wiring the live session
+      // afterwards never costs the evidence the wallet already paid gas for.
+      const directory = await getDirectory(env);
+      const { agent: sharedAgent } = await ensureSharedAgentIdentity(directory, pending.agentKeypair.publicKey());
+      const principal = await directory.upsertPrincipal({
+        address: pending.walletAddress,
+        did: stellarAddressToDid(pending.walletAddress, "testnet"),
+      });
+      await directory.recordCredential({
+        agentId: sharedAgent.id,
+        tenantId: sessionId,
+        credentialHash: pending.credentialHash,
+        issuerDid: pending.credential.issuer,
+        principalDid: pending.credential.credentialSubject.principal,
+        jws: pending.issuedCredentialJws,
+        validFrom: new Date(pending.credential.validFrom),
+        validUntil: new Date(pending.credential.validUntil),
+        anchorTx: pending.credentialAnchorTx,
+      });
+      await directory.recordMandate({
+        tenantId: sessionId,
+        agentId: sharedAgent.id,
+        principalId: principal.id,
+        mandateHash: walletMandateHash(pending.mandate),
+        signatureKind: "wallet-sep53",
+        document: { ...pending.mandate },
+        signature: pending.signature,
+        validFrom: new Date(pending.mandate.validFrom),
+        validUntil: new Date(pending.mandate.validUntil),
+        anchorTx: transactionHash,
+        supersedesId: pending.supersedes?.id,
+      });
+
       const session = await finishSession({
         sessionId,
         env,
@@ -976,6 +1159,14 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     try {
       const revokeTx = await current.agentpass.submitSigned(requestId, signedXdr);
       const credentialStatus = await current.agentpass.status(current.credentialHash);
+      // T39: mirror the revocation into the directory, so a later rehydration
+      // attempt for this tenant correctly finds no active mandate and issues
+      // a fresh one instead of reusing a mandate the chain no longer honours.
+      if (current.walletAddress !== undefined) {
+        const env = await readEnv();
+        const directory = await getDirectory(env);
+        await directory.revokeMandate(current.mandate.hash, revokeTx);
+      }
       sendJson(res, 200, { ok: true, mandateHash: current.mandate.hash, revokeTx, credentialStatus });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });

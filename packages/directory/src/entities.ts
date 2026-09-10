@@ -129,6 +129,14 @@ export const agentInstanceSchema = z.strictObject({
 export const credentialRecordSchema = z.strictObject({
   id: credentialIdSchema,
   agentId: agentIdSchema,
+  /**
+   * Which tenant this credential was issued for. Added in schema version 2
+   * (T39) precisely because `agentId` alone does not scope it: before F4
+   * wires a distinct Stellar identity per tenant, every tenant's credential
+   * names the same shared `agentId` (`C-33`), so finding "the credential for
+   * this tenant" needs its own column, not a join through the agent.
+   */
+  tenantId: tenantIdSchema,
   /** `sha256(compact JWS)`, hex — the value anchored in `agent_registry`. */
   credentialHash: z.string().regex(/^[0-9a-f]{64}$/),
   issuerDid: stellarDidSchema,

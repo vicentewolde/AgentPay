@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T38 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T39 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
 misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
@@ -37,6 +37,7 @@ pero cablear la identidad propia por tenant queda para un hito aparte
 | T36 | Blindar `apps/web`: costuras testeables extraídas de `server.ts` y 49 tests donde antes no había ninguno | ✅ cerrado 2026-09-10 |
 | T37 | Diseño de la plataforma para partners: modelo de entidades, modelo de fondos, plan de diez fases — **sin una línea de código** | ✅ cerrado 2026-09-10 |
 | T38 | `@agentpay/directory`: el registro durable de partners, tenants, principals, agentes, credenciales y mandatos | ✅ cerrado 2026-09-10 |
+| T39 | Persistencia de sesión: una wallet que vuelve encuentra su credencial y su Mandato ya firmados, en vez de que se emitan de nuevo | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -731,3 +732,79 @@ no nombraba. Se corrigieron los dos archivos y se registró
 Documentación tocada: `PLATAFORMA-PARTNERS.md` (§6.1 y las diez tablas de
 delegación), `AGENTS.md`, `CLAUDE.md`, `docs/DECISIONES.md` (`P-10`),
 `docs/AGENT_LOG.md`. Cero código.
+
+---
+
+## T39 · Persistencia de sesión: una wallet que vuelve encuentra lo que ya firmó — cerrado 2026-09-10
+
+**Qué quedó funcionando, en palabras llanas.** Hasta ayer, conectar la misma
+wallet una segunda vez —incluso en la misma pestaña, con solo recargar—
+volvía a pedir una firma, volvía a emitir una credencial nueva y un Mandato
+nuevo, y volvía a gastar una transacción de anclaje en testnet. Eso violaba
+dos reglas del objetivo del producto: renovar un mandato no debe crear un
+agente nuevo, y una sesión no debe crear identidad nueva. Ahora, cuando una
+wallet ya tiene un Mandato vigente, "Iniciar sesión" lo encuentra en
+Postgres y arma la sesión alrededor de él — sin pedir una firma más, sin
+gastar una transacción más.
+
+**La prueba, hecha de la forma más exigente posible.** No alcanzaba con un
+test: se conectó una wallet real (la del emisor, ya fondeada), se firmó de
+verdad un Mandato, se ancló de verdad en testnet. Después **se mató el
+proceso del servidor y se levantó uno nuevo**, sin nada en memoria, y esa
+misma wallet, al conectar de nuevo, encontró exactamente el mismo Mandato y
+la misma credencial que antes de que el proceso muriera — los hashes
+coinciden byte por byte. Con esa sesión reconstruida desde cero se hizo una
+compra real, liquidada por `policy_rail`, y se le sumó el anclaje del vault.
+Y al revocar el Mandato, la wallet volvió a pedir una firma nueva en vez de
+seguir devolviendo el Mandato muerto — con el Mandato nuevo encadenado al
+viejo (`supersedesId`), no como una identidad huérfana.
+
+**Dónde queda la seguridad, y por qué esto no la toca.** Lo que decide si un
+Mandato es genuinamente válido —no revocado, no expirado, firmado por quien
+dice ser— sigue siendo exactamente lo mismo que antes: `checkMandate`,
+`checkScope`, y el verificador on-chain, en el momento de la compra. Este
+hito solo decide si iniciar sesión se ahorra una emisión redundante; nunca
+decide si una compra se autoriza. Verificado con `git diff` contra
+`apps/agent/` y `contracts/`: cero cambios.
+
+**Una brecha del esquema, encontrada al construir y no al planificar.**
+`@agentpay/directory` (T38) asumía el mundo de F4 —una identidad Stellar por
+tenant— pero ese mundo todavía no llegó: todos los visitantes siguen
+firmando con el mismo `AGENT_SECRET_KEY` (`C-16`, diferido a F4 a propósito).
+Con un solo agente compartido por todos los tenants, la columna que
+identificaba a una credencial (`agent_id`) dejó de alcanzar para responder
+"¿cuál es la credencial de este tenant en particular?" — se agregó una
+columna `tenant_id` a la tabla de credenciales (migración segura: la tabla
+existía, vacía, desde los propios tests de T38). El agente compartido en sí
+se modela como una fila real y etiquetada como transicional
+(`ensureSharedAgentIdentity`), no como una excepción al esquema.
+
+**Evidencia técnica.** `apps/web` pasa de 49 a 63 tests sin red (16
+nuevos —ocho sobre la decisión pura de rehidratar, ocho sobre el bootstrap
+idempotente del agente compartido y del tenant de cada visitante— menos dos
+que quedaron sin sentido al retirar `walletTenantId`). Total del monorepo:
+**773 tests offline en verde, de 759.** `@agentpay/directory` suma tres
+tests de integración para los métodos nuevos (`findAgentByAddress`,
+`findLatestCredential`, `findLatestMandate`), 19 en total ahí, todos en
+verde contra Postgres real. `pnpm typecheck` y `pnpm build` limpios. Las
+cinco corridas manuales contra testnet real, con transacciones y anclajes
+de verdad, están en [evidencia/T39.md](evidencia/T39.md).
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta `BITACORA.md`,
+`DECISIONES.md` (`C-33` a `C-38`), `evidencia/T39.md` (nuevo). Archivos de
+código nuevos: `apps/web/src/session-rehydration.ts` (+test),
+`apps/web/src/shared-identity.ts` (+test). Archivos de código tocados:
+`apps/web/src/server.ts`, `apps/web/src/wallet-session.ts` (+test),
+`apps/web/package.json`, `apps/web/tsconfig.json`,
+`packages/directory/src/{schema-sql,entities,directory}.ts`,
+`packages/directory/src/directory.integration.test.ts`. **Cero archivos de
+`apps/agent/` o `contracts/` tocados.**
+
+Pendiente: el siguiente hito propuesto es **T40** (F4 del plan) — cablear
+`@agentpay/tenancy` para que cada tenant tenga su propia cuenta Stellar en
+vez de compartir `AGENT_SECRET_KEY`. Es área restringida (custodia y
+claves, `P-10`) y se queda enteramente en Claude Code. La tabla de
+delegación de F3 (`PLATAFORMA-PARTNERS.md` § 6.1) señala tres tickets para
+Codex que ahora ya se pueden abrir, detrás de la interfaz que este hito
+estabilizó — ver la sección de instrucciones en el mensaje de cierre de
+este hito. Sigue pendiente de antes: el rename a VynGent (`P-9`).

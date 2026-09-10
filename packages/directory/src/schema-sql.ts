@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 1;
+export const DIRECTORY_SCHEMA_VERSION = 2;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -109,10 +109,26 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
      valid_until     timestamptz not null,
      anchor_tx       text        not null,
      revoked_at      timestamptz,
-     created_at      timestamptz not null default now()
+     created_at      timestamptz not null default now(),
+     tenant_id       text        references directory_tenants(id)
    )`,
 
+  // Added in schema version 2 (T39), via `alter` rather than only in the
+  // `create table` above, because this table already exists — empty, but
+  // existing — on the pilot's live database from T38's own integration
+  // tests. `agent_id` alone identified a credential's *identity* correctly,
+  // but not which tenant it belongs to: before F4 wires a distinct Stellar
+  // identity per tenant, every tenant's credential shares one `agent_id`
+  // (`C-33`), so rehydrating "the credential for this tenant" needs a column
+  // that scopes by tenant directly. Nullable at the SQL level — no row has
+  // ever been written without it, and every write path (`recordCredential`)
+  // requires it as a matter of TypeScript's own types — but not enforced
+  // `not null` in the schema itself, so this statement stays safe to replay
+  // against a database this migration has already run against.
+  `alter table directory_credentials add column if not exists tenant_id text references directory_tenants(id)`,
+
   `create index if not exists directory_credentials_agent_idx on directory_credentials (agent_id)`,
+  `create index if not exists directory_credentials_tenant_idx on directory_credentials (tenant_id)`,
 
   `create table if not exists directory_mandates (
      id             text        primary key,

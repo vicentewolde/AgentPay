@@ -1,16 +1,9 @@
 import { randomUUID } from "node:crypto";
 
-import { Keypair } from "@stellar/stellar-sdk";
+import { newId, newTenantId } from "@agentpay/directory";
 import { describe, expect, it } from "vitest";
 
-import {
-  SESSION_COOKIE,
-  challengeMessage,
-  createExpiringStore,
-  isValidSessionId,
-  parseCookies,
-  walletTenantId,
-} from "./wallet-session.js";
+import { SESSION_COOKIE, challengeMessage, createExpiringStore, isValidSessionId, parseCookies } from "./wallet-session.js";
 
 describe("parseCookies", () => {
   it("returns nothing for a request with no cookie header", () => {
@@ -35,13 +28,16 @@ describe("parseCookies", () => {
 
 describe("isValidSessionId", () => {
   // This is what stops a forged cookie from being used as somebody else's
-  // `tenant_id` when reading or writing their rows in `vault_records`.
-  it("accepts an id this server would have minted", () => {
+  // identity when reading, writing or rehydrating their rows.
+  it("accepts a classic-path id (randomUUID)", () => {
     expect(isValidSessionId(randomUUID())).toBe(true);
-    expect(isValidSessionId(walletTenantId(Keypair.random().publicKey()))).toBe(true);
   });
 
-  it("rejects anything that is not shaped like one", () => {
+  it("accepts a wallet-path id — a real @agentpay/directory tenant id, since T39 (`C-25`/`D4`)", () => {
+    expect(isValidSessionId(newTenantId(newId("partner")))).toBe(true);
+  });
+
+  it("rejects anything that is not shaped like either", () => {
     for (const forged of [
       undefined,
       "",
@@ -50,26 +46,11 @@ describe("isValidSessionId", () => {
       "not-a-uuid",
       `${randomUUID()}extra`,
       `${randomUUID()} `,
+      "ptn_short:short", // right prefix, wrong-length ULIDs
+      newId("partner"), // a partner id alone is not a tenant id — needs the ":<ULID>" half too
     ]) {
       expect(isValidSessionId(forged)).toBe(false);
     }
-  });
-});
-
-describe("walletTenantId", () => {
-  // Why a wallet's history survives across visits (T33/T34): the same wallet
-  // always lands on the same vault tenant, without a lookup table.
-  it("is stable for the same address", () => {
-    const address = Keypair.random().publicKey();
-    expect(walletTenantId(address)).toBe(walletTenantId(address));
-  });
-
-  it("differs for different addresses", () => {
-    expect(walletTenantId(Keypair.random().publicKey())).not.toBe(walletTenantId(Keypair.random().publicKey()));
-  });
-
-  it("produces something the cookie validator accepts", () => {
-    expect(isValidSessionId(walletTenantId(Keypair.random().publicKey()))).toBe(true);
   });
 });
 

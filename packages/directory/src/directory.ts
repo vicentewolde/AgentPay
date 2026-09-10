@@ -140,6 +140,7 @@ export interface BindPrincipalInput {
 
 export interface RecordCredentialInput {
   readonly agentId: string;
+  readonly tenantId: string;
   readonly credentialHash: string;
   readonly issuerDid: string;
   readonly principalDid: string;
@@ -248,6 +249,7 @@ function toCredential(row: Record<string, unknown>): CredentialRecord {
   return credentialRecordSchema.parse({
     id: row.id,
     agentId: row.agent_id,
+    tenantId: row.tenant_id,
     credentialHash: row.credential_hash,
     issuerDid: row.issuer_did,
     principalDid: row.principal_did,
@@ -309,18 +311,28 @@ export interface Directory {
 
   createAgent(input: CreateAgentInput): Promise<AgentInstance>;
   findAgent(id: string): Promise<AgentInstance | undefined>;
+  /** Unique by address — the lookup that makes bootstrapping a shared agent idempotent (T39, `C-33`). */
+  findAgentByAddress(address: string): Promise<AgentInstance | undefined>;
   listAgents(tenantId: string): Promise<readonly AgentInstance[]>;
   setAgentStatus(id: string, status: AgentStatus): Promise<AgentInstance>;
   setAgentOnchainState(id: string, state: OnchainState): Promise<AgentInstance>;
 
   recordCredential(input: RecordCredentialInput): Promise<CredentialRecord>;
   findCredentialByHash(credentialHash: string): Promise<CredentialRecord | undefined>;
+  /** Most recently created credential for this tenant, regardless of status. `undefined` if it has none yet. */
+  findLatestCredential(tenantId: string): Promise<CredentialRecord | undefined>;
   revokeCredential(credentialHash: string, at?: Date): Promise<void>;
 
   recordMandate(input: RecordMandateInput): Promise<MandateRecord>;
   findMandateByHash(mandateHash: string): Promise<MandateRecord | undefined>;
   /** Every mandate of this tenant that is neither revoked nor outside its window at `at`. */
   listActiveMandates(tenantId: string, at?: Date): Promise<readonly MandateRecord[]>;
+  /**
+   * Most recently created mandate for this tenant, active or not. Used to
+   * chain `supersedesId` on renewal — a renewal must find what it renews
+   * even when the prior mandate has expired or been revoked.
+   */
+  findLatestMandate(tenantId: string): Promise<MandateRecord | undefined>;
   revokeMandate(mandateHash: string, revokeTx: string, at?: Date): Promise<void>;
 
   close(): Promise<void>;
@@ -581,6 +593,10 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
       return one("select * from directory_agents where id = $1", [id], toAgent);
     },
 
+    findAgentByAddress(address) {
+      return one("select * from directory_agents where address = $1", [address], toAgent);
+    },
+
     async listAgents(tenantId) {
       const { rows } = await pool.query<Record<string, unknown>>(
         "select * from directory_agents where tenant_id = $1 order by key_index asc",
@@ -618,11 +634,12 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
       const id = newId("credential");
       const row = await one(
         `insert into directory_credentials
-           (id, agent_id, credential_hash, issuer_did, principal_did, jws, valid_from, valid_until, anchor_tx)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+           (id, agent_id, tenant_id, credential_hash, issuer_did, principal_did, jws, valid_from, valid_until, anchor_tx)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
         [
           id,
           input.agentId,
+          input.tenantId,
           input.credentialHash,
           input.issuerDid,
           input.principalDid,
@@ -639,6 +656,14 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
 
     findCredentialByHash(credentialHash) {
       return one("select * from directory_credentials where credential_hash = $1", [credentialHash], toCredential);
+    },
+
+    findLatestCredential(tenantId) {
+      return one(
+        "select * from directory_credentials where tenant_id = $1 order by id desc limit 1",
+        [tenantId],
+        toCredential,
+      );
     },
 
     async revokeCredential(credentialHash, at) {
@@ -693,6 +718,14 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
         [tenantId, at ?? new Date()],
       );
       return rows.map(toMandate);
+    },
+
+    findLatestMandate(tenantId) {
+      return one(
+        "select * from directory_mandates where tenant_id = $1 order by id desc limit 1",
+        [tenantId],
+        toMandate,
+      );
     },
 
     async revokeMandate(mandateHash, revokeTx, at) {

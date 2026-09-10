@@ -68,6 +68,9 @@ importers:
       '@agentpay/agent':
         specifier: workspace:*
         version: link:../agent
+      '@agentpay/directory':
+        specifier: workspace:*
+        version: link:../../packages/directory
       '@agentpay/mandate':
         specifier: workspace:*
         version: link:../../packages/mandate

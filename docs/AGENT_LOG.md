@@ -2227,3 +2227,68 @@ hito de código, con su tabla de delegación ya lista en
 `PLATAFORMA-PARTNERS.md` § F3. La rama `cc/t38-directory` sigue sin
 mergear ni pushear — lleva ahora T38 y este addendum. Sigue pendiente:
 cablear `@agentpay/tenancy` (`C-16`, F4) y el rename a VynGent (`P-9`).
+
+## 2026-09-10 (7) — cc/t39-session-persistence (T39 cerrado)
+
+Agente: Claude Code
+
+Qué: **T39 cerrado.** Persistencia de sesión para el camino de wallet
+conectada: iniciar sesión persiste credencial y Mandato contra el tenant en
+`@agentpay/directory`, y una wallet que vuelve —incluso desde un proceso
+del servidor completamente nuevo, sin nada en memoria— encuentra lo que ya
+firmó en vez de que se emita de nuevo. Revocar corta la rehidratación:
+marca el mandato revocado en el directorio, así la sesión siguiente pide
+una firma nueva y la encadena con `supersedesId` en vez de dejarla
+huérfana.
+
+Por qué: era la brecha que el propio objetivo del producto señala como
+violada hoy — renovar un mandato no debe crear un agente nuevo, una sesión
+no debe crear identidad nueva — y las dos pasaban exactamente lo contrario
+en cada "Iniciar sesión".
+
+**Cero cambios en puntos de autorización**, verificado:
+`git diff --stat c3bd052..HEAD -- apps/agent contracts` no devuelve nada.
+`checkMandate`, `checkScope`, `checkDailyLimit`, `policy_rail`,
+`agent_registry` intactos — este hito decide si se salta una emisión
+redundante, nunca si una compra se autoriza. Esa distinción quedó escrita
+explícitamente en `C-35`.
+
+Una brecha de esquema encontrada al construir, no al planificar: con un
+solo `AGENT_SECRET_KEY` compartido por todos los tenants (F4 sin cablear
+todavía, `C-16`), la columna `agent_id` de `directory_credentials` dejó de
+alcanzar para responder "¿la credencial de cuál tenant?" — se agregó
+`tenant_id` vía `alter table` (la tabla existía, vacía, desde los tests de
+T38). El agente compartido se modela como una fila real, etiquetada
+explícitamente como transicional, no como una excepción al esquema. Ver
+`C-33`.
+
+Verificado offline: 773 tests en verde (16 nuevos, 2 retirados junto con
+`walletTenantId`, superado por `C-25`), de 759. 19 tests de integración de
+`@agentpay/directory` contra Postgres real, en verde. `pnpm typecheck` y
+`pnpm build` limpios.
+
+**Verificado contra testnet real, con cinco corridas manuales** (script
+descartable, nunca commiteado, mismo patrón que `C-18`/T36 para rutas
+HTTP): conectar y firmar de verdad → segunda llamada en el mismo proceso
+rehidrata → **matar el proceso y levantar uno nuevo, sin memoria, rehidrata
+igual, mismos hashes** → una compra real liquidada por `policy_rail` sobre
+la sesión puramente rehidratada → revocar fuerza una firma nueva,
+encadenada por `supersedesId`, confirmado consultando la base
+directamente. Todo en `evidencia/T39.md`.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en
+`docs/fase-6-agentguard-comercializacion/`: `BITACORA.md`, `DECISIONES.md`
+(`C-33` a `C-38`), `evidencia/T39.md` (nuevo).
+
+Pendiente: siguiente hito propuesto **T40** (F4 — identidad técnica y
+llaves por tenant, área restringida por `P-10`, se queda en Claude Code).
+La tabla de delegación de F3 ya publicada en `PLATAFORMA-PARTNERS.md` § 6.1
+señala tres tickets para Codex (T40, T41, T42 de esa tabla — numeración de
+la tabla, no de hitos reales, a reconciliar al abrirlos) que ahora tienen
+una interfaz estable detrás de la cual trabajar: la vista de historial de
+solo lectura en `apps/web/public/index.html`, cobertura de tests adicional
+sobre las costuras nuevas, y documentación. Instrucciones completas
+entregadas al usuario en el cierre de este hito, no repetidas acá. La rama
+`cc/t39-session-persistence` sigue sin mergear ni pushear. Sigue
+pendiente: cablear `@agentpay/tenancy` (`C-16`, ahora T40) y el rename a
+VynGent (`P-9`).

@@ -414,6 +414,7 @@ describe("createDirectory", () => {
 
     await directory.recordCredential({
       agentId: agent.id,
+      tenantId: tenant.id,
       credentialHash,
       issuerDid: stellarAddressToDid(agent.address, "testnet"),
       principalDid: vinny.did,
@@ -425,10 +426,91 @@ describe("createDirectory", () => {
 
     const found = await directory.findCredentialByHash(credentialHash);
     expect(found?.agentId).toBe(agent.id);
+    expect(found?.tenantId).toBe(tenant.id);
     expect(found?.revokedAt).toBeNull();
 
     await directory.revokeCredential(credentialHash);
     expect((await directory.findCredentialByHash(credentialHash))?.revokedAt).not.toBeNull();
+  });
+
+  it("finds a shared agent by its Stellar address — the lookup a bootstrap step needs to be idempotent", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_shared_agent" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+
+    const found = await directory.findAgentByAddress(agent.address);
+    expect(found?.id).toBe(agent.id);
+    expect(await directory.findAgentByAddress("GNONEXISTENT")).toBeUndefined();
+  });
+
+  it("finds the latest credential for a tenant, even before F4 gives it its own agent", async () => {
+    // Simulates T39's transitional reality: many tenants' credentials all
+    // naming the *same* shared agentId, distinguishable only by tenantId.
+    const partner = await freshPartner();
+    const tenantA = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_latest_cred_a" });
+    const tenantB = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_latest_cred_b" });
+    const sharedAgent = await directory.createAgent({ tenantId: tenantA.id, derive: deriveFromMaster });
+    const vinny = await freshPrincipal(8);
+
+    expect(await directory.findLatestCredential(tenantB.id)).toBeUndefined();
+
+    const base = {
+      agentId: sharedAgent.id,
+      issuerDid: stellarAddressToDid(sharedAgent.address, "testnet"),
+      principalDid: vinny.did,
+      jws: "eyJ.a.b",
+      validFrom: new Date("2026-09-10T00:00:00.000Z"),
+      validUntil: new Date("2026-09-11T00:00:00.000Z"),
+      anchorTx: "tx-a",
+    };
+    await directory.recordCredential({ ...base, tenantId: tenantA.id, credentialHash: "1".repeat(64) });
+    const forB = await directory.recordCredential({ ...base, tenantId: tenantB.id, credentialHash: "2".repeat(64) });
+
+    // Finds B's own credential, not A's — even though both name the same
+    // shared agentId.
+    const latestForB = await directory.findLatestCredential(tenantB.id);
+    expect(latestForB?.id).toBe(forB.id);
+    expect(latestForB?.credentialHash).toBe("2".repeat(64));
+  });
+
+  it("finds the latest mandate for a tenant regardless of revoked or expired status", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_latest_mandate" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+    const vinny = await freshPrincipal(9);
+
+    expect(await directory.findLatestMandate(tenant.id)).toBeUndefined();
+
+    const base = {
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: vinny.id,
+      signatureKind: "wallet-sep53" as const,
+      document: { grant: "one" },
+      anchorTx: "tx-1",
+    };
+    const first = await directory.recordMandate({
+      ...base,
+      mandateHash: "3".repeat(64),
+      validFrom: new Date("2026-01-01T00:00:00.000Z"),
+      validUntil: new Date("2026-01-02T00:00:00.000Z"), // already expired
+    });
+    await directory.revokeMandate("3".repeat(64), "tx-revoke");
+
+    // Even revoked and expired, it is still the latest one — supersedesId
+    // chaining on renewal needs to find it regardless of its status.
+    const latest = await directory.findLatestMandate(tenant.id);
+    expect(latest?.id).toBe(first.id);
+    expect(latest?.revokedAt).not.toBeNull();
+
+    const renewal = await directory.recordMandate({
+      ...base,
+      mandateHash: "4".repeat(64),
+      validFrom: new Date("2026-09-10T00:00:00.000Z"),
+      validUntil: new Date("2026-09-11T00:00:00.000Z"),
+      supersedesId: first.id,
+    });
+    expect((await directory.findLatestMandate(tenant.id))?.id).toBe(renewal.id);
   });
 
   // ---- survives a restart ------------------------------------------------

@@ -9,22 +9,35 @@
  * half-finished wallet session must not outlive its window — can be tested
  * directly instead of only through a live browser.
  */
-import { createHash } from "node:crypto";
+import { ID_PREFIXES, ULID_LENGTH } from "@agentpay/directory";
 
 const SESSION_COOKIE = "agentpay_sid";
 
 /**
- * Session ids are only ever minted by this server (`randomUUID()`, or
- * {@link walletTenantId}) — validated on the way back in so a forged cookie
- * cannot be used as another visitor's `tenantId` when reading or writing
- * their rows in `vault_records`.
+ * Session ids are only ever minted by this server — `randomUUID()` for the
+ * classic (platform-signed) path, or a real `@agentpay/directory` tenant id
+ * (`ptn_<ULID>:<ULID>`) for the wallet path since T39 — validated on the way
+ * back in so a forged cookie cannot be used as another visitor's identity
+ * when reading, writing or rehydrating their rows.
+ *
+ * Two shapes, not one, because the two paths mint genuinely different
+ * things: the classic path has no durable identity to key by (`session-rehydration.ts`'s
+ * docstring), so a fresh random id per visit is still correct there; the
+ * wallet path's id *is* the tenant's own real identifier in the directory,
+ * not a derived stand-in the way `walletTenantId`'s `sha256(address)` used
+ * to be (superseded — `C-25`/`D4`: that scheme let one wallet's tenant id
+ * collide across two different partners, which is exactly what a tenant id
+ * must never do).
  */
-const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TENANT_ID_RE = new RegExp(
+  `^${ID_PREFIXES.partner}_[0-9A-Z]{${ULID_LENGTH}}:[0-9A-Z]{${ULID_LENGTH}}$`,
+);
 
 export { SESSION_COOKIE };
 
 export function isValidSessionId(value: string | undefined): value is string {
-  return value !== undefined && SESSION_ID_RE.test(value);
+  return value !== undefined && (UUID_RE.test(value) || TENANT_ID_RE.test(value));
 }
 
 export function parseCookies(header: string | undefined): Map<string, string> {
@@ -43,20 +56,6 @@ export function parseCookies(header: string | undefined): Map<string, string> {
 /** The message a wallet is asked to sign to prove it controls its address. */
 export function challengeMessage(nonce: string): string {
   return `VynGent quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
-}
-
-/**
- * A stable, cookie-safe id derived from a wallet address, so the same wallet
- * reconnecting always lands on the same MandateVault `tenant_id` (T33)
- * instead of a fresh random one per visit. Not a real UUID v5 (no
- * namespace/version bits) — just `sha256(address)` reshaped to satisfy
- * `SESSION_ID_RE`, since nothing downstream needs RFC 4122 compliance, only
- * a stable, collision-resistant string shaped like the ones `randomUUID()`
- * already produces.
- */
-export function walletTenantId(address: string): string {
-  const hex = createHash("sha256").update(address, "utf8").digest("hex").slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 export const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;

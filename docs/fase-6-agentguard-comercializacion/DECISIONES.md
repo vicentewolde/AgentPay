@@ -882,3 +882,176 @@ mensaje, y `details.cause` es el mensaje, no el error. Lo mismo hace
 completo — algo que la superficie de API de F5 va a tener que hacer bien
 desde el primer día. Se anota como requisito de F5/F8: **ningún log
 estructurado serializa un error crudo**. No se cambia nada ahora.
+
+---
+
+### C-33 · Antes de F4, todo tenant comparte un único agente — modelado como una fila real, no como una ficción · `Vigente`
+**Fecha:** 2026-09-10 (T39)
+
+`@agentpay/directory` (T38) asume el mundo de F4: una identidad Stellar por
+tenant, `directory_agents.address` único. Eso todavía no es cierto — todo
+visitante sigue firmando con el único `AGENT_SECRET_KEY` compartido
+(`C-16`/`C-20`, diferido a F4 a propósito). En vez de aflojar la unicidad que
+el esquema protege, o inventar una segunda forma más laxa para este período
+transicional, T39 representa la verdad tal cual es: existe **una sola** fila
+de agente, compartida por todos los tenants, con una etiqueta que lo dice
+explícitamente (`apps/web/src/shared-identity.ts`).
+
+**Consecuencia que obligó a un cambio de esquema.** Con un solo `agentId`
+compartido por todos los tenants, `agentId` deja de alcanzar para responder
+"¿cuál es la credencial de **este** tenant?" — antes de este hito
+`directory_credentials` no tenía columna `tenant_id`. Se agregó vía `alter
+table` (T38 ya había creado la tabla, vacía, contra la base real), documentado
+en `schema-sql.ts`. Post-F4, cuando cada tenant tenga su propio agente, la
+columna sigue siendo correcta — deja de ser la única forma de resolver la
+ambigüedad, no una que sobra.
+
+**Por qué no reusar el `tenantIndex` de `@agentpay/tenancy` para esto.**
+`deriveTenantKeypair` sigue sin cablearse (`C-16`); cablearlo es,
+explícitamente, el trabajo de F4, no de F3. Bootstrapear una fila que ya
+existe on-chain (`AGENT_SECRET_KEY` ya está anclado, ya tiene mandatos
+firmados) con la maquinaria de derivación de F4 habría mezclado dos
+migraciones en un solo hito.
+
+**Alternativa descartada:** relajar `directory_agents.address unique` para
+permitir que varios tenants apunten a la misma fila directamente (sin capa
+de indirección). Se descartó porque esa unicidad es la garantía central del
+esquema — que dos agentes nunca deriven la misma cuenta Stellar — y
+relajarla para un caso transicional la debilitaría también para el caso
+permanente que llega con F4.
+
+---
+
+### C-34 · La sesión clásica (sin wallet) no se persiste — sigue siendo efímera a propósito · `Vigente`
+**Fecha:** 2026-09-10 (T39)
+
+T39 solo agrega persistencia al camino de wallet conectada. El camino
+clásico (la plataforma firma como su propio principal) sigue emitiendo
+credencial y Mandato nuevos en cada "Iniciar sesión", exactamente como
+antes.
+
+**Motivo.** El requisito de F3 es que una wallet pueda volver desde otro
+navegador y encontrar lo que ya firmó — eso exige una prueba de control
+(la firma SEP-0053) que solo una wallet puede dar. El camino clásico no
+tiene ese ancla: no hay "la misma persona volviendo", porque nadie probó
+ser nadie. Persistirlo no compraría el objetivo de F3, solo agregaría
+filas de un camino que la Fase 6 ya trata como demo.
+
+**Alternativa descartada:** persistir también el camino clásico, usando
+algún otro identificador (IP, fingerprint de navegador) como ancla. Se
+descartó por no ser una prueba de identidad real — cualquier ancla así
+sería más débil que lo que ya existe, y el objetivo del hito es
+verificable, no aproximado.
+
+---
+
+### C-35 · La decisión de rehidratar es una función pura, separada de dónde se guarda el estado · `Vigente`
+**Fecha:** 2026-09-10 (T39)
+
+`decideRehydration()` (`apps/web/src/session-rehydration.ts`) no toca red, no
+tiene reloj propio, no conoce Postgres. Recibe la credencial y los mandatos
+que el llamador ya leyó y devuelve `"rehydrate"` o `"issue"`.
+
+**Motivo.** Es la misma disciplina que `checkMandate`/`checkScope` ya siguen,
+por la misma razón: la función que decide si algo se reusa o se emite de
+nuevo es exactamente la que más conviene poder testear sin un servidor, sin
+una base, sin testnet. Los ocho tests de `session-rehydration.test.ts` cubren
+cada rama —sin nada que rehidratar, mandato expirado, mandato revocado,
+credencial revocada de forma independiente, estado a medio escribir sin
+credencial, agente no coincidente (la comparación que empieza a importar de
+verdad recién con F4), más de un mandato activo a la vez— sin abrir una
+conexión.
+
+**Lo que esta función explícitamente no es: un punto de confianza.** Que un
+mandato sea genuinamente válido —no revocado on-chain, no expirado, firmado
+por quien dice— lo sigue decidiendo `checkMandate`/`checkScope` y el
+verificador on-chain en el momento de la compra, exactamente igual que
+antes de T39. Esta función solo decide si iniciar sesión se salta un
+`issue()` + anclaje redundantes contra testnet. Una fila desactualizada acá
+—revocada por otra vía, por ejemplo— no cuesta nada nuevo: el camino de
+compra ya la rechaza, como siempre lo hizo.
+
+**Alternativa descartada:** decidir la rehidratación dentro de
+`startSession` directamente, sin extraerla. Se descartó porque es
+exactamente el patrón que `C-18`/T36 ya identificó como el que falla en
+producción — lógica pura viviendo dentro de una función que además hace
+red, sin un solo test posible sin levantar todo alrededor.
+
+---
+
+### C-36 · El bootstrap de identidad compartida y del tenant de un visitante son idempotentes por búsqueda, no por bloqueo · `Vigente`
+**Fecha:** 2026-09-10 (T39)
+
+`ensureSharedAgentIdentity()` y `ensureVisitorTenant()`
+(`apps/web/src/shared-identity.ts`) siguen el mismo patrón: buscar primero:
+si existe, devolverlo; si no, crear, y si la creación falla (una carrera
+real entre dos requests concurrentes la primera vez que algo se crea),
+volver a buscar en vez de propagar el error de unicidad.
+
+**Motivo.** Este piloto corre un solo proceso, pero ese proceso sirve
+requests concurrentes — dos visitantes conectando su wallet al mismo tiempo,
+la primera vez que existe cualquiera de estas filas, es un caso real, no
+hipotético. Bloquear con una transacción explícita habría funcionado, pero
+es más máquina de la que el problema necesita: la carrera ocurre como mucho
+una vez por fila (agente compartido: una vez en la vida del despliegue;
+tenant de un visitante: una vez por wallet), y perder esa carrera cuesta
+exactamente una consulta extra, no un error.
+
+**Verificado con tests, no solo argumentado.** Los cuatro tests de "recovers
+when a concurrent call already created the row" simulan la pérdida de la
+carrera haciendo que el paso de creación explote, y confirman que la
+segunda búsqueda encuentra lo que el ganador creó.
+
+---
+
+### C-37 · Revocar actualiza el directorio antes de que una futura sesión pueda rehidratar el mandato muerto · `Vigente`
+**Fecha:** 2026-09-10 (T39)
+
+`/api/session/wallet-revoke-submit` llama `directory.revokeMandate(...)`
+después de que la revocación on-chain se confirma.
+
+**Motivo.** Sin esto, `listActiveMandates` seguiría devolviendo el mandato
+revocado hasta que expirara por `validUntil` — `decideRehydration` lo
+rehidrataría igual, y el primer intento de compra recién ahí fallaría
+contra `checkMandate` (correcto, pero tarde: la sesión entera se arma
+alrededor de un mandato que ya no sirve). Marcarlo en el directorio hace que
+la siguiente vez que esa wallet inicie sesión, `decideRehydration` vea
+`activeMandates.length === 0` y emita uno nuevo, encadenado por
+`supersedesId` al que se revocó.
+
+**Verificado end-to-end contra testnet real** (no solo en test): revocar,
+después iniciar sesión de nuevo, confirmar que pide firma nueva
+(`pending: "wallet-consent"`, no rehidratación), completar la renovación, y
+consultar el directorio directamente para confirmar que el mandato nuevo
+tiene `supersedesId` apuntando al revocado. Ver `evidencia/T39.md`.
+
+---
+
+### C-38 · La verificación de este hito se corrió contra testnet real, con firmas reales, no solo con tests · `Vigente`
+**Fecha:** 2026-09-10 (T39)
+
+Cuatro corridas manuales, con un script descartable (nunca commiteado) que
+usó `ISSUER_SECRET_KEY` —ya fondeada y ya registrada— como wallet simulada,
+firmando con SEP-0053 real y transacciones Stellar reales:
+
+1. Conectar, firmar el Mandato, anclar — primera vez, emite de verdad.
+2. Llamar `/api/session/start` una segunda vez, mismo proceso — rehidrata,
+   mismos hashes.
+3. **Matar el proceso del servidor y levantar uno nuevo** — sin ningún
+   estado en memoria — y confirmar que rehidrata desde Postgres solo, con
+   los mismos hashes exactos que antes de morir.
+4. Una compra real, liquidada por `policy_rail`, ejecutada sobre una sesión
+   que nunca pasó por `issue()` en este proceso — prueba que el documento
+   rehidratado (reparseado desde `json`, no el objeto original en memoria)
+   sigue siendo un `AgentPayMandate` válido para `checkMandate`/`checkScope`.
+5. Revocar y confirmar que la sesión siguiente no rehidrata la muerta
+   (`C-37`).
+
+**Por qué un script descartable y no un test de integración commiteado.**
+El patrón ya establecido por `C-18` (T36): las rutas HTTP de `apps/web` se
+verifican contra testnet real, de punta a punta, no simuladas — un test que
+mockeara `AgentPass`/Stellar para esto probaría los dobles, no el código.
+Lo que sí quedó como test permanente es la lógica pura que gobierna la
+decisión (`session-rehydration.test.ts`) y el bootstrap idempotente
+(`shared-identity.test.ts`) — la misma división de responsabilidades que
+T36 ya estableció.
