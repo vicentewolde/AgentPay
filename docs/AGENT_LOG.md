@@ -36,7 +36,8 @@ ni los backends del vault.
 
 Verificado: `pnpm typecheck` y `pnpm test` en verde (750 tests en total).
 
-Pendiente: abrir el PR y esperar revisión antes de mergear.
+Pendiente: PR [#4](https://github.com/vicentewolde/AgentPay/pull/4) abierto;
+esperar revisión antes de mergear.
 
 ## 2026-09-07 — codex/sdk-config-tests
 
