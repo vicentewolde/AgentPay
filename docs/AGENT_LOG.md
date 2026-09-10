@@ -22,6 +22,23 @@ Por qué: <motivo>
 Pendiente: <qué queda para la próxima sesión>
 ```
 
+## 2026-09-10 — codex/check-render-env-vars
+
+Agente: Codex
+
+Qué: se agregó un test que extrae de `apps/web/src/server.ts` cada variable
+pasada a `requireEnv` o `requireSecretKey` y comprueba que esté declarada como
+`key` dentro de `envVars` de `render.yaml`.
+
+Por qué: `ADMIN_SECRET_KEY` llegó a faltar en el deploy real porque no había
+un control que conectara las variables requeridas por el servidor con el
+manifiesto de Render.
+
+Verificado: `pnpm typecheck` y `pnpm test` en verde (735 tests en total).
+
+Pendiente: PR [#5](https://github.com/vicentewolde/AgentPay/pull/5) abierto;
+esperar revisión antes de mergear.
+
 ## 2026-09-07 — codex/sdk-config-tests
 
 Agente: Codex
