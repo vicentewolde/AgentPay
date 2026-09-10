@@ -504,3 +504,208 @@ vencimiento chequeado al leer, compartido con los nonces del challenge. De
 paso, el nonce se consume **antes** de verificar la firma, no después: un
 nonce se gasta por ser presentado, así que una firma incorrecta ya no puede
 reintentarse contra el mismo challenge.
+
+### C-19 · Un tenant es la relación (partner, usuario final), no el partner ni el workspace · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+`CloudOps` es un **partner**. Cada usuario final suyo —`usr_123`— tiene su
+propio **tenant**, aislado del resto. El escenario objetivo que el usuario
+describió es de ~500 partners con miles de usuarios cada uno, es decir del
+orden de **un millón de tenants**; el primer escenario a construir es
+deliberadamente de dos partners, dos usuarios y dos comercios.
+
+**Motivo.** Es la única lectura que sostiene las distinciones del brief: un
+mismo principal usando la misma wallet con dos partners tiene que quedar en
+espacios separados, y eso solo pasa si el tenant incluye al partner **y** al
+usuario. Un tenant por partner metería a todos sus usuarios en el mismo
+`perDay` y la misma bitácora.
+
+**Consecuencia que obliga a `C-20` y `C-21`.** Un millón de tenants no es una
+abstracción gratuita: bajo el modelo de fondos elegido, cada tenant querría
+una cuenta Stellar y un contrato propios, y ambos cuestan saldo bloqueado y
+renta en la cadena. Ver `C-21`.
+
+**Alternativa descartada:** tenant = partner, con el usuario final como un
+`principal` más dentro de él. Se descartó porque colapsa el aislamiento que
+es la razón de ser de la entidad — y porque el brief pide explícitamente que
+"un mismo principal pueda usar la misma wallet con varios partners y tener
+tenants, agentes y mandatos separados".
+
+---
+
+### C-20 · El modelo de fondos del producto es el smart account por tenant, fondeado por el principal · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+De las cuatro alternativas presentadas en
+[PLATAFORMA-PARTNERS.md §4.1](PLATAFORMA-PARTNERS.md), el usuario eligió la
+**opción 3**: Vinny fondea un `policy_rail` propio de su tenant, y el agente
+gasta desde ahí con `per_tx`/`per_day` aplicados por la red dentro de la
+misma transacción que mueve el dinero.
+
+**Motivo.** Es la única de las cuatro donde los límites los aplica la cadena
+y no el software, y es literalmente la tesis del proyecto ya escrita en Rust
+(`contracts/policy-rail`, T22/T31). La opción 1 (la wallet firma cada pago)
+elimina la autonomía que da sentido al producto; la opción 2 se descartó por
+un hecho del protocolo y no por preferencia —Stellar da a los firmantes
+adicionales *pesos y umbrales, no montos*, así que una "clave de sesión"
+sobre una cuenta clásica tiene poder sobre todo el saldo—; la opción 4
+(custodia total) es lo que el producto hace hoy en testnet y lo que su propia
+narrativa dice que no hay que hacer.
+
+**Lo que queda explícitamente rotulado, no escondido.** La opción 4 sigue
+existiendo como **modo demo de testnet**, apagable, para que el visitante
+casual pueda probar sin fondear nada. Lo que cambia es que deja de ser el
+único modo y deja de ser el modo por omisión de un tenant real.
+
+**Precondición registrada, no construida.** `contracts/policy-rail/src/lib.rs`
+no tiene retiro, ni rotación de owner, ni revocación: quien fondee un rail
+cuyo owner tenga AgentPay **no puede recuperar su saldo**. En testnet con
+montos simbólicos es tolerable y así queda. Antes de cualquier fondo real es
+bloqueante. Es un cambio de contrato — área restringida por `CLAUDE.md` — y
+**no se construye sin pedido explícito del usuario**.
+
+**Segunda limitación del contrato, encontrada al leerlo para esta decisión.**
+`policy_rail` fija **un solo asset** en su constructor (`asset`, documentado
+en su propio docstring como simplificación deliberada de `M-14`). Un tenant
+que quiera comprar en dos assets necesita dos rails, o un cambio de contrato.
+Se registra; no se resuelve.
+
+**Alternativa descartada:** decidir esto más adelante y avanzar con la cuenta
+compartida. Se descartó porque el modelo de fondos gobierna el modelo de
+entidades, el onboarding y la superficie de API — construir esas tres cosas
+sin la decisión tomada garantiza rehacerlas.
+
+---
+
+### C-21 · La identidad on-chain de un tenant se crea de forma perezosa: derivar es gratis, existir en la cadena no · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+Crear un tenant **no** despliega nada en Stellar. Se le asigna su índice de
+derivación y se calcula su par de llaves (`deriveTenantKeypair`, T32), que es
+una operación local, offline y sin costo. La cuenta Stellar del agente y el
+contrato `policy_rail` del tenant se crean **recién cuando ese tenant va a
+gastar de verdad**.
+
+**Motivo, con los números del propio repo.** Bajo `C-19` (un millón de
+tenants) y `C-20` (un rail por tenant), crear todo por adelantado significa:
+una cuenta Stellar por agente, cada una con el saldo mínimo que la red exige
+para que la cuenta exista, más un despliegue de contrato por tenant con su
+fee y su renta. El spike de T22 fondeó su rail de prueba con **1 XLM**
+(`docs/fase-3-policyrail-mandato/evidencia/T22-spike.md` §8) y midió que la
+renta de TTL es la partida que domina el costo —203 831 stroops contra
+48 886 sin ella, §9.1—. Multiplicado por un millón de tenants, el costo de
+existir en la cadena es del orden de un millón de XLM inmovilizados. La
+inmensa mayoría de los usuarios de un partner nunca van a comprar nada.
+
+**Alternativa descartada:** crear la cuenta y el rail al dar de alta el
+tenant, para que "todo esté listo". Se descartó por el costo de arriba y
+porque no compra nada: el momento en que el tenant necesita su identidad
+on-chain es exactamente el momento en que consiente y fondea, no antes.
+
+---
+
+### C-22 · La integración es híbrida: API hospedada para lo que debe ser hospedado, SDK local para lo que debe ser verificable · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+Confirmado por el usuario. **Hospedado por AgentPay:** alta de tenants y
+agentes, flujo de consentimiento, custodia de las llaves derivadas, la
+decisión de autorización que necesita estado (`perDay`), la bitácora y los
+webhooks. **Biblioteca local en el partner:** verificar la credencial,
+verificar el Mandato, `checkScope`, `checkMandate`, armar el
+`PurchaseIntent`, hablar x402.
+
+**Motivo.** El proyecto ya está construido así y la tesis depende de ello:
+`@agentpass/core`, `@agentpass/sdk`, `@agentpay/mandate` y el motor de
+`apps/agent` son bibliotecas puras, verificables sin red. Obligar a un
+partner a preguntarle a una API si un Mandato es válido, cuando puede
+verificar la firma él mismo, destruye la propiedad que hace al producto
+distinto ("verificable, no confiable"). A la inversa, el consentimiento y la
+bitácora tienen que estar hospedados porque su valor es justamente que no los
+controla la parte interesada: un consentimiento que renderiza el partner deja
+de ser evidencia de nada.
+
+**Alternativa descartada:** solo SDK (cada partner hospeda todo), que hace
+del consentimiento algo fabricable por el propio partner; y solo API, que
+tira la verificabilidad local.
+
+---
+
+### C-23 · El primer partner y el primer comercio los construimos nosotros · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+El usuario quiere diseñar él mismo, más adelante, un partner de referencia y
+un comercio de referencia para la primera compra. Hasta entonces, el piloto
+no depende de ningún tercero.
+
+**Motivo, y por qué es una mejora sobre el plan anterior.** El riesgo
+transversal número uno del `ROADMAP.md` §5 es la dependencia del embajador —
+bloqueante directo en la Fase 2 y estructural en la Fase 4. Construir un
+partner y un comercio propios lo elimina del camino crítico: el bazaar del
+embajador pasa de ser la única integración posible a ser **la segunda**, lo
+que además es la prueba real de que el camino de comercio se generalizó
+(F7). Un comercio propio también permite ejercitar las variantes que un
+tercero no va a producir a pedido: un `402` con un precio distinto al
+cotizado, un asset no autorizado, un destinatario que no coincide.
+
+**Alternativa descartada:** esperar a un partner externo antes de diseñar la
+API. Se descartó porque congela el trabajo detrás de una conversación que no
+depende de nosotros, y porque una API diseñada sin ningún integrador —ni
+propio ni ajeno— se diseña a ciegas.
+
+---
+
+### C-24 · El éxito del piloto en testnet es el flujo completo con todas sus variantes, con una entidad de cada tipo · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+Definición del usuario, textual: el flujo completo de punta a punta con todas
+sus variantes y condicionales, con al menos un usuario, un partner, un
+comercio, un agente, una compra y todo lo que la compra involucra. Cada
+entidad puede ser externa o construida por nosotros (`C-23`).
+
+**Qué significa "todas sus variantes", para que el criterio sea verificable y
+no una intención.** No solo el camino feliz: también cada rechazo que el
+sistema sabe producir. Como mínimo — venue no autorizado, asset no
+autorizado, monto sobre `perTx`, acumulado sobre `perDay`, mandato fuera de
+vigencia, mandato revocado, credencial revocada, principal que no coincide
+con el firmante, y un `402` cuyo precio no reconcilia con lo firmado. Cada
+uno con su código de error tipado y su registro en la bitácora.
+
+**Motivo.** Es un criterio de completitud, no de volumen: no pide escala,
+pide que ninguna rama del árbol de decisión quede sin ejercitar. Encaja con
+cómo se verificó cada hito de las Fases 1 a 5.
+
+**Alternativa descartada:** una métrica de volumen (N compras, N partners) o
+de tiempo de integración. Se descartaron porque en testnet, sin usuarios
+reales, ambas se pueden inflar sin que prueben nada.
+
+---
+
+### C-25 · Decisiones menores resueltas junto con las anteriores · `Vigente`
+**Fecha:** 2026-09-10 (T37)
+
+Cerradas sin discusión aparte, siguiendo las recomendaciones de
+[PLATAFORMA-PARTNERS.md §4.2](PLATAFORMA-PARTNERS.md):
+
+- **`D4` — namespace del `tenant_id` en el vault:** `<partner_id>:<ULID>`,
+  no `sha256(wallet)`. El actual colisiona entre partners, que es
+  exactamente lo que `C-19` prohíbe. Las filas ya escritas en
+  `vault_records` bajo el id viejo **se quedan donde están**: reescribirlas
+  rompería la cadena de hashes, que es lo único que el vault promete.
+- **`D5` — fase:** esto sigue siendo **Fase 6**, no una fase nueva. Sus
+  etapas 2 y 3 documentadas (`CONTEXTO.md` §5) son literalmente este
+  trabajo.
+- **`D1` — seed maestro:** gestor de secretos (Doppler o Infisical) cuando
+  se cablee la derivación (F4), no antes. Confirma lo que `C-3` anticipó.
+- **`D2` — quién emite la credencial:** la plataforma, como hoy (`C-17`).
+- **`D3` — alta de emisores on-chain:** por partner al alta, **no** por
+  wallet conectada. Reemplaza el registro automático de `C-15`, que es un
+  camino de escritura on-chain sin límite pagado por la clave admin y
+  disparable por cualquiera. `C-15` queda **superada** cuando F5 lo
+  implemente; hasta entonces sigue vigente en `apps/web`.
+- **`D6` — correlación de una misma wallet entre partners:** se acepta y se
+  declara en testnet; se reevalúa antes de cualquier consideración de
+  mainnet.
+
+**Diferidas a pedido del usuario, sin decidir:** qué pasa cuando alguien
+conecta varias wallets, y toda condición previa a mainnet. Ninguna de las dos
+bloquea el trabajo inmediato.

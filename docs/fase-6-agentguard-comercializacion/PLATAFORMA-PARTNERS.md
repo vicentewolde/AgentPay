@@ -381,6 +381,15 @@ Cada paso marcado con lo que hoy existe y lo que falta.
 
 ## 4. Decisiones abiertas
 
+> **Resueltas el 2026-09-10 (T37).** Todo lo de esta sección quedó decidido y
+> registrado en [DECISIONES.md](DECISIONES.md) → `C-19` a `C-25`. Se conserva
+> el análisis completo abajo, sin editar, porque es el razonamiento que
+> sostiene cada decisión — y porque las alternativas descartadas importan
+> tanto como la elegida. Resumen: tenant = (partner, usuario final) `C-19`;
+> modelo de fondos = **opción 3**, smart account por tenant `C-20`; creación
+> on-chain perezosa `C-21`; integración híbrida `C-22`. Diferidas sin
+> decidir: varias wallets por usuario, y mainnet.
+
 ### 4.1 La decisión crítica: fondos y autonomía
 
 **No decido esto. Presento las cuatro opciones que pediste, con lo que
@@ -739,6 +748,12 @@ antes de encadenar la siguiente, como el resto del proyecto.
 ---
 
 ## 7. Preguntas que necesito que respondas
+
+> **Respondidas el 2026-09-10 (T37).** Las respuestas están en
+> [DECISIONES.md](DECISIONES.md) → `C-19` a `C-25`. Se conservan las preguntas
+> tal como se hicieron. Quedaron deliberadamente sin responder, a pedido del
+> usuario, la 5 (varias wallets) y la 7 (condiciones para mainnet); ninguna
+> bloquea el trabajo inmediato.
 
 Solo las que cambian una decisión material. Sin ellas, F1 no cierra.
 

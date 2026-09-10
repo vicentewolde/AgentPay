@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T36 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T37 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
 misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
@@ -35,6 +35,7 @@ pero cablear la identidad propia por tenant queda para un hito aparte
 | T34 | Conectar wallet (Freighter) con verificación criptográfica real (SEP-0053); da a cada wallet un `tenant_id` estable en el vault | ✅ cerrado 2026-09-09 |
 | T35 | La wallet conectada firma de verdad el Mandato (SEP-0053) y ancla/revoca la transacción on-chain con su propia firma | ✅ cerrado 2026-09-09 |
 | T36 | Blindar `apps/web`: costuras testeables extraídas de `server.ts` y 49 tests donde antes no había ninguno | ✅ cerrado 2026-09-10 |
+| T37 | Diseño de la plataforma para partners: modelo de entidades, modelo de fondos, plan de diez fases — **sin una línea de código** | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -544,3 +545,68 @@ trabajo a Codex — costuras acotadas, sin red, donde ampliar cobertura no
 toca ningún punto de autorización. Sigue sin resolver, a propósito:
 cablear `@agentpay/tenancy` (T32) para que cada tenant gaste desde su
 propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).
+
+---
+
+## T37 · Diseño de la plataforma para partners — cerrado 2026-09-10
+
+**Qué quedó, en palabras llanas.** Nada que se pueda ejecutar: un plano y
+seis decisiones tomadas. El usuario pidió diseñar, antes de construir, cómo
+AgentPay deja de ser una demo de un visitante y pasa a ser algo que una
+empresa como "CloudOps" pueda integrar para que los agentes de sus propios
+usuarios compren cosas. El resultado es
+[PLATAFORMA-PARTNERS.md](PLATAFORMA-PARTNERS.md) — modelo de entidades y su
+ciclo de vida, separación de datos, onboarding, comparación de formas de
+integración, contratos de API, brechas contra el repo real, y un plan de
+diez fases con puertas de aprobación — más las decisiones `C-19` a `C-25`.
+
+**La decisión de fondo.** De cuatro formas posibles de resolver "quién firma
+el pago y quién tiene las llaves", el usuario eligió la que ya está escrita
+en Rust en este repo: cada tenant fondea su propio `policy_rail`, y los
+límites los aplica la red dentro de la misma transacción que mueve el dinero,
+no el software antes de moverlo (`C-20`). Un tenant es la relación entre un
+partner y **un usuario final suyo**, no el partner entero (`C-19`).
+
+**Tres cosas que se encontraron leyendo el código y no la documentación, y
+que ninguna decisión previa registraba.**
+
+1. **`@agentpay/tenancy` (T32) no lo importa ningún archivo fuera de su
+   propio paquete.** `C-16` decía que faltaba cablearlo; lo que no decía es
+   que estuviera literalmente huérfano. La derivación de llaves por tenant
+   existe como biblioteca, no como capacidad del producto.
+2. **El vault responde `spentOn()` desde un caché en memoria** cargado al
+   construirse (`packages/vault/src/postgres-vault.ts`). Con dos procesos
+   sirviendo al mismo tenant, cada uno ve un gasto diario desactualizado y el
+   camino de cuenta clásica podría exceder `perDay`. El camino `policy_rail`
+   no, porque ahí el límite lo aplica el contrato. `C-7` documenta la
+   serialización de **escrituras**; la lectura de totales no estaba anotada.
+   Hoy está mitigado por correr una sola instancia, y eso ahora está escrito.
+3. **`policy_rail` no tiene retiro, ni rotación de owner, ni revocación**
+   (`contracts/policy-rail/src/lib.rs`). Con el modelo de fondos recién
+   elegido, quien fondee un rail cuyo owner tenga AgentPay no puede recuperar
+   su saldo. Tolerable en testnet con montos simbólicos; bloqueante para
+   fondos reales. Es un cambio de contrato, área restringida — registrado en
+   `C-20`, **no propuesto para construir**.
+
+**Una consecuencia de escala que apareció al cruzar dos respuestas del
+usuario.** Un tenant por usuario final, a ~500 partners con miles de usuarios
+cada uno, es del orden de un millón de tenants; y un `policy_rail` por
+tenant, creado por adelantado, sería del orden de un millón de XLM
+inmovilizados solo para que las cuentas y los contratos existan. De ahí sale
+`C-21`: derivar llaves es local y gratis, y la cuenta y el contrato se crean
+recién cuando el tenant va a gastar de verdad.
+
+**Evidencia técnica.** Ninguna corrida: este hito no produjo código. Lo que sí
+se verificó, contra el repo y no contra la documentación, está en
+[evidencia/T37.md](evidencia/T37.md) — los comandos exactos y sus salidas.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta
+`PLATAFORMA-PARTNERS.md` (nuevo), `BITACORA.md`, `DECISIONES.md` (`C-19` a
+`C-25`), `CONTEXTO.md` §5, `evidencia/T37.md` (nuevo). Fuera de la carpeta,
+`ROADMAP.md` §4.6. **Cero archivos de código tocados.**
+
+Pendiente: el siguiente hito propuesto es **F2 = T38**, el modelo de datos de
+partner y tenant como paquete nuevo — no toca ninguna área restringida y no
+depende de nada que quede sin decidir. Sigue pendiente de antes: cablear
+`@agentpay/tenancy` (`C-16`, ahora parte de F4) y el rename a VynGent
+(`P-9`).

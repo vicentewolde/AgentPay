@@ -537,6 +537,18 @@ partners reales en testnet. Ver `P-6` en
 competitivo, mercado, hoja de ruta técnica, plan financiero) en el plan de
 trabajo "AgentPay: De Piloto a Producto" (2026-09-09).
 
+**Desde T37 (2026-09-10) la mitad de "comercialización" tiene un plano
+detallado y decisiones tomadas.** Ver
+[docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md](docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md)
+— arquitectura objetivo, modelo de entidades, brechas contra el repo real y
+un plan de diez fases con puertas de aprobación — y `DECISIONES.md` → `C-19`
+a `C-25` en esa misma carpeta. Las dos decisiones que gobiernan el resto: un
+**tenant** es la relación entre un partner y un usuario final suyo, no el
+partner entero (`C-19`); y el **modelo de fondos** es un `policy_rail` por
+tenant fondeado por el propio principal, elegido entre cuatro alternativas
+(`C-20`). Sigue sin definir el alcance de AgentGuard, y sigue vigente que
+nada de esto cruza a mainnet.
+
 **Texto original de esta sección, vigente para la parte de AgentGuard —
 todavía sin alcance definido.** Esta fase existe en el plan por una razón
 distinta a las anteriores: para que quede escrito, desde ahora, que **no se

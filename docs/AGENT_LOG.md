@@ -2059,3 +2059,59 @@ implementable sin tocar áreas restringidas es F2 (modelo de datos
 partner/tenant como paquete nuevo). La rama queda **sin mergear y sin
 pushear**, esperando revisión. Sigue pendiente de antes: cablear
 `@agentpay/tenancy` (`C-16`) y el rename a VynGent (`P-9`).
+
+## 2026-09-10 (4) — cc/diseno-plataforma-partners (T37 cerrado)
+
+Agente: Claude Code
+
+Qué: **T37 cerrado, sin una línea de código.** El usuario respondió las
+siete preguntas del diseño de la plataforma para partners y las respuestas
+quedaron registradas como `C-19` a `C-25` en la fase 6. Las dos que
+gobiernan todo lo demás: un **tenant** es la relación (partner, usuario
+final) —no el partner entero, no el workspace— con un escenario objetivo
+del orden de 500 partners × miles de usuarios (`C-19`); y el **modelo de
+fondos** es la opción 3 de las cuatro presentadas, un `policy_rail` por
+tenant fondeado por el propio principal, con `per_tx`/`per_day` aplicados
+por la red dentro de la transacción (`C-20`).
+
+Por qué: `CLAUDE.md` regla 1 — cerrar el hito de diseño y mostrarlo antes
+de encadenar el siguiente. Las decisiones se escriben antes de construir
+porque el modelo de fondos gobierna el modelo de entidades, el onboarding
+y la superficie de API; construir esas tres sin la decisión tomada
+garantiza rehacerlas.
+
+Hallazgo propio del cruce de dos respuestas, no de una sola: un tenant por
+usuario final a esa escala es ~10⁶ tenants, y un rail por tenant creado por
+adelantado sería del orden de 10⁶ XLM inmovilizados solo para que cuentas y
+contratos existan (el spike de T22 fondeó su rail con 1 XLM y midió que la
+renta de TTL domina el costo). De ahí `C-21`: derivar llaves es local y
+gratis, la identidad on-chain se crea recién cuando el tenant va a gastar.
+
+Dos limitaciones de `contracts/policy-rail` registradas y **no
+construidas** (área restringida): no tiene retiro, rotación de owner ni
+revocación, así que quien fondee un rail cuyo owner tenga AgentPay no puede
+recuperar su saldo; y fija un solo `asset` por rail. Tolerable en testnet,
+bloqueante para fondos reales. Ver `C-20`.
+
+Además, `C-15` (registro automático de cualquier wallet conectada como
+emisor, usando la clave admin) queda marcada para ser **superada** por
+`D3`/`C-25` cuando F5 la implemente: es una escritura on-chain sin límite,
+pagada por la cuenta admin, disparable por cualquiera.
+
+Documentación tocada: `ROADMAP.md` §4.6, `docs/AGENT_LOG.md`, y en
+`docs/fase-6-agentguard-comercializacion/`: `PLATAFORMA-PARTNERS.md`
+(secciones 4 y 7 marcadas resueltas), `BITACORA.md` (estado, tabla, bloque
+T37), `DECISIONES.md` (`C-19` a `C-25`), `CONTEXTO.md` §5, y
+`evidencia/T37.md` (nuevo, con los comandos y salidas de las ocho
+verificaciones contra el repo). **Cero archivos de código.**
+
+Verificado: nada que correr — el hito no produjo código. Lo que sí se
+verificó es cada afirmación del diseño contra el repo y no contra la
+documentación de la fase; los comandos exactos están en `evidencia/T37.md`.
+
+Pendiente: el siguiente hito propuesto es **T38** (F2 del plan) — el modelo
+de datos de partner y tenant como paquete nuevo `packages/registry`. No
+toca ninguna área restringida, no depende de nada sin decidir, y desbloquea
+F3, F4 y F5. **Esperando visto bueno antes de arrancar.** La rama sigue sin
+mergear y sin pushear. Sigue pendiente de antes: cablear `@agentpay/tenancy`
+(`C-16`, ahora F4) y el rename a VynGent (`P-9`).

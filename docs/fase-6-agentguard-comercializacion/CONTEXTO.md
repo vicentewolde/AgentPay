@@ -65,3 +65,15 @@ API para terceros; (3) publicación de paquetes npm + hardening de
 dependencias; (4) boceto de modelo de cobro, sin conectar cobro real
 todavía. Ninguna etapa está comprometida a un plazo — se cierra un hito,
 se muestra el resultado, y se decide el siguiente con el usuario.
+
+**Desde T37 (2026-09-10), las etapas 1 y 2 tienen un plano detallado.** El
+usuario pidió diseñar la plataforma completa antes de construirla:
+[PLATAFORMA-PARTNERS.md](PLATAFORMA-PARTNERS.md) lo desarrolla en diez fases
+con puertas de aprobación, y `DECISIONES.md` → `C-19` a `C-25` registra las
+decisiones que lo gobiernan. Las dos que cambian todo lo demás: un **tenant**
+es la relación entre un partner y un usuario final suyo (`C-19`), y el
+**modelo de fondos** es un `policy_rail` por tenant, fondeado por el propio
+principal, con los límites aplicados por la red (`C-20`). El plano no altera
+nada de lo ya construido: sigue en pie que esta fase es aditiva y que
+`checkMandate`, `scope.limits`/`perDay` y los contratos Soroban no se
+tocan.
