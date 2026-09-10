@@ -36,7 +36,8 @@ manifiesto de Render.
 
 Verificado: `pnpm typecheck` y `pnpm test` en verde (735 tests en total).
 
-Pendiente: abrir el PR y esperar revisión antes de mergear.
+Pendiente: PR [#5](https://github.com/vicentewolde/AgentPay/pull/5) abierto;
+esperar revisión antes de mergear.
 
 ## 2026-09-07 — codex/sdk-config-tests
 
