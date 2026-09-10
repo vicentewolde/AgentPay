@@ -433,3 +433,39 @@ alcance sin que el usuario lo pidiera, la misma razón que ya justificó
 que la precondición de USDC lo desbloquea. Se descartó por alcance — sigue
 faltando decidir cómo y cuándo se deriva el índice de tenant de cada
 wallet nueva, una conversación de producto que no se tuvo todavía.
+
+### C-17 · La credencial nombra a la wallet como `principal` aunque la siga emitiendo la plataforma · `Vigente`
+**Fecha:** 2026-09-10 (T35, corrección)
+
+Cuando hay una wallet conectada, el `credentialSubject.principal` de la
+credencial AgentPass es el DID de esa wallet — el mismo que el `issuer` del
+Mandato. El `issuer` de la credencial sigue siendo la plataforma
+(`ISSUER_SECRET_KEY`), sin cambios.
+
+**Motivo, con el bug real en producción que lo forzó.** T35 hizo que el
+Mandato lo firmara la wallet, pero dejó la credencial diciendo que el
+principal del agente era la plataforma. `checkMandate` (T17, Fase 3)
+compara `mandate.issuer` contra `intent.principal`, y `intent.principal`
+se lee de la credencial — así que los dos documentos firmados se
+contradecían y **toda compra** de una sesión con wallet fallaba con
+`MandatePrincipalMismatch`. El chequeo hizo exactamente lo que debía: es
+la evidencia de consentimiento la que no cerraba. Ahora los dos documentos
+derivan el principal de un único valor (`principalDid` en `startSession`),
+así que no pueden volver a separarse.
+
+**Qué asunción de la Fase 1 cambia esto, dicho explícitamente.**
+`packages/core/src/credential.ts` documentaba que `principal` era "siempre
+el DID del propio emisor en este piloto — no hay un rol de principal
+separado". T35 crea exactamente ese rol separado: la plataforma **atesta**
+la identidad y el scope del agente (emisor), la wallet **consiente** el
+gasto (principal). Ninguna verificación exigía que coincidieran —era una
+observación, no una regla, y no hay ningún esquema ni chequeo que cambie—,
+pero el comentario se actualizó para que no siga afirmando algo que dejó
+de ser cierto.
+
+**Alternativa descartada:** relajar `checkMandate` para que aceptara un
+`principal` distinto del emisor del Mandato. Se descartó de inmediato — es
+el chequeo que prueba que quien consintió es quien dice el intent; aflojarlo
+sería exactamente el tipo de bypass que `B-25` (Fase 2) dejó documentado
+como inaceptable. El problema nunca estuvo en el chequeo, sino en cómo
+`apps/web` armaba los documentos.

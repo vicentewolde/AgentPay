@@ -478,18 +478,27 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
   const now = new Date();
   const validUntil = new Date(now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
+  const walletAddress = walletAddressBySession.get(sessionId);
+  // The one party both signed documents must agree on. `checkMandate` (T17)
+  // refuses an intent whose principal — read off the credential — is not the
+  // mandate's own issuer, so naming the connected wallet in the Mandate while
+  // the credential still named the platform made every purchase fail with
+  // `MandatePrincipalMismatch`. Derived once, used by both, so the two cannot
+  // drift apart again. The credential's *issuer* stays the platform: it
+  // attests the agent's identity and scope, which is a different role from
+  // being the principal the agent acts for (`C-17`).
+  const principalDid = walletAddress === undefined ? issuerDid : stellarAddressToDid(walletAddress, "testnet");
+
   const credential: AgentPassCredential = {
     "@context": [VC_CONTEXT_V2],
     type: ["VerifiableCredential", AGENTPASS_CREDENTIAL_TYPE],
     issuer: issuerDid,
     validFrom: now.toISOString(),
     validUntil,
-    credentialSubject: { id: agentDid, agent: demoScope.agent, principal: issuerDid, scope: demoScope.scope },
+    credentialSubject: { id: agentDid, agent: demoScope.agent, principal: principalDid, scope: demoScope.scope },
     credentialStatus: { type: AGENTPASS_STATUS_TYPE, registry: agentpass.config.contractId },
   };
   const issued = await agentpass.issue({ credential, issuer });
-
-  const walletAddress = walletAddressBySession.get(sessionId);
 
   // Same limits as the scope, not narrower (contrast `pnpm demo`, `G-8`): a
   // real purchase authorises twice — once structurally in
@@ -499,7 +508,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
   // first call's recorded amount. A `perDay` tight enough to demonstrate a
   // rejection here would reject the very first purchase.
   const mandateDocument = createMandate({
-    principal: walletAddress === undefined ? issuerDid : stellarAddressToDid(walletAddress, "testnet"),
+    principal: principalDid,
     agent: agentDid,
     grant: demoScope.scope,
     registry: agentpass.config.contractId,

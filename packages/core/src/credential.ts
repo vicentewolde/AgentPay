@@ -59,9 +59,11 @@ export const credentialSubjectSchema = z.strictObject({
 
 /**
  * What a caller supplies to issue a credential: everything about the agent
- * except `id` (the subject, known only at issue time) and `principal` (always
- * the issuer's own DID in this pilot — there is no separate principal role).
- * This is the shape of the CLI's `--scope <file.json>`.
+ * except `id` (the subject, known only at issue time) and `principal` (the
+ * party the agent acts for, decided by whoever issues). Through T34 that was
+ * always the issuer's own DID — there was no separate principal role; T35
+ * introduced one, where a connected wallet is the principal of a credential
+ * the platform still issues. This is the shape of the CLI's `--scope <file.json>`.
  */
 export const credentialRequestSchema = z.strictObject({
   agent: agentDescriptorSchema,
