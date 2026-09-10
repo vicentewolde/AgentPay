@@ -15,5 +15,8 @@
     "@agentpay/mandate": "workspace:*",
     "@agentpay/vault": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1"
+  },
+  "devDependencies": {
+    "yaml": "^2.9.0"
   }
 }
