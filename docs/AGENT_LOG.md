@@ -2012,3 +2012,50 @@ atrasado (estaba en `3ac4ffc`), hay que actualizarlo, y hay que pushear
 `main` primero porque su rama parte de `origin/main`. Sin resolver, a
 propósito: cablear `@agentpay/tenancy` (T32) para que cada tenant gaste
 desde su propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).
+
+## 2026-09-10 (3) — cc/diseno-plataforma-partners
+
+Agente: Claude Code
+
+Qué: documento de diseño, **sin una línea de código**, para convertir el
+piloto en una plataforma integrable por partners de agentes (el caso
+B2B2C: CloudOps ofrece agentes, Vinny conecta su wallet y firma un
+mandato, el agente compra en un comercio x402).
+`docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md`: modelo de
+entidades y ciclo de vida, separación de datos, onboarding hospedado,
+comparación SDK/API/híbrido, contratos de API, las cuatro alternativas de
+fondos y autonomía sin decidir ninguna, tabla de brechas contra el repo
+real, plan de diez fases con gates de aprobación, y siete preguntas
+abiertas.
+
+Por qué: el usuario pidió explícitamente arquitectura revisable antes de
+implementar, con la instrucción de no tocar contratos, mandatos,
+PolicyRail, `checkMandate`, `scope.limits`/`perDay`, MandateVault ni la
+integración del bazaar.
+
+Verificado contra el código, no contra la documentación. Tres hallazgos
+que no estaban anotados en ningún `DECISIONES.md`:
+
+1. `@agentpay/tenancy` (T32) **no lo importa ningún archivo fuera de su
+   propio paquete** — existe como biblioteca, no como capacidad.
+2. `createPostgresMandateVault` responde `spentOn()` desde un caché en
+   memoria cargado al construirse, así que con dos procesos el `perDay`
+   del camino de cuenta clásica se puede exceder. `C-7` documenta la
+   serialización de escrituras; la lectura de totales, no. El camino
+   `policy_rail` está cubierto por el contrato.
+3. `contracts/policy-rail/src/lib.rs` no tiene retiro, ni rotación de
+   owner, ni revocación: quien fondee un rail cuyo owner tenga AgentPay no
+   puede recuperar su saldo. Tolerable en testnet, bloqueante para fondos
+   reales. Anotado como área restringida (G9), **no propuesto para
+   construir**.
+
+Documentación tocada: solo este archivo y el documento nuevo. Cero cambios
+de código, cero cambios de contratos, cero decisiones nuevas registradas —
+las decisiones quedan abiertas a propósito, esperando respuesta.
+
+Pendiente: las siete preguntas de la sección 7, en particular la de
+custodia (§4.1), que gobierna el resto del diseño. El primer hito
+implementable sin tocar áreas restringidas es F2 (modelo de datos
+partner/tenant como paquete nuevo). La rama queda **sin mergear y sin
+pushear**, esperando revisión. Sigue pendiente de antes: cablear
+`@agentpay/tenancy` (`C-16`) y el rename a VynGent (`P-9`).
