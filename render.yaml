@@ -45,6 +45,15 @@ services:
       # ephemeral disk and was wiped on every redeploy).
       - key: DATABASE_URL
         sync: false
+      # F4/T40 — the master seed each tenant's own derived Stellar identity
+      # comes from (`@agentpay/tenancy`). Required for any wallet session:
+      # without it, `MASTER_MNEMONIC is missing` at "Iniciar sesión", the
+      # same class of omission `ADMIN_SECRET_KEY` already taught (T35). Not
+      # generated or set by this commit — this line only reserves the name
+      # Render will prompt for; the actual value is set in the dashboard,
+      # once, and never regenerated (`.env.example`'s comment explains why).
+      - key: MASTER_MNEMONIC
+        sync: false
       - key: BAZAAR_BASE_URL
         value: https://stellar-bazaar-x402.vercel.app
       # Not a secret — a public Soroban contract address, already committed

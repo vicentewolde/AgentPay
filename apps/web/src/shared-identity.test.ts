@@ -4,9 +4,9 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  ensureSharedAgentIdentity,
+  ensureSharedPayerIdentity,
   ensureVisitorTenant,
-  type SharedIdentityDirectory,
+  type SharedPayerDirectory,
   type VisitorTenantDirectory,
 } from "./shared-identity.js";
 
@@ -38,7 +38,7 @@ function fakeAgent(overrides: Partial<AgentInstance> = {}): AgentInstance {
 }
 
 /** A minimal in-memory stand-in for the directory, implementing only what this module depends on. */
-function fakeDirectory(): SharedIdentityDirectory & { readonly createAgentCalls: number } {
+function fakeDirectory(): SharedPayerDirectory & { readonly createAgentCalls: number } {
   let agent: AgentInstance | undefined;
   let tenant: Tenant | undefined;
   let createAgentCalls = 0;
@@ -83,25 +83,25 @@ function fakeDirectory(): SharedIdentityDirectory & { readonly createAgentCalls:
   };
 }
 
-describe("ensureSharedAgentIdentity", () => {
+describe("ensureSharedPayerIdentity", () => {
   it("creates the shared agent row on the first call, marked funded", async () => {
     const directory = fakeDirectory();
-    const identity = await ensureSharedAgentIdentity(directory, ADDRESS);
+    const identity = await ensureSharedPayerIdentity(directory, ADDRESS);
 
-    expect(identity.agent.address).toBe(ADDRESS);
-    expect(identity.agent.onchainState).toBe("funded");
+    expect(identity.payer.address).toBe(ADDRESS);
+    expect(identity.payer.onchainState).toBe("funded");
     expect(identity.partnerId).toMatch(/^ptn_/);
     expect(directory.createAgentCalls).toBe(1);
   });
 
   it("reuses the existing row on every later call — no second agent is ever created", async () => {
     const directory = fakeDirectory();
-    const first = await ensureSharedAgentIdentity(directory, ADDRESS);
-    const second = await ensureSharedAgentIdentity(directory, ADDRESS);
-    const third = await ensureSharedAgentIdentity(directory, ADDRESS);
+    const first = await ensureSharedPayerIdentity(directory, ADDRESS);
+    const second = await ensureSharedPayerIdentity(directory, ADDRESS);
+    const third = await ensureSharedPayerIdentity(directory, ADDRESS);
 
-    expect(second.agent.id).toBe(first.agent.id);
-    expect(third.agent.id).toBe(first.agent.id);
+    expect(second.payer.id).toBe(first.payer.id);
+    expect(third.payer.id).toBe(first.payer.id);
     expect(directory.createAgentCalls).toBe(1);
   });
 
@@ -112,11 +112,11 @@ describe("ensureSharedAgentIdentity", () => {
     // exercised here by having createPartner itself throw, which is enough
     // to prove the catch-and-refetch path works regardless of which step
     // in the creation sequence loses the race.
-    const winner = await ensureSharedAgentIdentity(directory, ADDRESS);
+    const winner = await ensureSharedPayerIdentity(directory, ADDRESS);
 
-    const raceProneDirectory: SharedIdentityDirectory = {
+    const raceProneDirectory: SharedPayerDirectory = {
       ...directory,
-      findAgentByAddress: vi.fn(async (address: string) => (address === ADDRESS ? winner.agent : undefined)),
+      findAgentByAddress: vi.fn(async (address: string) => (address === ADDRESS ? winner.payer : undefined)),
       createPartner: vi.fn(async () => {
         throw new Error("unique constraint violation (simulated)");
       }),
@@ -124,13 +124,13 @@ describe("ensureSharedAgentIdentity", () => {
 
     // findAgentByAddress already finds the winner's row, so createPartner
     // should never even be called for this second attempt.
-    const loser = await ensureSharedAgentIdentity(raceProneDirectory, ADDRESS);
-    expect(loser.agent.id).toBe(winner.agent.id);
+    const loser = await ensureSharedPayerIdentity(raceProneDirectory, ADDRESS);
+    expect(loser.payer.id).toBe(winner.payer.id);
     expect(raceProneDirectory.createPartner).not.toHaveBeenCalled();
   });
 
   it("re-throws the original error when creation fails and the row still cannot be found afterwards", async () => {
-    const directory: SharedIdentityDirectory = {
+    const directory: SharedPayerDirectory = {
       async findAgentByAddress() {
         return undefined;
       },
@@ -151,7 +151,7 @@ describe("ensureSharedAgentIdentity", () => {
       },
     };
 
-    await expect(ensureSharedAgentIdentity(directory, ADDRESS)).rejects.toThrow("database unreachable (simulated)");
+    await expect(ensureSharedPayerIdentity(directory, ADDRESS)).rejects.toThrow("database unreachable (simulated)");
   });
 });
 

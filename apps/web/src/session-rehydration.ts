@@ -41,32 +41,59 @@ export interface RehydrationInputs {
   readonly activeMandates: readonly MandateRecord[];
   /** The tenant's most recently recorded mandate, active or not — for `supersedesId` chaining. */
   readonly latestMandate: MandateRecord | undefined;
+  /**
+   * The agent identity a fresh session would use right now — this tenant's
+   * own current `directory_agents` row id (`ensureTenantAgent`'s
+   * `instance.id`, F4/T40). Rehydration only ever reuses a credential or
+   * mandate that already names *this* agent; one that names anything else is
+   * stale relative to the identity a session would use today and is treated
+   * exactly like one with no record at all.
+   *
+   * This field earned its place the hard way, not by design: pre-F4, every
+   * tenant's rows shared one `agentId` (`C-33`) — `latestCredential.agentId
+   * === mostRecentActive.agentId` was the whole check, and it happened to be
+   * true for everyone. The first real F4 session found a pre-F4 record whose
+   * `agentId` was the *shared payer's* row, rehydrated it anyway (the two
+   * still agreed with each other), and handed `finishSession` a document
+   * whose subject was the shared key alongside a signer that was this
+   * tenant's brand-new derived key — `createAgent()`'s own fail-closed
+   * subject/signer check caught it immediately (`SignerMismatch`), but the
+   * right fix is not letting a stale identity reach that check to begin with.
+   */
+  readonly currentAgentId: string;
 }
 
 /**
  * Decides whether a session can be rehydrated from what the directory
  * already holds for this tenant, or must issue fresh documents.
  *
- * Rehydration requires all three: a credential on file, at least one active
- * mandate, and — the check that actually matters — that credential and that
- * mandate name the **same agent**. Before F4 gives each tenant its own
- * Stellar identity, every tenant's rows share one `agentId` by construction
- * (`C-33`), so this comparison is trivially true today; it stays correct
- * once F4 makes it meaningful, without this function changing at all.
+ * Rehydration requires all three: a credential on file that is not revoked,
+ * at least one active mandate, and — the check both name — that both name
+ * `currentAgentId`. A credential or mandate from before this tenant had its
+ * own identity, or from before an identity change of any kind, is never
+ * eligible: it is treated the same as no record at all, falling through to
+ * `"issue"` and chaining `supersedesId` to whatever was most recently
+ * recorded, even if that record's own identity has since changed. The
+ * renewal is the correct outcome either way — a routine one (this tenant's
+ * mandate expired or was revoked) or a migration (the identity scheme
+ * itself changed underneath it, as F4 did) look identical from here, and
+ * both are handled by issuing fresh documents.
  *
- * A tenant with more than one active mandate — which should not happen
- * under normal operation, since starting a new one is exactly what this
- * function exists to avoid — rehydrates the most recently issued one rather
- * than refusing outright: refusing would turn a data anomaly into an outage
- * for a UX-only decision, and the security-relevant checks live elsewhere
- * (see the module docstring).
+ * A tenant with more than one active mandate for the current agent — which
+ * should not happen under normal operation, since starting a new one is
+ * exactly what this function exists to avoid — rehydrates the most recently
+ * issued one rather than refusing outright: refusing would turn a data
+ * anomaly into an outage for a UX-only decision, and the security-relevant
+ * checks live elsewhere (see the module docstring).
  */
 export function decideRehydration(inputs: RehydrationInputs): RehydrationDecision {
-  const { latestCredential, activeMandates, latestMandate } = inputs;
+  const { latestCredential, activeMandates, latestMandate, currentAgentId } = inputs;
 
-  if (latestCredential !== undefined && latestCredential.revokedAt === null && activeMandates.length > 0) {
-    const mostRecentActive = [...activeMandates].sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))[0];
-    if (mostRecentActive !== undefined && mostRecentActive.agentId === latestCredential.agentId) {
+  if (latestCredential !== undefined && latestCredential.revokedAt === null && latestCredential.agentId === currentAgentId) {
+    const mostRecentActive = activeMandates
+      .filter((mandate) => mandate.agentId === currentAgentId)
+      .sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))[0];
+    if (mostRecentActive !== undefined) {
       return { kind: "rehydrate", credential: latestCredential, mandate: mostRecentActive };
     }
   }

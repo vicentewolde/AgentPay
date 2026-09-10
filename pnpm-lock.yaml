@@ -74,6 +74,9 @@ importers:
       '@agentpay/mandate':
         specifier: workspace:*
         version: link:../../packages/mandate
+      '@agentpay/tenancy':
+        specifier: workspace:*
+        version: link:../../packages/tenancy
       '@agentpay/vault':
         specifier: workspace:*
         version: link:../../packages/vault

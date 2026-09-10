@@ -7,11 +7,13 @@ import { decideRehydration } from "./session-rehydration.js";
 
 const ISSUER_DID = stellarAddressToDid(Keypair.random().publicKey(), "testnet");
 const PRINCIPAL_DID = stellarAddressToDid(Keypair.random().publicKey(), "testnet");
+const CURRENT_AGENT_ID = "agt_00000000000000000000000001";
+const OLD_AGENT_ID = "agt_00000000000000000000000000"; // e.g. the pre-F4 shared payer's row
 
 function credential(overrides: Partial<CredentialRecord> = {}): CredentialRecord {
   return {
     id: "crd_00000000000000000000000001",
-    agentId: "agt_00000000000000000000000001",
+    agentId: CURRENT_AGENT_ID,
     tenantId: "ptn_00000000000000000000000001:00000000000000000000000001",
     credentialHash: "a".repeat(64),
     issuerDid: ISSUER_DID,
@@ -30,7 +32,7 @@ function mandate(overrides: Partial<MandateRecord> = {}): MandateRecord {
   return {
     id: "mdt_00000000000000000000000001",
     tenantId: "ptn_00000000000000000000000001:00000000000000000000000001",
-    agentId: "agt_00000000000000000000000001",
+    agentId: CURRENT_AGENT_ID,
     principalId: "prc_00000000000000000000000001",
     mandateHash: "b".repeat(64),
     signatureKind: "wallet-sep53",
@@ -49,15 +51,25 @@ function mandate(overrides: Partial<MandateRecord> = {}): MandateRecord {
 }
 
 describe("decideRehydration", () => {
-  it("rehydrates when a credential and an active mandate share the same agent", () => {
+  it("rehydrates when a credential and an active mandate share the current agent", () => {
     const cred = credential();
     const active = mandate();
-    const decision = decideRehydration({ latestCredential: cred, activeMandates: [active], latestMandate: active });
+    const decision = decideRehydration({
+      latestCredential: cred,
+      activeMandates: [active],
+      latestMandate: active,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "rehydrate", credential: cred, mandate: active });
   });
 
   it("issues fresh documents for a brand new tenant — nothing recorded yet", () => {
-    const decision = decideRehydration({ latestCredential: undefined, activeMandates: [], latestMandate: undefined });
+    const decision = decideRehydration({
+      latestCredential: undefined,
+      activeMandates: [],
+      latestMandate: undefined,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "issue", supersedes: undefined });
   });
 
@@ -66,14 +78,24 @@ describe("decideRehydration", () => {
     const expired = mandate({ mandateHash: "c".repeat(64) });
     // No active mandates — this one fell outside its window — but it is
     // still the latest, so a renewal must supersede it, not orphan it.
-    const decision = decideRehydration({ latestCredential: cred, activeMandates: [], latestMandate: expired });
+    const decision = decideRehydration({
+      latestCredential: cred,
+      activeMandates: [],
+      latestMandate: expired,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "issue", supersedes: expired });
   });
 
   it("issues fresh documents when the only mandate on file was revoked", () => {
     const cred = credential();
     const revoked = mandate({ mandateHash: "d".repeat(64), revokedAt: new Date("2026-09-10T06:00:00.000Z") });
-    const decision = decideRehydration({ latestCredential: cred, activeMandates: [], latestMandate: revoked });
+    const decision = decideRehydration({
+      latestCredential: cred,
+      activeMandates: [],
+      latestMandate: revoked,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "issue", supersedes: revoked });
   });
 
@@ -82,21 +104,36 @@ describe("decideRehydration", () => {
     // together), but a half-written state must fail toward re-issuing, not
     // toward rehydrating something incomplete.
     const active = mandate();
-    const decision = decideRehydration({ latestCredential: undefined, activeMandates: [active], latestMandate: active });
+    const decision = decideRehydration({
+      latestCredential: undefined,
+      activeMandates: [active],
+      latestMandate: active,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "issue", supersedes: active });
   });
 
   it("issues fresh documents when the credential itself was independently revoked", () => {
     const revokedCred = credential({ revokedAt: new Date("2026-09-10T06:00:00.000Z") });
     const active = mandate();
-    const decision = decideRehydration({ latestCredential: revokedCred, activeMandates: [active], latestMandate: active });
+    const decision = decideRehydration({
+      latestCredential: revokedCred,
+      activeMandates: [active],
+      latestMandate: active,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "issue", supersedes: active });
   });
 
-  it("refuses to rehydrate a mandate whose agent does not match the credential's — the check that will matter after F4", () => {
-    const cred = credential({ agentId: "agt_00000000000000000000000001" });
+  it("refuses to rehydrate a mandate whose agent does not match the credential's", () => {
+    const cred = credential({ agentId: CURRENT_AGENT_ID });
     const mismatched = mandate({ agentId: "agt_99999999999999999999999999" });
-    const decision = decideRehydration({ latestCredential: cred, activeMandates: [mismatched], latestMandate: mismatched });
+    const decision = decideRehydration({
+      latestCredential: cred,
+      activeMandates: [mismatched],
+      latestMandate: mismatched,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
     expect(decision).toEqual({ kind: "issue", supersedes: mismatched });
   });
 
@@ -108,7 +145,38 @@ describe("decideRehydration", () => {
       latestCredential: cred,
       activeMandates: [older, newer],
       latestMandate: newer,
+      currentAgentId: CURRENT_AGENT_ID,
     });
     expect(decision).toEqual({ kind: "rehydrate", credential: cred, mandate: newer });
+  });
+
+  // The exact scenario F4 (T40) hit for real against testnet: a credential
+  // and mandate that agree with each other, both naming an identity that is
+  // no longer this tenant's current one (the pre-F4 shared payer, in that
+  // case). Internal agreement is not enough — see `currentAgentId`'s
+  // docstring for the full story.
+  it("issues fresh documents when the credential and mandate agree with each other but not with the current agent", () => {
+    const staleCred = credential({ agentId: OLD_AGENT_ID });
+    const staleMandate = mandate({ agentId: OLD_AGENT_ID });
+    const decision = decideRehydration({
+      latestCredential: staleCred,
+      activeMandates: [staleMandate],
+      latestMandate: staleMandate,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
+    expect(decision).toEqual({ kind: "issue", supersedes: staleMandate });
+  });
+
+  it("skips a stale-agent active mandate and rehydrates a different one that does match the current agent", () => {
+    const cred = credential();
+    const stale = mandate({ id: "mdt_00000000000000000000000001", mandateHash: "1".repeat(64), agentId: OLD_AGENT_ID });
+    const current = mandate({ id: "mdt_00000000000000000000000002", mandateHash: "2".repeat(64) });
+    const decision = decideRehydration({
+      latestCredential: cred,
+      activeMandates: [stale, current],
+      latestMandate: current,
+      currentAgentId: CURRENT_AGENT_ID,
+    });
+    expect(decision).toEqual({ kind: "rehydrate", credential: cred, mandate: current });
   });
 });

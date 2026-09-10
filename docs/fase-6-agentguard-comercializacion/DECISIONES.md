@@ -1055,3 +1055,128 @@ Lo que sí quedó como test permanente es la lógica pura que gobierna la
 decisión (`session-rehydration.test.ts`) y el bootstrap idempotente
 (`shared-identity.test.ts`) — la misma división de responsabilidades que
 T36 ya estableció.
+
+---
+
+### C-39 · F4 separa identidad de pago; el pago sigue compartido hasta F6 · `Vigente`
+**Fecha:** 2026-09-10 (T40)
+
+Antes de escribir código se leyó `apps/agent/src/agent.ts` y se confirmó:
+`createAgent()` exige, fallando cerrado, que quien firma (`signer`) sea
+exactamente la misma llave que el sujeto de la credencial — pero **nada**
+exige que esa misma llave sea también quien paga. En `apps/web`, quién paga
+(`signerSecret` en `executeBazaarPayment`, `ownerSecret` del `policy_rail`)
+es un parámetro completamente separado del que arma la identidad del
+agente. Esto no estaba documentado en ningún lado antes de este hito — se
+encontró leyendo, no se asumió.
+
+Con eso confirmado, se le presentaron al usuario tres formas de resolver
+que cada tenant nuevo no puede pagar con una cuenta recién derivada sin
+cargarle USDC a mano (`C-11`): fondear a mano cada tenant nuevo, adelantar
+F6 (el rail por tenant) antes que F4, o **derivar y anclar la identidad de
+cada tenant ahora, dejando el pago compartido hasta que F6 le dé a cada uno
+su propio `policy_rail` fondeado**. El usuario eligió la tercera.
+
+**Qué prueba este hito, con precisión.** Que cada tenant tiene una
+identidad Stellar propia y verificable — su propia credencial, su propio
+Mandato, ambos anclados con su propia firma. No prueba que cada tenant
+gasta desde su propia cuenta: eso sigue pendiente, es F6, y la razón por la
+que sigue pendiente está anotada, no escondida.
+
+**Por qué la identidad no necesita fondeo, aunque el pago sí.** El agente
+derivado firma dos cosas: nada on-chain directamente — es el sujeto de la
+credencial (una dirección, sin transacción) y el firmante del intent de
+compra (`apps/agent/src/intent/sign.ts`, un JWS EdDSA fuera de la cadena,
+sin llamada de red). Ninguna de las dos necesita XLM ni USDC. Solo pagar
+—mover el SEP-41 de verdad— necesita una cuenta real con saldo, y eso sigue
+en la cuenta compartida. Esto es lo que hace posible separar las dos cosas
+sin dejar a ningún tenant nuevo con una compra rota.
+
+**Alternativa descartada:** mantener acopladas identidad y pago (como
+estaban) y posponer F4 entero hasta que F6 esté listo. Se descartó porque
+el modelo de identidad —la parte que `checkMandate`/`checkScope` verifican,
+la parte auditable on-chain— es independiente de quién paga, y no había
+motivo para bloquear una mitad real y ya construible detrás de la otra.
+
+---
+
+### C-40 · El seed maestro va en `.env.local`/variable de entorno del host, no en un gestor de secretos dedicado — todavía · `Vigente`, revisa `D1`
+**Fecha:** 2026-09-10 (T40)
+
+`D1` (T37) decía: "gestor de secretos (Doppler o Infisical) cuando se
+cablee la derivación (F4), no antes." Al llegar a F4, se decidió no crear
+esa cuenta.
+
+**Motivo.** Crear una cuenta en un servicio de terceros es una acción que
+este agente tiene prohibida por sus propias reglas de seguridad — pedirle
+al usuario que la cree y conecte las credenciales habría convertido un
+hito chico en uno que depende de trabajo manual externo, por un beneficio
+que en testnet es marginal: el mismo `.env.local`/variable de entorno de
+Render que ya protege `ADMIN_SECRET_KEY`, `ISSUER_SECRET_KEY` y
+`AGENT_SECRET_KEY` es, en este momento, el nivel de protección
+proporcional al riesgo real —fondos de testnet, presupuesto techo de $200
+USD/mes (`P-6`)—. `MASTER_MNEMONIC` queda documentado en `.env.example`
+con la misma disciplina que el resto: nunca en `.env.local` versionado,
+nunca impreso en un log (se generó y se escribió directo al archivo sin
+pasar por la salida de ninguna herramienta).
+
+**Lo que esto no decide.** No cierra `D1` — antes de manejar fondos
+reales, un gestor de secretos dedicado sigue siendo la recomendación, y
+queda anotado como precondición de cualquier salto a producción, igual
+que ya lo estaba.
+
+**Alternativa descartada:** pedirle al usuario que cree la cuenta de
+Doppler/Infisical él mismo, ahora, para no reabrir esta decisión más
+adelante. Se descartó por ser trabajo manual desproporcionado al riesgo
+actual del piloto.
+
+---
+
+### C-41 · La rehidratación de T39 necesitaba saber cuál es la identidad *vigente* del tenant, no solo que credencial y mandato coincidan entre sí · `Vigente`
+**Fecha:** 2026-09-10 (T40)
+
+**Hallazgo real, contra testnet, no anticipado al diseñar T39.** La primera
+corrida de verificación de F4 contra el servidor real falló con
+`SignerMismatch`: un tenant con una credencial persistida *antes* de F4
+—cuyo sujeto era la cuenta compartida— intentó rehidratarse usando la
+identidad *nueva*, recién derivada, de ese mismo tenant.
+`decideRehydration` (T39) solo comparaba que la credencial y el mandato
+coincidieran *entre sí* (`C-35`), lo cual seguía siendo cierto para ese
+registro viejo — nunca comparaba contra cuál es la identidad que una
+sesión nueva usaría *hoy*.
+
+**La corrección.** `decideRehydration` recibe ahora `currentAgentId` — la
+fila de `directory_agents` que `ensureTenantAgent` resolvería en este
+mismo momento — y exige que la credencial y el mandato activo lo nombren a
+él, no solo que se nombren entre sí. Un registro que coincide consigo
+mismo pero no con la identidad vigente se trata exactamente igual que si
+no hubiera ningún registro: se emite de nuevo, encadenado por
+`supersedesId` al que quedó atrás. Dos tests nuevos cubren exactamente
+este caso (`session-rehydration.test.ts`): coincidencia interna sin
+coincidir con la identidad vigente, y una activa vieja descartada en favor
+de una vigente entre varias.
+
+**Por qué esto no es un bug de seguridad, aunque lo encontró un error real
+de ejecución.** `createAgent()` lo atajó fallando cerrado — nunca se armó
+una sesión con una firma que no correspondía a su propio sujeto. Lo que
+esto corrige es la experiencia: sin el arreglo, cada tenant que existía
+antes de F4 habría visto un error crudo en vez de una migración silenciosa
+a su nueva identidad, la primera vez que volviera a conectar.
+
+---
+
+### C-42 · `render.yaml` reserva `MASTER_MNEMONIC`; el despliegue en sí queda fuera de este hito · `Vigente`
+**Fecha:** 2026-09-10 (T40)
+
+Se agregó `MASTER_MNEMONIC` a `render.yaml` (`sync: false`, sin valor) —
+mismo patrón que `ADMIN_SECRET_KEY`/`DATABASE_URL`/`POLICY_RAIL_CONTRACT_ID`
+en hitos anteriores. Verificado y cerrado únicamente contra el servidor de
+desarrollo local y testnet real — el deploy de Render no se tocó, y sin la
+variable configurada ahí, el sitio en producción seguirá con el
+comportamiento de antes de T40 hasta que alguien complete ese paso
+explícitamente.
+
+**Motivo.** Mismo criterio que separó siempre "construir y verificar" de
+"desplegar" en este proyecto (T31, T33, T35): un cambio de identidad que
+toca el camino de "Iniciar sesión" de todo visitante merece confirmarse
+localmente antes de tocar el sitio real, no en el mismo movimiento.

@@ -11,6 +11,7 @@
     { "path": "../../packages/mandate" },
     { "path": "../../packages/vault" },
     { "path": "../../packages/directory" },
+    { "path": "../../packages/tenancy" },
     { "path": "../agent" }
   ]
 }

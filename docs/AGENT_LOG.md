@@ -2292,3 +2292,70 @@ entregadas al usuario en el cierre de este hito, no repetidas acá. La rama
 `cc/t39-session-persistence` sigue sin mergear ni pushear. Sigue
 pendiente: cablear `@agentpay/tenancy` (`C-16`, ahora T40) y el rename a
 VynGent (`P-9`).
+
+## 2026-09-10 (8) — main (T40 cerrado)
+
+Agente: Claude Code
+
+Qué: **T40 cerrado.** Cada tenant que conecta su wallet deriva y ancla
+ahora su propia identidad Stellar (`@agentpay/tenancy`, cableado por fin) —
+firma su propia credencial y su propio Mandato, distinguible de cualquier
+otro tenant en la cadena. El pago real sigue saliendo de la cuenta
+compartida hasta F6.
+
+Por qué, y por qué el alcance quedó más chico de lo planeado: antes de
+tocar código se confirmó leyendo `apps/agent/src/agent.ts` que quién firma
+el Mandato y quién paga son dos parámetros independientes en el punto
+donde `apps/web` los usa — nada los obliga a ser la misma llave. Eso
+reveló que dar a cada tenant una cuenta que además PAGUE tropieza con el
+mismo bloqueante ya conocido (`C-11`: USDC de testnet solo se carga a mano,
+vía el faucet web de Circle). Se le presentaron al usuario tres caminos y
+eligió resolver solo la identidad ahora, dejando el pago compartido para
+F6 — sin fondeo automático ni pantalla de USDC, porque ninguna de las dos
+hacía falta: la identidad derivada solo firma off-chain (JWS), nunca
+necesita saldo.
+
+**Hallazgo real, contra testnet, no en el diseño:** la primera corrida
+falló con `SignerMismatch` — un tenant con una credencial persistida
+*antes* de este hito (nombrando la cuenta compartida) intentó rehidratarse
+con su identidad *nueva*. La lógica de T39 solo comparaba que credencial y
+mandato coincidieran entre sí, nunca contra cuál es la identidad vigente
+de una sesión nueva. Se corrigió agregando `currentAgentId` a
+`decideRehydration`, con dos tests que cubren exactamente el caso.
+`createAgent()` lo había atajado fallando cerrado — nunca se armó una
+sesión con una firma que no correspondía a su sujeto; lo que se arregló es
+la experiencia, no un agujero de seguridad.
+
+**Cero cambios en puntos de autorización**, verificado:
+`git diff --stat 50cd8c5..HEAD -- apps/agent contracts` no devuelve nada.
+
+Un secreto nuevo generado (`MASTER_MNEMONIC`, 24 palabras BIP-39) y escrito
+directo a `.env.local` sin pasar por ningún log ni salida de herramienta.
+Va en `.env.local`/variable de entorno del host, no en un gestor de
+secretos dedicado — crear esa cuenta de terceros está fuera de lo que este
+agente puede hacer por su cuenta, y en testnet el mismo nivel de
+protección que ya usan los otros tres secretos es proporcional al riesgo.
+`D1` sigue vigente para cuando haya fondos reales.
+
+Verificado offline: 781 tests en verde (8 nuevos, de 773), `pnpm
+typecheck`/`pnpm build` limpios. Contra testnet real: dos wallets
+distintas terminaron con dos identidades derivadas distintas (direcciones
+y `key_index` distintos, ninguna igual a la cuenta compartida); una compra
+real de cada una liquidó pagada por `policy_rail`; y la identidad de un
+tenant sobrevivió sin cambios a matar y levantar el proceso del servidor —
+se re-deriva del seed y el índice, nunca se guarda. Todo en
+`evidencia/T40.md`.
+
+Documentación tocada: `.env.example`, `render.yaml` (reserva
+`MASTER_MNEMONIC`, `sync: false`, sin valor — el despliegue en sí queda
+fuera de este hito), `docs/AGENT_LOG.md`, y en
+`docs/fase-6-agentguard-comercializacion/`: `BITACORA.md`, `DECISIONES.md`
+(`C-39` a `C-42`), `PLATAFORMA-PARTNERS.md` (F4 marcada resuelta, con el
+alcance real documentado), `evidencia/T40.md` (nuevo).
+
+Pendiente: siguiente hito propuesto **T41** (F5 — API y SDK para
+partners), la fase con más superficie delegable del plan; su tabla ya
+está lista en `PLATAFORMA-PARTNERS.md` § 6.1. Trabajo commiteado directo a
+`main` en esta sesión (T38→T39→T40 se apilaron sin mergear hasta el
+cierre de T39; T40 siguió sobre `main` ya actualizado). Sigue pendiente:
+el rename a VynGent (`P-9`), y desplegar T40 a Render.

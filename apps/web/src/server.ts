@@ -77,7 +77,8 @@ import {
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
-import { ensureSharedAgentIdentity, ensureVisitorTenant } from "./shared-identity.js";
+import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
+import { ensureTenantAgent } from "./tenant-agent.js";
 import {
   PENDING_WALLET_SESSION_TTL_MS,
   SESSION_COOKIE,
@@ -131,7 +132,23 @@ interface DemoSession {
   readonly scope: Scope;
   readonly mandate: DemoSessionMandate;
   readonly credentialHash: string;
+  /**
+   * The agent's own identity — the credential subject, the Mandato's
+   * `agent`, and the purchase-intent signer. Since F4 (T40) this is the
+   * tenant's own derived key on the wallet path, not the shared
+   * `AGENT_SECRET_KEY` — see `tenant-agent.ts`. The classic path still uses
+   * the shared key here, unchanged (`C-34`).
+   */
   readonly agentSecret: string;
+  /**
+   * Who actually pays — `signerSecret`/`policy_rail` owner in `buy()`.
+   * Always the shared `AGENT_SECRET_KEY` today, on both paths: F4 only
+   * separates *identity* from *payment*, it does not yet give any tenant its
+   * own funded account (F6's job, `C-20`). Deliberately its own field rather
+   * than reusing `agentSecret`, so that day's change is additive here, not a
+   * rename.
+   */
+  readonly paymentSecret: string;
   readonly issuerSecret: string;
   readonly baseUrl: string;
   readonly venueId: VenueId;
@@ -183,7 +200,10 @@ interface PendingWalletSession {
   readonly issuerSecret: string;
   readonly mandate: AgentPayMandate;
   readonly walletAddress: string;
+  /** This tenant's own derived identity (F4/T40) — the credential subject, the Mandato's `agent`, the intent signer. Not who pays; see `paymentSecret`. */
   readonly agentKeypair: Keypair;
+  /** The shared account that actually pays (`C-20`, unchanged by F4) — resolved once in `startSession`, reused here so `wallet-anchor` need not re-read it. */
+  readonly paymentSecret: string;
   readonly demoScope: CredentialRequest;
   readonly baseUrl: string;
   /**
@@ -278,6 +298,8 @@ interface FinishSessionParams {
   readonly env: ReadonlyMap<string, string>;
   readonly agentpass: AgentPass;
   readonly agentKeypair: Keypair;
+  /** Who pays — see `DemoSession.paymentSecret`'s docstring. Equals `agentKeypair.secret()` on the classic path. */
+  readonly paymentSecret: string;
   readonly demoScope: CredentialRequest;
   readonly baseUrl: string;
   readonly issuedCredentialJws: string;
@@ -329,6 +351,7 @@ async function finishSession(params: FinishSessionParams): Promise<DemoSession> 
     mandate: params.mandate,
     credentialHash: params.credentialHash,
     agentSecret: params.agentKeypair.secret(),
+    paymentSecret: params.paymentSecret,
     issuerSecret: params.issuerSecret,
     baseUrl: params.baseUrl,
     venueId: catalog.venueId,
@@ -421,12 +444,31 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     // credential and mandate before issuing anything new. This is the check
     // that makes "volver desde otro navegador" not mint a fresh identity.
     const directory = await getDirectory(env);
+
+    // F4 (T40): this tenant's own derived identity — the credential subject,
+    // the Mandato's `agent`, the intent signer. `AGENT_SECRET_KEY` (read as
+    // `agentKeypair` above) stops being anyone's identity from here on; it
+    // only pays (`tenant-agent.ts`'s docstring explains why that split is
+    // safe). Resolved before the rehydrate/issue decision because both
+    // branches need it — rehydrating still has to reconstruct `agentKeypair`
+    // for `finishSession`, and it must be *this* tenant's key, not the
+    // shared one, or `createAgent()`'s own subject/signer check (fail-closed
+    // by construction) would refuse the session outright.
+    const masterMnemonic = requireEnv(env, "MASTER_MNEMONIC");
+    const tenantAgent = await ensureTenantAgent(directory, masterMnemonic, sessionId);
+    const paymentSecret = agentKeypair.secret();
+
     const [latestCredential, activeMandates, latestMandate] = await Promise.all([
       directory.findLatestCredential(sessionId),
       directory.listActiveMandates(sessionId, now),
       directory.findLatestMandate(sessionId),
     ]);
-    const decision = decideRehydration({ latestCredential, activeMandates, latestMandate });
+    const decision = decideRehydration({
+      latestCredential,
+      activeMandates,
+      latestMandate,
+      currentAgentId: tenantAgent.instance.id,
+    });
 
     if (decision.kind === "rehydrate") {
       const { mandate, mandateSource } = mandateFromRecord(decision.mandate, walletAddress);
@@ -434,7 +476,8 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
         sessionId,
         env,
         agentpass,
-        agentKeypair,
+        agentKeypair: tenantAgent.keypair,
+        paymentSecret,
         demoScope,
         baseUrl,
         issuedCredentialJws: decision.credential.jws,
@@ -449,10 +492,12 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
 
     // No active mandate for this tenant — issue fresh documents, same as
     // before T39, carrying `decision.supersedes` so `wallet-anchor` can
-    // record the new mandate as a renewal rather than an orphan.
+    // record the new mandate as a renewal rather than an orphan. Named as
+    // this tenant's own derived identity (`tenantAgent.keypair`), not the
+    // shared `AGENT_SECRET_KEY` — the change F4 makes.
     const { credential, mandate: mandateDocument } = buildSessionDocuments({
       issuerAddress: issuer.publicKey(),
-      agentAddress: agentKeypair.publicKey(),
+      agentAddress: tenantAgent.keypair.publicKey(),
       walletAddress,
       scope: demoScope,
       registryContractId: agentpass.config.contractId,
@@ -474,7 +519,8 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
       issuerSecret,
       mandate: mandateDocument,
       walletAddress,
-      agentKeypair,
+      agentKeypair: tenantAgent.keypair,
+      paymentSecret,
       demoScope,
       baseUrl,
       supersedes: decision.supersedes,
@@ -483,10 +529,11 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     return { kind: "pending-wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
   }
 
-  // Classic (platform-signed) path — unchanged since T35. Deliberately not
-  // persisted to the directory (`evidencia/T39.md`): there is no wallet here
-  // to prove control on a later visit, so "volver desde otro navegador" does
-  // not apply the same way, and this stays the ephemeral demo path it always was.
+  // Classic (platform-signed) path — unchanged since T35, including its
+  // identity: it still uses the shared `AGENT_SECRET_KEY` for everything.
+  // F4 only gives *wallet* sessions their own derived identity — the classic
+  // path has no wallet to anchor a distinct one to, the same reason `C-34`
+  // already gives for why it stays unpersisted.
   const { credential, mandate: mandateDocument } = buildSessionDocuments({
     issuerAddress: issuer.publicKey(),
     agentAddress: agentKeypair.publicKey(),
@@ -503,6 +550,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     env,
     agentpass,
     agentKeypair,
+    paymentSecret: agentKeypair.secret(),
     demoScope,
     baseUrl,
     issuedCredentialJws: issued.jws,
@@ -574,20 +622,24 @@ async function buy(
       { details: { missing: "POLICY_RAIL_CONTRACT_ID" } },
     );
   }
+  // F4 (T40): `paymentSecret`, not `agentSecret` — who pays is still the
+  // shared account on both paths (`C-20`, deferred to F6); who the mandate
+  // and the intent name as the agent is, since F4, this tenant's own
+  // derived identity. See `DemoSession.paymentSecret`'s docstring.
   const payer =
     viaRail && current.railContractId !== undefined
-      ? { contractId: current.railContractId, ownerSecret: current.agentSecret }
+      ? { contractId: current.railContractId, ownerSecret: current.paymentSecret }
       : undefined;
   steps.push({
     label: "pagador",
     value:
       payer === undefined
-        ? `${Keypair.fromSecret(current.agentSecret).publicKey()} (cuenta clásica)`
+        ? `${Keypair.fromSecret(current.paymentSecret).publicKey()} (cuenta clásica)`
         : `${payer.contractId} (policy_rail, límites on-chain)`,
   });
 
   const receipt = await executeBazaarPayment(
-    { policyRail: current.policyRail, signerSecret: current.agentSecret, payer },
+    { policyRail: current.policyRail, signerSecret: current.paymentSecret, payer },
     {
       resourceUrl,
       intent: verified.intent,
@@ -906,7 +958,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const directory = await getDirectory(env);
       const agentAddress = requireSecretKey(env, "AGENT_SECRET_KEY").publicKey();
 
-      const { partnerId } = await ensureSharedAgentIdentity(directory, agentAddress);
+      const { partnerId } = await ensureSharedPayerIdentity(directory, agentAddress);
       const [principal, tenant] = await Promise.all([
         directory.upsertPrincipal({ address, did: stellarAddressToDid(address, "testnet") }),
         ensureVisitorTenant(directory, partnerId, address),
@@ -1018,14 +1070,21 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // T39: persist now that both documents are genuinely anchored — before
       // `finishSession`, so an unrelated failure wiring the live session
       // afterwards never costs the evidence the wallet already paid gas for.
+      // F4 (T40): `agentId` is this tenant's own row, not the shared payer's
+      // — `pending.agentKeypair` already *is* that tenant's derived identity
+      // (set in `startSession`), so this re-resolves the same row
+      // `ensureTenantAgent` created or found there, rather than threading its
+      // id through `PendingWalletSession` — idempotent, so re-calling it here
+      // costs one query, not a second row.
       const directory = await getDirectory(env);
-      const { agent: sharedAgent } = await ensureSharedAgentIdentity(directory, pending.agentKeypair.publicKey());
+      const masterMnemonic = requireEnv(env, "MASTER_MNEMONIC");
+      const tenantAgent = await ensureTenantAgent(directory, masterMnemonic, sessionId);
       const principal = await directory.upsertPrincipal({
         address: pending.walletAddress,
         did: stellarAddressToDid(pending.walletAddress, "testnet"),
       });
       await directory.recordCredential({
-        agentId: sharedAgent.id,
+        agentId: tenantAgent.instance.id,
         tenantId: sessionId,
         credentialHash: pending.credentialHash,
         issuerDid: pending.credential.issuer,
@@ -1037,7 +1096,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       });
       await directory.recordMandate({
         tenantId: sessionId,
-        agentId: sharedAgent.id,
+        agentId: tenantAgent.instance.id,
         principalId: principal.id,
         mandateHash: walletMandateHash(pending.mandate),
         signatureKind: "wallet-sep53",
@@ -1054,6 +1113,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         env,
         agentpass: pending.agentpass,
         agentKeypair: pending.agentKeypair,
+        paymentSecret: pending.paymentSecret,
         demoScope: pending.demoScope,
         baseUrl: pending.baseUrl,
         issuedCredentialJws: pending.issuedCredentialJws,

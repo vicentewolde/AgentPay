@@ -762,6 +762,23 @@ No se abrió ese ticket porque el hito completo tomó menos de una sesión.
 
 ### F4 · Identidad técnica por tenant y llaves 🟡
 
+> **Cerrada el 2026-09-10 como T40 — con un alcance más chico que el
+> escrito abajo, y por un motivo real.** Antes de escribir código se
+> confirmó leyendo `apps/agent/src/agent.ts` que la identidad que firma el
+> Mandato/credencial y la cuenta que **paga** son dos parámetros
+> independientes en el punto donde `apps/web` los usa — nada obliga a que
+> sean la misma llave. Eso permite separar "cada tenant tiene su propia
+> identidad" de "cada tenant tiene su propia cuenta fondeada", y la segunda
+> mitad es exactamente lo que `C-11` ya identificó como bloqueado por el
+> faucet manual de Circle. El usuario eligió, explícitamente, resolver solo
+> la primera mitad ahora: cada tenant deriva su propia identidad Stellar
+> —firma su propio Mandato y su propia credencial, con su propio
+> `key_index`— pero **el pago sigue saliendo de la cuenta compartida hasta
+> F6**. Eso significa: nada de fondeo con Friendbot, nada de pantalla de
+> USDC — ninguna de las dos hacía falta, porque la identidad derivada nunca
+> necesita pagar nada, solo firmar un JWS fuera de la cadena. Ver
+> `DECISIONES.md` → `C-39` a `C-42` y `evidencia/T40.md`.
+
 - **Objetivo llano.** Que cada tenant tenga su propio agente y su propia
   cuenta, en vez de compartir una con todos.
 - **Alcance.** Cablear `@agentpay/tenancy` (T32) usando el índice de F2;
@@ -777,6 +794,21 @@ No se abrió ese ticket porque el hito completo tomó menos de una sesión.
 - **Riesgos.** Alto de operación: un seed mal guardado pierde todas las
   cuentas. Un índice mal asignado hace colisionar tenants.
 - **Listo cuando.** `AGENT_SECRET_KEY` ya no participa de ninguna compra.
+
+**Lo que efectivamente se cerró (T40), en vez de lo de arriba.** Cablear
+`@agentpay/tenancy` usando el `key_index` de `@agentpay/directory` — hecho,
+cada tenant deriva su propia identidad. Seed maestro en `.env.local`/env
+var del host, **no** en un gestor de secretos dedicado: `D1` decía
+"gestor de secretos... cuando se cablee la derivación", pero crear una
+cuenta en Doppler/Infisical es una acción que este agente no puede hacer
+por su cuenta (creación de cuentas de terceros está prohibida), y en
+testnet el mismo nivel de secreto que ya usan `ADMIN_SECRET_KEY`/
+`ISSUER_SECRET_KEY` es proporcional al riesgo real. **`AGENT_SECRET_KEY`
+sigue participando de toda compra** — la frase "listo cuando" de arriba
+describía el mundo post-F6, no post-F4; F4 por sí solo no lo logra y no lo
+pretendía, una vez separadas las dos mitades. `render.yaml` ya reserva la
+variable `MASTER_MNEMONIC` (sin valor, `sync: false`) para cuando esto se
+despliegue — el despliegue en sí no es parte de este hito.
 
 **Delegación Claude Code / Codex.**
 

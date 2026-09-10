@@ -1,20 +1,18 @@
 /**
- * Bootstraps the one Stellar agent identity every visitor still shares —
- * `AGENT_SECRET_KEY` — as a row in `@agentpay/directory`, so a tenant's
- * mandate and credential can name a real, findable `agentId` before F4
- * wires a distinct derived identity per tenant.
+ * Bootstraps the shared payer — `AGENT_SECRET_KEY` — as a row in
+ * `@agentpay/directory`, and finds or creates each visitor's own tenant
+ * under the partner that row anchors.
  *
- * **Why this exists, and why it is temporary.** `@agentpay/directory`'s
- * shape (T38) assumes the F4 world: one Stellar identity per tenant,
- * `directory_agents.address` unique. That is not true yet — every visitor's
- * mandate is still signed by the one shared `AGENT_SECRET_KEY`
- * (`C-16`/`C-20`, deferred to F4 on purpose). Rather than relax the
- * uniqueness the schema protects, or invent a second, looser shape for this
- * transitional period, T39 represents the truth plainly: there is exactly
- * **one** agent row, shared by every tenant, clearly labelled as such. `C-33`
- * records this as a deliberate, temporary compromise — superseded the day
- * F4 gives each tenant its own `deriveTenantKeypair` output instead of this
- * function's fixed address.
+ * **Renamed in F4 (T40), on purpose.** Through T39 this module's main export
+ * was `ensureSharedAgentIdentity`: `AGENT_SECRET_KEY` was every tenant's
+ * *identity* — the credential subject, the mandate's `agent`, the intent
+ * signer — because nothing distinguished one tenant's agent from another's.
+ * F4 gives each tenant its own derived signing identity (`./tenant-agent.ts`)
+ * while leaving *payment* shared until F6 gives each tenant its own funded
+ * `policy_rail` (`C-20`). What this function bootstraps now is only that:
+ * the account whose key signs the actual Stellar transfer, on the classic
+ * path or as a `policy_rail` owner. Calling it "shared agent identity" after
+ * F4 would be actively misleading — it no longer is one.
  *
  * `idempotent by address`: {@link findAgentByAddress} is the directory's own
  * unique-by-address lookup, so calling this on every request is safe and
@@ -26,31 +24,32 @@
 import { AgentPassError, stellarAddressToDid } from "@agentpass/core";
 import type { AgentInstance, Directory, Tenant } from "@agentpay/directory";
 
-export interface SharedAgentIdentity {
+export interface SharedPayerIdentity {
   readonly partnerId: string;
   /**
-   * The tenant that formally owns the shared agent row — not a real
+   * The tenant that formally owns the shared payer row — not a real
    * visitor's tenant, just where the row has to live for the schema's
    * foreign keys. No mandate or credential is ever recorded against this
-   * tenant itself.
+   * tenant itself, and since F4 this row is never used as an `agentId`
+   * either — see the module docstring.
    */
   readonly bootstrapTenantId: string;
-  readonly agent: AgentInstance;
+  readonly payer: AgentInstance;
 }
 
 /** The slice of {@link Directory} this bootstrap actually depends on. */
-export type SharedIdentityDirectory = Pick<
+export type SharedPayerDirectory = Pick<
   Directory,
   "findAgentByAddress" | "createPartner" | "createTenant" | "findTenant" | "createAgent" | "setAgentOnchainState"
 >;
 
-const BOOTSTRAP_PARTNER_NAME = "AgentPay web — identidad compartida (pre-F4)";
-const BOOTSTRAP_EXTERNAL_REF = "shared-legacy-agent";
-const BOOTSTRAP_AGENT_LABEL =
-  "Identidad compartida de apps/web (AGENT_SECRET_KEY) — reemplazada por una derivada por tenant en F4";
+const BOOTSTRAP_PARTNER_NAME = "AgentPay web — pagador compartido";
+const BOOTSTRAP_EXTERNAL_REF = "shared-payer";
+const BOOTSTRAP_PAYER_LABEL =
+  "Cuenta pagadora compartida de apps/web (AGENT_SECRET_KEY) — cada tenant tiene su propia identidad desde F4; paga esta hasta que F6 le dé a cada tenant su propio policy_rail fondeado";
 
 /**
- * Finds or creates the directory row for the shared agent identity at
+ * Finds or creates the directory row for the shared payer account at
  * `address`. Safe to call on every request: the common case is one
  * `findAgentByAddress` query.
  *
@@ -68,43 +67,43 @@ const BOOTSTRAP_AGENT_LABEL =
  * attempt — that failure is not a race, and hiding it would be worse than
  * surfacing it.
  */
-export async function ensureSharedAgentIdentity(
-  directory: SharedIdentityDirectory,
+export async function ensureSharedPayerIdentity(
+  directory: SharedPayerDirectory,
   address: string,
   network: "testnet" | "public" = "testnet",
-): Promise<SharedAgentIdentity> {
+): Promise<SharedPayerIdentity> {
   const existing = await directory.findAgentByAddress(address);
   if (existing !== undefined) {
-    return { partnerId: (await requireTenantsPartner(directory, existing)).partnerId, bootstrapTenantId: existing.tenantId, agent: existing };
+    return { partnerId: (await requireTenantsPartner(directory, existing)).partnerId, bootstrapTenantId: existing.tenantId, payer: existing };
   }
 
   try {
     const partner = await directory.createPartner({ name: BOOTSTRAP_PARTNER_NAME });
     const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: BOOTSTRAP_EXTERNAL_REF });
-    const agent = await directory.createAgent({
+    const payer = await directory.createAgent({
       tenantId: tenant.id,
-      label: BOOTSTRAP_AGENT_LABEL,
+      label: BOOTSTRAP_PAYER_LABEL,
       derive: () => ({ address, did: stellarAddressToDid(address, network) }),
     });
     // Known to already be live on testnet — it is `AGENT_SECRET_KEY`, not a
     // freshly derived key nobody has funded yet (`C-21`'s "derived" default
-    // describes the F4 world, not this one).
-    const funded = await directory.setAgentOnchainState(agent.id, "funded");
-    return { partnerId: partner.id, bootstrapTenantId: tenant.id, agent: funded };
+    // describes a tenant's own agent, not this one).
+    const funded = await directory.setAgentOnchainState(payer.id, "funded");
+    return { partnerId: partner.id, bootstrapTenantId: tenant.id, payer: funded };
   } catch (raceError) {
     const afterRace = await directory.findAgentByAddress(address);
     if (afterRace === undefined) throw raceError;
-    return { partnerId: (await requireTenantsPartner(directory, afterRace)).partnerId, bootstrapTenantId: afterRace.tenantId, agent: afterRace };
+    return { partnerId: (await requireTenantsPartner(directory, afterRace)).partnerId, bootstrapTenantId: afterRace.tenantId, payer: afterRace };
   }
 }
 
-async function requireTenantsPartner(directory: SharedIdentityDirectory, agent: AgentInstance): Promise<{ readonly partnerId: string }> {
-  const tenant = await directory.findTenant(agent.tenantId);
+async function requireTenantsPartner(directory: SharedPayerDirectory, payer: AgentInstance): Promise<{ readonly partnerId: string }> {
+  const tenant = await directory.findTenant(payer.tenantId);
   if (tenant === undefined) {
-    // The agent's own foreign key guarantees this tenant exists — reaching
+    // The payer's own foreign key guarantees this tenant exists — reaching
     // here would mean the directory's own referential integrity broke.
-    throw new AgentPassError("TenantNotFound", "the shared agent names a tenant the directory cannot find", {
-      details: { agentId: agent.id, tenantId: agent.tenantId },
+    throw new AgentPassError("TenantNotFound", "the shared payer names a tenant the directory cannot find", {
+      details: { agentId: payer.id, tenantId: payer.tenantId },
     });
   }
   return { partnerId: tenant.partnerId };
@@ -112,7 +111,7 @@ async function requireTenantsPartner(directory: SharedIdentityDirectory, agent: 
 
 /**
  * The visitor's own tenant — one per connected wallet, under the bootstrap
- * partner {@link ensureSharedAgentIdentity} resolves. A Stellar address is
+ * partner {@link ensureSharedPayerIdentity} resolves. A Stellar address is
  * an appropriate `externalRef` here: it is a public, pseudonymous
  * identifier, and `apps/web` visiting itself is the direct pilot, not a
  * third party's user being minimised into an opaque reference — the case
@@ -125,7 +124,7 @@ export type VisitorTenantDirectory = Pick<Directory, "findTenantByExternalRef" |
 
 /**
  * Finds or creates the tenant for `walletAddress` under `partnerId`. Same
- * idempotent-by-lookup shape as {@link ensureSharedAgentIdentity}: the
+ * idempotent-by-lookup shape as {@link ensureSharedPayerIdentity}: the
  * common case is one query, and a creation race (two requests for a wallet's
  * very first connection, arriving together) resolves by re-querying rather
  * than surfacing the `TenantAlreadyExists` the loser's insert would raise.

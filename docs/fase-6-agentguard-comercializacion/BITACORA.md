@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T39 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T40 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
 misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
@@ -38,6 +38,7 @@ pero cablear la identidad propia por tenant queda para un hito aparte
 | T37 | Diseño de la plataforma para partners: modelo de entidades, modelo de fondos, plan de diez fases — **sin una línea de código** | ✅ cerrado 2026-09-10 |
 | T38 | `@agentpay/directory`: el registro durable de partners, tenants, principals, agentes, credenciales y mandatos | ✅ cerrado 2026-09-10 |
 | T39 | Persistencia de sesión: una wallet que vuelve encuentra su credencial y su Mandato ya firmados, en vez de que se emitan de nuevo | ✅ cerrado 2026-09-10 |
+| T40 | Identidad técnica por tenant: cada uno deriva y ancla su propia credencial y Mandato — el pago sigue compartido hasta F6 | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -808,3 +809,67 @@ delegación de F3 (`PLATAFORMA-PARTNERS.md` § 6.1) señala tres tickets para
 Codex que ahora ya se pueden abrir, detrás de la interfaz que este hito
 estabilizó — ver la sección de instrucciones en el mensaje de cierre de
 este hito. Sigue pendiente de antes: el rename a VynGent (`P-9`).
+
+---
+
+## T40 · Identidad técnica por tenant — cerrado 2026-09-10
+
+**Qué quedó funcionando, en palabras llanas.** Hasta ayer, todos los
+visitantes de `apps/web` firmaban su credencial y su Mandato con la misma
+llave Stellar (`AGENT_SECRET_KEY`) — indistinguibles entre sí para
+cualquiera que mirara la cadena desde afuera. Ahora, cada tenant que
+conecta su wallet obtiene su **propia** identidad Stellar, derivada
+matemáticamente de un único seed maestro, y firma su propia credencial y
+su propio Mandato con ella. Dos tenants distintos ya no comparten quién
+dice ser el agente que actúa en su nombre.
+
+**Lo que este hito deliberadamente no resuelve, y por qué está bien así.**
+El pago real —quién mueve la plata— sigue saliendo de la cuenta
+compartida. Antes de escribir una línea se confirmó, leyendo el código del
+motor de compra, que quién firma el Mandato y quién paga son dos cosas
+separables sin romper nada — así que se le presentaron al usuario tres
+caminos para el problema real (una cuenta recién derivada no tiene USDC, y
+cargárselo es un trámite manual en un faucet web, el mismo bloqueante que
+ya frenó esto una vez) y se eligió resolver solo la identidad ahora,
+dejando la cuenta pagadora propia para F6, sin fondeo automático ni
+pantallas de USDC que resultaron innecesarias.
+
+**Un hallazgo real, encontrado contra testnet y no en el diseño.** La
+primera corrida de verificación falló: un tenant que ya tenía una
+credencial de antes de este hito —firmada por la cuenta compartida—
+intentó "rehidratarse" (T39) usando su identidad nueva, y el propio sistema
+lo frenó con un error de firma no coincidente. La lógica de T39 comparaba
+que la credencial y el Mandato coincidieran entre sí, pero nunca preguntaba
+si esa identidad seguía siendo la vigente. Se corrigió agregando esa
+pregunta explícitamente, con dos tests nuevos que la cubren.
+
+**Evidencia técnica.** 781 tests offline en verde (8 nuevos, de 773: seis
+del bootstrap de la identidad derivada y dos de la migración de
+rehidratación — el módulo del pagador compartido se renombró sin agregar
+tests nuevos, los ocho que ya tenía siguen cubriendo la misma lógica).
+`pnpm typecheck`/`pnpm build` limpios. Contra testnet real: dos wallets
+distintas conectadas en la misma corrida terminaron con dos identidades
+derivadas distintas (direcciones y `key_index` distintos, ninguna igual a
+la cuenta compartida); una compra real de cada una liquidó correctamente,
+pagada por la cuenta compartida vía `policy_rail`; y la identidad derivada
+de un tenant sobrevivió, sin cambios, a matar y levantar el proceso del
+servidor de nuevo — se re-deriva del seed y el índice, nunca se guarda.
+Todo en [evidencia/T40.md](evidencia/T40.md).
+
+Documentación tocada: `.env.example`, `render.yaml` (reserva
+`MASTER_MNEMONIC`, sin valor), `docs/AGENT_LOG.md`, y en esta carpeta
+`BITACORA.md`, `DECISIONES.md` (`C-39` a `C-42`),
+`PLATAFORMA-PARTNERS.md` (F4 marcada resuelta, con su alcance real
+documentado), `evidencia/T40.md` (nuevo). Archivos de código nuevos:
+`apps/web/src/tenant-agent.ts` (+test). Archivos tocados:
+`apps/web/src/server.ts`, `apps/web/src/shared-identity.ts` (+test, la
+función que antes representaba "el" agente se renombró a lo que
+realmente es desde este hito: el pagador compartido),
+`apps/web/src/session-rehydration.ts` (+test). **Cero archivos de
+`apps/agent/` o `contracts/` tocados.**
+
+Pendiente: el siguiente hito propuesto es **T41** (F5 — API y SDK para
+partners), la fase con más superficie delegable del plan. Su tabla en
+`PLATAFORMA-PARTNERS.md` § 6.1 ya está lista. Sigue pendiente: el rename a
+VynGent (`P-9`), y desplegar este hito a Render (deliberadamente fuera de
+alcance — `C-42`).
