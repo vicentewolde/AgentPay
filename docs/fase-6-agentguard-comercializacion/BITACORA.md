@@ -446,6 +446,25 @@ la clave pública) contra el servidor real, confirmando el mensaje nuevo, y
 después corriendo el flujo completo de wallet de punta a punta contra
 testnet otra vez en verde.
 
+**Tercer fallo, el que sí era un bug de diseño de T35: toda compra con
+wallet fallaba.** Ya con la sesión iniciando bien (dos firmas de Freighter
+más la de conectar), el botón "Comprar" devolvía
+`MandatePrincipalMismatch: this mandate was not signed by the intent's
+principal`. T35 había hecho que la wallet firmara el Mandato pero dejó la
+credencial diciendo que el principal del agente seguía siendo la
+plataforma — y `checkMandate` (T17) compara justamente esas dos cosas. Los
+dos documentos firmados se contradecían y el chequeo los rechazó, que es
+exactamente lo que tiene que hacer. Se corrigió del lado correcto: los dos
+documentos derivan ahora el principal de un único valor, sin tocar
+`checkMandate` (ver `DECISIONES.md → C-17`, incluida la razón por la que
+aflojar el chequeo se descartó de inmediato). Verificado de punta a punta
+contra testnet — compra real liquidada (`settled: true`) pagando por
+`policy_rail`, con su anclaje en el vault — y confirmado después por el
+usuario en el deploy real de Render: conectar wallet, iniciar sesión,
+comprar y revocar, todo el ciclo funcionando en producción. Es la primera
+vez en esta fase que un hito queda confirmado contra el Render real y no
+solo en local.
+
 Pendiente: mergear `cc/wallet-signs-mandate` a `main` y pushear (a
 confirmar con el usuario). Siguiente decisión, sin resolver todavía:
 cablear `@agentpay/tenancy` (T32) dentro de `apps/web` para que cada

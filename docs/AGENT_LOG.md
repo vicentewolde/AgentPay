@@ -1901,3 +1901,58 @@ desde su propia cuenta (`C-16` — el usuario ya sacó el bloqueante externo
 del fondeo de USDC, pero falta la conversación de producto sobre cómo se
 deriva el índice de cada tenant); el rename a "TirevPay" (`P-8`) sigue
 congelado, el usuario va a traer nombres nuevos.
+
+## 2026-09-10 — main (T35 mergeado + tres fixes de producción)
+
+Agente: Claude Code
+
+Qué: `cc/wallet-signs-mandate` mergeado a `main` (fast-forward) y
+pusheado; rama borrada. Después, el usuario probó T35 en el Render real y
+falló tres veces seguidas — las tres corregidas y pusheadas directo a
+`main`, siguiendo el precedente de los fixes de deploy anteriores:
+
+1. `ADMIN_SECRET_KEY is missing` — la variable estaba en `.env.example`
+   desde siempre pero nunca se declaró en `render.yaml`, así que Render
+   nunca la pidió. Misma omisión que `POLICY_RAIL_CONTRACT_ID` (T31) y
+   `DATABASE_URL` (T33). Commit `bd83c8b`.
+2. `invalid version byte. expected 144, got 48` — se había cargado la
+   clave **pública** del admin donde va el secreto (144 es el byte de
+   versión de `S...`, 48 el de `G...`), en parte porque yo le mostré la
+   pública de una forma que invitaba a copiarla. Se agregó
+   `requireSecretKey`, por donde pasa ahora todo secreto Stellar leído del
+   entorno, con `ConfigError` tipado que nombra la variable y el arreglo —
+   el criterio no negociable de `CLAUDE.md` que ese camino violaba al
+   dejar escapar el error crudo del SDK. La clave de admin además se
+   resuelve recién cuando hay que registrar una wallet nueva. Commit
+   `6188003`.
+3. `MandatePrincipalMismatch` en toda compra — **el único que era un bug
+   de diseño de T35, no de configuración.** La wallet firmaba el Mandato
+   pero la credencial seguía nombrando a la plataforma como principal del
+   agente, y `checkMandate` compara exactamente esas dos cosas. Se
+   corrigió haciendo que los dos documentos deriven el principal de un
+   único valor, **sin tocar `checkMandate`** — aflojar ese chequeo se
+   descartó de inmediato (precedente `B-25`). Ver `C-17`. Commit `cd809e0`.
+
+Por qué: los tres bloqueaban el uso real del hito recién cerrado; el
+tercero, además, dejaba T35 funcionalmente incompleto (se podía firmar y
+anclar el Mandato, pero no comprar con él).
+
+Documentación tocada: `render.yaml`, `packages/core/src/credential.ts`
+(comentario de Fase 1 que afirmaba que `principal` siempre era el emisor —
+T35 crea ese rol separado), `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md` addendum, `DECISIONES.md` `C-17`).
+
+Verificado: reproducido el fallo 2 contra el servidor real antes y después
+del fix; flujo completo de wallet corrido de punta a punta contra testnet
+incluyendo una compra real liquidada por `policy_rail` con su anclaje en
+el vault; 685 tests en verde, `pnpm typecheck` limpio. **Confirmado por el
+usuario en el Render real**: conectar wallet, iniciar sesión, comprar y
+revocar, todo el ciclo andando en producción — la primera vez en esta fase
+que un hito se confirma contra el deploy real y no solo en local.
+
+Pendiente: sin cambios respecto de la entrada anterior — cablear
+`@agentpay/tenancy` (T32) en `apps/web` para que cada tenant gaste desde
+su propia cuenta (`C-16`), y el rename a "TirevPay" (`P-8`) sigue
+congelado a pedido del usuario. Nota: `docs/fase-0-fundamentos/prompt-delegar-codex.md`
+quedó sin trackear en la carpeta de trabajo — es un archivo del usuario,
+no se commiteó.
