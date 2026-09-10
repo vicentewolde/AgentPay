@@ -422,6 +422,30 @@ Archivos nuevos: `packages/core/src/sep53.ts` (+ test, movido de
 `apps/agent/src/testing/mandates.ts`, `apps/agent/src/index.ts`,
 `apps/web/src/server.ts`, `apps/web/public/index.html`.
 
+**Addendum del mismo día — `ADMIN_SECRET_KEY` en el deploy real.** El
+usuario probó T35 en Render y "Iniciar sesión" con wallet falló dos veces
+seguidas. Primero: `ADMIN_SECRET_KEY is missing` — la variable estaba en
+`.env.example` desde siempre pero nunca se había declarado en
+`render.yaml`, así que Render nunca la pidió (mismo tipo de omisión que
+`POLICY_RAIL_CONTRACT_ID` en T31 y `DATABASE_URL` en T33; ya declarada).
+Segundo, al cargarla: `invalid version byte. expected 144, got 48` — un
+error crudo de strkey del SDK de Stellar que no nombra ni la variable ni
+el arreglo. 144 es el byte de versión de un secreto (`S...`) y 48 el de
+una dirección pública (`G...`): se había pegado la clave pública donde va
+el secreto. Se agregó `requireSecretKey`, por donde pasa ahora todo
+secreto Stellar que este servidor lee del entorno, que falla con un
+`ConfigError` tipado diciendo exactamente qué variable y qué poner — el
+criterio no negociable de `CLAUDE.md` (errores tipados, nunca un `Error`
+genérico) que este camino violaba al dejar escapar el error del SDK. De
+paso, la clave de admin pasó a resolverse recién cuando hace falta
+registrar una wallet nueva, no al iniciar la sesión: una wallet ya
+registrada como issuer no depende de ella para nada.
+
+Verificado reproduciendo el fallo exacto (`ADMIN_SECRET_KEY` apuntando a
+la clave pública) contra el servidor real, confirmando el mensaje nuevo, y
+después corriendo el flujo completo de wallet de punta a punta contra
+testnet otra vez en verde.
+
 Pendiente: mergear `cc/wallet-signs-mandate` a `main` y pushear (a
 confirmar con el usuario). Siguiente decisión, sin resolver todavía:
 cablear `@agentpay/tenancy` (T32) dentro de `apps/web` para que cada

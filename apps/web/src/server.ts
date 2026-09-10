@@ -276,11 +276,15 @@ function clearPendingWalletSession(sessionId: string): void {
  */
 async function ensureWalletIsRegisteredIssuer(
   agentpass: AgentPass,
-  admin: Keypair,
+  env: ReadonlyMap<string, string>,
   walletAddress: string,
 ): Promise<void> {
   const existing = await agentpass.issuerStatus(walletAddress);
   if (existing.registered && existing.active) return;
+  // Read the admin key here rather than at session start: only a wallet that
+  // is not registered yet needs it at all, so one already registered keeps
+  // working even if `ADMIN_SECRET_KEY` is unset or wrong on this deploy.
+  const admin = requireSecretKey(env, "ADMIN_SECRET_KEY");
   const metaHash = createHash("sha256").update(walletAddress, "utf8").digest("hex");
   await agentpass.registerIssuer({ admin, issuer: walletAddress, metaHash });
 }
@@ -320,6 +324,28 @@ function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
     });
   }
   return value;
+}
+
+/**
+ * Every Stellar secret this server reads from the environment goes through
+ * here. Handed a public key (`G...`) where a secret seed (`S...`) belongs,
+ * `Keypair.fromSecret` throws a raw strkey error — "invalid version byte.
+ * expected 144, got 48" — that names neither the variable at fault nor what
+ * to do about it. That is exactly what the live deploy showed the first time
+ * `ADMIN_SECRET_KEY` was set, so the version bytes stay inside the SDK and
+ * the operator gets the variable's name and the fix instead.
+ */
+function requireSecretKey(env: ReadonlyMap<string, string>, key: string): Keypair {
+  const value = requireEnv(env, key);
+  try {
+    return Keypair.fromSecret(value);
+  } catch (error) {
+    throw new AgentPassError(
+      "ConfigError",
+      `${key} must be an S... secret seed, not a G... address — the value set for it is not a Stellar secret key`,
+      { cause: error, details: { key, startsWith: `${value.slice(0, 1)}...` } },
+    );
+  }
 }
 
 async function readScope(): Promise<CredentialRequest> {
@@ -431,9 +457,9 @@ export type StartSessionResult =
  */
 async function startSession(sessionId: string): Promise<StartSessionResult> {
   const env = await readEnv();
-  const issuerSecret = requireEnv(env, "ISSUER_SECRET_KEY");
-  const issuer = Keypair.fromSecret(issuerSecret);
-  const agentKeypair = Keypair.fromSecret(requireEnv(env, "AGENT_SECRET_KEY"));
+  const issuer = requireSecretKey(env, "ISSUER_SECRET_KEY");
+  const issuerSecret = issuer.secret();
+  const agentKeypair = requireSecretKey(env, "AGENT_SECRET_KEY");
   const contractId = requireEnv(env, "AGENT_REGISTRY_CONTRACT_ID");
   const baseUrl = env.get("BAZAAR_BASE_URL") ?? DEFAULT_BAZAAR_BASE_URL;
 
@@ -508,7 +534,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
 
   // A wallet is connected — it must anchor its own Mandate as issuer, which
   // needs it registered first (`M-17`, automated here — `C-8`).
-  await ensureWalletIsRegisteredIssuer(agentpass, Keypair.fromSecret(requireEnv(env, "ADMIN_SECRET_KEY")), walletAddress);
+  await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
 
   stashPendingWalletSession(sessionId, {
     agentpass,
