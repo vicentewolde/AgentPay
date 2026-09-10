@@ -300,3 +300,27 @@ typecheck`/`pnpm build` (monorepo completo) limpios. No se pudo verificar
 todavía contra el Render real —el usuario tiene que redesplegar y probar
 de nuevo—, a diferencia del resto de los hitos de esta fase.
 
+**Segunda vuelta, mismo día — el SSL no era la única causa.** Con el
+logging del error real ya en su lugar (el fix de arriba), el usuario probó
+de nuevo y esta vez el mensaje fue explícito: `ENETUNREACH` contra una
+dirección `2600:...` — una IPv6. La conexión "Direct connection" de
+Supabase resuelve solo a IPv6, y Render (como la mayoría de los hosts
+PaaS) no tiene salida a internet por IPv6, solo IPv4 — por eso conectaba
+sin problema desde la computadora del usuario (que sí tiene ruta IPv6) y
+nunca desde Render. La solución de Supabase para exactamente este caso es
+el **"Session pooler"** (`*.pooler.supabase.com`), que resuelve solo a
+IPv4 — confirmado con `dig` antes de usarlo, sin ningún registro `AAAA`.
+
+Al armar la nueva cadena aparecieron dos problemas más, los dos resueltos
+con el mismo truco del portapapeles de T33 (nunca pasar la contraseña por
+el chat): la cadena que copia Supabase para el pooler también trae
+`[YOUR-PASSWORD]` sin reemplazar, igual que la directa; y una contraseña
+recién reseteada tardó **~30 segundos** en sincronizarse hacia el pooler
+—la misma contraseña funcionaba de inmediato contra la conexión directa,
+pero el pooler seguía rechazándola hasta esperar un poco y reintentar—.
+Los dos quedaron documentados en `.env.example` para que la próxima vez no
+haga falta redescubrirlos.
+
+Verificado: los 5 tests de integración del vault corridos de punta a
+punta contra la conexión por pooler, todos en verde.
+

@@ -1816,3 +1816,35 @@ pasa a ser una precondición del usuario, no algo que el producto tenga que
 resolver. Siguiente hito confirmado: que la wallet conectada firme de
 verdad el Mandato (`C-8` — necesita extender `verifyMandate` de la Fase 3,
 avisado con evidencia antes de tocarlo, no en silencio).
+
+## 2026-09-09 (6) — main
+
+Agente: Claude Code
+
+Qué: con el logging del error real ya en su lugar (entrada anterior), el
+usuario probó de nuevo y esta vez el mensaje fue explícito: `ENETUNREACH`
+contra una dirección IPv6. La conexión "Direct connection" de Supabase
+resuelve solo a IPv6; Render no tiene salida por IPv6. Se guio al usuario
+a conseguir la cadena del **"Session pooler"** de Supabase (resuelve solo
+IPv4, confirmado con `dig`), y se armó la conexión final combinando esa
+cadena con la contraseña tomada de su portapapeles (mismo truco de T33,
+nunca pasó por el chat) — encontrando en el camino que esa cadena también
+trae `[YOUR-PASSWORD]` sin reemplazar, y que una contraseña recién
+reseteada tarda ~30s en sincronizarse hacia el pooler (un intento falló,
+el mismo password funcionaba de inmediato contra la conexión directa).
+Los 5 tests de integración del vault corrieron en verde contra la
+conexión final. `.env.example` actualizado con las dos causas para no
+tener que redescubrirlas.
+
+Por qué: el usuario seguía bloqueado en producción; sin el fix de logging
+de la entrada anterior, este segundo problema (IPv6) habría sido
+imposible de diagnosticar a distancia.
+
+Documentación tocada: `.env.example`, `docs/fase-6-agentguard-comercializacion/BITACORA.md`
+(addendum a la entrada de la SSL). Sin cambios de código — es
+configuración (`DATABASE_URL`), no un fix de `postgres-vault.ts`.
+
+Pendiente: el usuario tiene que copiar el `DATABASE_URL` corregido de su
+`.env.local` local al dashboard de Render y confirmar que "Iniciar sesión"
+ya funciona ahí. Con eso confirmado, sigue el hito ya acordado: la wallet
+conectada firmando de verdad el Mandato (`C-8`).
