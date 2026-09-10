@@ -1,11 +1,20 @@
 import type { AgentPass } from "@agentpass/sdk";
-import { hasErrorCode, didToStellarAddress } from "@agentpass/core";
+import { hasErrorCode, didToStellarAddress, signStellarMessage } from "@agentpass/core";
 import { Keypair, StrKey } from "@stellar/stellar-sdk/base";
 import { describe, expect, it } from "vitest";
 
-import { anchorMandate, revokeMandate, verifyMandateOnChain, type RegistryAccess } from "./anchor.js";
+import {
+  anchorMandate,
+  prepareWalletAnchor,
+  prepareWalletRevoke,
+  revokeMandate,
+  verifyMandateOnChain,
+  verifyWalletSignedMandateOnChain,
+  type RegistryAccess,
+} from "./anchor.js";
 import { signMandate } from "./sign.js";
 import { createFakeRegistryAccess, didOf, makeTestMandate } from "./testing.js";
+import { mandateChallengeMessage } from "./wallet-sign.js";
 
 const principal = Keypair.random();
 const agent = Keypair.random();
@@ -23,7 +32,7 @@ describe("the port is narrow on purpose", () => {
    * Compile-time, not runtime: the real SDK satisfies the port as-is — every
    * method `RegistryAccess` names is already document-agnostic in
    * `@agentpass/sdk` — while the port itself exposes no way to issue a
-   * credential, verify one, or run the admin operations. If any of the four
+   * credential, verify one, or run the admin operations. If any of the seven
    * methods ever changed shape in the SDK, this stops building.
    */
   it("AgentPass from the SDK satisfies RegistryAccess", () => {
@@ -32,7 +41,7 @@ describe("the port is narrow on purpose", () => {
     expect(typeof conforms).toBe("function");
   });
 
-  it("exposes exactly the four methods it needs, plus config", () => {
+  it("exposes exactly the seven methods it needs, plus config", () => {
     const registry = createFakeRegistryAccess();
 
     expect(new Set(Object.keys(registry))).toEqual(
@@ -42,6 +51,9 @@ describe("the port is narrow on purpose", () => {
         "status",
         "issuerStatus",
         "revoke",
+        "prepareAnchor",
+        "prepareRevoke",
+        "submitSigned",
         "registerIssuer",
         "deactivateIssuer",
         "getCredential",
@@ -233,5 +245,115 @@ describe("revokeMandate", () => {
     await revokeMandate(registry, { mandateHash: anchored.hash, principal });
 
     await expect(registry.status(anchored.hash)).resolves.toBe("Revoked");
+  });
+});
+
+describe("prepareWalletAnchor / submitSigned — the two-phase, wallet-signed path (T35)", () => {
+  it("anchors once the prepared transaction is submitted as signed", async () => {
+    const registry = registryWithPrincipal();
+    const mandate = makeTestMandate(principal, agent);
+    const signature = signStellarMessage(principal, mandateChallengeMessage(mandate));
+
+    const prepared = await prepareWalletAnchor(registry, { mandate, signature });
+    expect(prepared.xdr).not.toBe("");
+    // Nothing is anchored yet — only prepared.
+    await expect(registry.status(prepared.hash)).resolves.toBe("Unknown");
+
+    const transactionHash = await registry.submitSigned(prepared.requestId, "fake-signed-xdr");
+
+    expect(transactionHash).not.toBe("");
+    await expect(registry.status(prepared.hash)).resolves.toBe("Active");
+    expect(registry.getCredential(prepared.hash)).toEqual({
+      issuer: principal.publicKey(),
+      subject: didToStellarAddress(didOf(agent)),
+    });
+  });
+
+  it("refuses to prepare for a mandate whose wallet signature does not verify", async () => {
+    const registry = registryWithPrincipal();
+    const mandate = makeTestMandate(principal, agent);
+    const wrongSignature = signStellarMessage(stranger, mandateChallengeMessage(mandate));
+
+    await expect(prepareWalletAnchor(registry, { mandate, signature: wrongSignature })).rejects.toSatisfy(
+      (error: unknown) => hasErrorCode(error, "InvalidSignature"),
+    );
+  });
+
+  it("refuses a mandate naming a registry this client does not trust, before preparing anything", async () => {
+    const registry = registryWithPrincipal();
+    const mandate = makeTestMandate(principal, agent, { registry: FOREIGN_REGISTRY });
+    const signature = signStellarMessage(principal, mandateChallengeMessage(mandate));
+
+    await expect(prepareWalletAnchor(registry, { mandate, signature })).rejects.toSatisfy((error: unknown) =>
+      hasErrorCode(error, "RegistryMismatch"),
+    );
+  });
+
+  it("refuses submitSigned for a requestId that does not exist", async () => {
+    const registry = registryWithPrincipal();
+
+    await expect(registry.submitSigned("no-such-request", "fake-signed-xdr")).rejects.toSatisfy((error: unknown) =>
+      hasErrorCode(error, "ConfigError"),
+    );
+  });
+
+  it("a prepared anchor still enforces the contract's own rules at submit time", async () => {
+    // Not yet registered when prepared — the fake mirrors the real contract's
+    // own refusal, which only happens once the transaction actually lands.
+    const registry = createFakeRegistryAccess();
+    const mandate = makeTestMandate(principal, agent);
+    const signature = signStellarMessage(principal, mandateChallengeMessage(mandate));
+
+    const prepared = await prepareWalletAnchor(registry, { mandate, signature });
+
+    await expect(registry.submitSigned(prepared.requestId, "fake-signed-xdr")).rejects.toSatisfy(
+      (error: unknown) => hasErrorCode(error, "IssuerNotRegistered"),
+    );
+  });
+});
+
+describe("verifyWalletSignedMandateOnChain", () => {
+  async function anchorByWallet(registry: RegistryAccess, mandate: ReturnType<typeof makeTestMandate>) {
+    const signature = signStellarMessage(principal, mandateChallengeMessage(mandate));
+    const prepared = await prepareWalletAnchor(registry, { mandate, signature });
+    await registry.submitSigned(prepared.requestId, "fake-signed-xdr");
+    return signature;
+  }
+
+  it("runs the same network checks as the JWS path and returns Active with the principal's address", async () => {
+    const registry = registryWithPrincipal();
+    const mandate = makeTestMandate(principal, agent);
+    const signature = await anchorByWallet(registry, mandate);
+
+    const verified = await verifyWalletSignedMandateOnChain(registry, mandate, signature);
+
+    expect(verified.status).toBe("Active");
+    expect(verified.principalAddress).toBe(principal.publicKey());
+    expect(verified.agent).toBe(didOf(agent));
+  });
+
+  it("refuses a wallet-signed mandate that was never anchored", async () => {
+    const registry = registryWithPrincipal();
+    const mandate = makeTestMandate(principal, agent);
+    const signature = signStellarMessage(principal, mandateChallengeMessage(mandate));
+
+    await expect(verifyWalletSignedMandateOnChain(registry, mandate, signature)).rejects.toSatisfy(
+      (error: unknown) => hasErrorCode(error, "MandateUnknown"),
+    );
+  });
+
+  it("refuses a revoked wallet-signed mandate", async () => {
+    const registry = registryWithPrincipal();
+    const mandate = makeTestMandate(principal, agent);
+    const signature = await anchorByWallet(registry, mandate);
+    const prepared = await prepareWalletRevoke(registry, {
+      mandateHash: (await verifyWalletSignedMandateOnChain(registry, mandate, signature)).hash,
+      principalAddress: principal.publicKey(),
+    });
+    await registry.submitSigned(prepared.requestId, "fake-signed-xdr");
+
+    await expect(verifyWalletSignedMandateOnChain(registry, mandate, signature)).rejects.toSatisfy(
+      (error: unknown) => hasErrorCode(error, "MandateRevoked"),
+    );
   });
 });

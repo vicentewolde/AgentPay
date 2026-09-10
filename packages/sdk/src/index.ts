@@ -17,7 +17,7 @@ import type { Keypair } from "@stellar/stellar-sdk";
 
 import type { AgentPassConfig } from "./config.js";
 import { parseConfig } from "./config.js";
-import type { CredRecord, CredStatus } from "./registry.js";
+import type { CredRecord, CredStatus, PreparedRegistryWrite } from "./registry.js";
 import { assertTrustedRegistry } from "./guards.js";
 import { Registry } from "./registry.js";
 
@@ -99,6 +99,28 @@ export interface AgentPass {
   deactivateIssuer(params: { admin: Keypair; issuer: string }): Promise<string>;
   /** The raw registry call `issue()` already makes internally. See {@link AnchorParams}. */
   anchor(params: AnchorParams): Promise<string>;
+  /**
+   * `anchor`'s two-phase twin, for a principal this process never holds the
+   * secret key for — T35. Builds and simulates the same call, but does not
+   * sign it: only `issuerAddress`'s own wallet can produce a signature the
+   * contract's `require_auth()` accepts. Pair with {@link submitSigned}.
+   */
+  prepareAnchor(params: {
+    readonly issuerAddress: string;
+    readonly credentialHash: string;
+    readonly subject: string;
+    readonly expiresAt: Date;
+  }): Promise<PreparedRegistryWrite>;
+  /** `revoke`'s two-phase twin — see {@link prepareAnchor}. */
+  prepareRevoke(params: { readonly issuerAddress: string; readonly credentialHash: string }): Promise<PreparedRegistryWrite>;
+  /**
+   * Finishes a `prepareAnchor`/`prepareRevoke` call once a wallet has signed
+   * the XDR it returned.
+   *
+   * @throws AgentPassError `ConfigError` if `requestId` names no pending
+   * transaction — already submitted, or its TTL passed.
+   */
+  submitSigned(requestId: string, signedTxXdr: string): Promise<string>;
 }
 
 function addressOf(did: StellarDid): string {
@@ -207,12 +229,24 @@ export async function createAgentPass(config: unknown): Promise<AgentPass> {
         expiresAt: params.expiresAt,
       });
     },
+
+    async prepareAnchor(params): Promise<PreparedRegistryWrite> {
+      return registry.prepareAnchor(params);
+    },
+
+    async prepareRevoke(params): Promise<PreparedRegistryWrite> {
+      return registry.prepareRevoke(params);
+    },
+
+    async submitSigned(requestId: string, signedTxXdr: string): Promise<string> {
+      return registry.submitSigned(requestId, signedTxXdr);
+    },
   };
 }
 
 export { credentialHash };
 export { assertTrustedRegistry, credentialHashToBytes } from "./guards.js";
-export { CRED_STATUSES, type CredRecord, type CredStatus } from "./registry.js";
+export { CRED_STATUSES, type CredRecord, type CredStatus, type PreparedRegistryWrite } from "./registry.js";
 export {
   agentPassConfigSchema,
   configFromEnv,

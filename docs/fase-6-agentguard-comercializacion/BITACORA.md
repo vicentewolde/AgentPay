@@ -12,20 +12,19 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-09 · **Último hito cerrado:** T34 · **Fase 6: en curso**
+**Fecha:** 2026-09-09 · **Último hito cerrado:** T35 · **Fase 6: en curso**
 
-Un visitante ya puede conectar una wallet Stellar real (Freighter) y
-probar criptográficamente que la controla, sin que su llave secreta salga
-nunca de la wallet (T34) — la primera interacción Web3 genuina del
-proyecto de cara al usuario, más allá de las transacciones que el agente
-ya hacía en su nombre. Esa wallet le da a cada visitante un `tenant_id`
-estable en el vault de Postgres (T33), así que su historial persiste entre
-visitas, no solo entre reinicios del servidor. Lo que todavía falta,
-anotado a propósito y no construido: que la wallet conectada firme de
-verdad el Mandato (necesita extender la verificación de la Fase 3, `C-8`),
-y que cada tenant tenga su propia cuenta Stellar fondeada en vez de
-compartir `AGENT_SECRET_KEY` (bloqueado por el faucet manual de USDC de
-Circle, `C-11`).
+Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
+misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
+gasto ya no la firma la plataforma en su nombre, la firma la wallet, y esa
+firma queda anclada on-chain en `agent_registry`, exactamente igual que un
+Mandato clásico. Revocarlo también lo firma la wallet. Lo único que
+todavía falta, anotado a propósito y no construido: que cada tenant tenga
+su propia cuenta Stellar fondeada para gastar, en vez de compartir
+`AGENT_SECRET_KEY` — el usuario ya asumió que quien conecta su wallet tiene
+USDC de testnet de antes, lo que saca el bloqueante externo de en medio,
+pero cablear la identidad propia por tenant queda para un hito aparte
+(`C-16`).
 
 ### Progreso
 
@@ -34,6 +33,7 @@ Circle, `C-11`).
 | T32 | `@agentpay/tenancy`: deriva un par de llaves Stellar (agente + issuer) por tenant desde un único seed maestro, vía SEP-0005/BIP-44 | ✅ cerrado 2026-09-09 |
 | T33 | `MandateVault` sobre Postgres, reemplaza el JSONL en disco efímero de Render; cableado en `apps/web` | ✅ cerrado 2026-09-09 |
 | T34 | Conectar wallet (Freighter) con verificación criptográfica real (SEP-0053); da a cada wallet un `tenant_id` estable en el vault | ✅ cerrado 2026-09-09 |
+| T35 | La wallet conectada firma de verdad el Mandato (SEP-0053) y ancla/revoca la transacción on-chain con su propia firma | ✅ cerrado 2026-09-09 |
 
 ---
 
@@ -323,4 +323,109 @@ haga falta redescubrirlos.
 
 Verificado: los 5 tests de integración del vault corridos de punta a
 punta contra la conexión por pooler, todos en verde.
+
+## T35 · La wallet firma de verdad el Mandato — cerrado 2026-09-09
+
+**Qué quedó funcionando, en palabras llanas.** Hasta T34, conectar una
+wallet solo probaba quién era el visitante; el permiso de gasto (el
+Mandato) lo seguía firmando la plataforma en su nombre. Ahora, si conectás
+tu wallet antes de "Iniciar sesión", es tu propia wallet la que aprueba
+ese permiso — dos firmas tuyas, en dos ventanas de Freighter: primero un
+mensaje que resume el Mandato en texto legible (montos, límites, hasta
+cuándo vale), después la transacción real que lo deja anclado en la
+blockchain de Stellar. Revocarlo más tarde también lo firma tu wallet, no
+la plataforma. Si no conectaste ninguna wallet, todo sigue exactamente
+como antes (T25–T34): la plataforma firma por vos, sin ningún paso extra.
+
+**El problema técnico real, y por qué no se resolvió estirando código de
+la Fase 3.** Una wallet nunca puede producir la firma que el Mandato
+usaba hasta ahora (un JWS compacto EdDSA) — no es una limitación de
+Freighter, es que las wallets, por diseño, solo exponen firma de mensajes
+de texto (SEP-0043/SEP-0053), que se calcula sobre un hash distinto del
+que un JWS firma. Extender la verificación cerrada de la Fase 3 para que
+aceptara las dos formas habría sido tocar en silencio una decisión ya
+cerrada — en vez de eso, se avisó al usuario con esta evidencia y se
+construyó un camino de verificación paralelo, nuevo, que nunca toca
+`verifyMandate`. Detalle completo en `DECISIONES.md → C-13`.
+
+**Cómo quedó construido.** Cinco piezas, de abajo hacia arriba:
+
+1. `packages/core/src/sep53.ts` — `verifyStellarMessage`/`signStellarMessage`,
+   promovido desde `apps/web` (T34) a `@agentpass/core` porque ahora lo usa
+   también `@agentpay/mandate`.
+2. `packages/mandate/src/wallet-sign.ts` — `verifyWalletSignedMandate`: dado
+   un documento de Mandato en JSON y una firma SEP-0053, verifica que la
+   firma corresponda al `principal` que el documento declara, valida su
+   forma con el mismo esquema zod de siempre, y chequea la ventana de
+   validez — sin tocar `verifyMandate` para nada.
+3. `packages/mandate/src/anchor.ts` — `prepareWalletAnchor`/
+   `prepareWalletRevoke`: arman y simulan la transacción de
+   anclar/revocar contra `agent_registry`, pero se detienen antes de
+   firmar — devuelven la transacción sin firmar para que la wallet la
+   firme. `verifyWalletSignedMandateOnChain` hace el mismo chequeo on-chain
+   que su versión JWS, compartiendo la parte que sí es idéntica entre las
+   dos (`checkOnChainStatus`, extraída en este hito).
+4. `packages/sdk/src/registry.ts` — el `Registry` de la Fase 1 gana
+   `prepareAnchor`/`prepareRevoke`/`submitSigned`, usando
+   `AssembledTransaction.toXdr()`/`.signAndSend({ signTransaction })` (ya
+   parte de `@stellar/stellar-sdk/contract`) para el flujo de dos fases:
+   preparar acá, firmar en la wallet, enviar acá. Detalle de por qué dos
+   fases y no una en `DECISIONES.md → C-14`.
+5. `apps/agent` — `MandateSource` pasa a ser `string | { mandate, signature }`;
+   el agente y sus tools despachan según cuál llegó, sin que el resto del
+   código que ya pasaba un JWS crudo tenga que cambiar (verificado sin
+   ninguna regresión en los 421 tests existentes de `apps/agent`).
+
+`apps/web/src/server.ts` cablea todo esto en tres peticiones nuevas —
+`/api/session/wallet-consent` (firma del Mandato) y
+`/api/session/wallet-anchor` (firma del anclaje) además de
+`/api/session/start` ya existente, más `/api/session/wallet-revoke-submit`
+para la revocación— y una wallet conectada se registra automáticamente
+como issuer si hace falta (`DECISIONES.md → C-15`).
+
+**Evidencia técnica.** 15 tests nuevos (`sep53.test.ts` promovido con 6,
+`wallet-sign.test.ts` con 9), `anchor.test.ts` creció de 17 a 25 tests
+cubriendo el camino de wallet, cero regresiones en los 421 tests
+existentes de `apps/agent` — 515 tests en total en la suite rápida.
+`pnpm typecheck`/`pnpm build` (monorepo completo) limpios.
+
+**Verificado en vivo, de punta a punta contra testnet real — no un
+mock.** Un script simula exactamente lo que hace Freighter (sin ningún
+atajo del servidor): genera una wallet nueva, la fondea con Friendbot,
+la conecta (T34), inicia sesión (queda "pendiente de firma"), firma el
+mensaje-resumen del Mandato con esa misma primitiva SEP-0053 que usaría
+una wallet real, lo manda al servidor y recibe de vuelta una transacción
+sin firmar; la firma con `TransactionBuilder`/`.sign()` — igual que hace
+Freighter internamente — y la reenvía. El servidor la ancló de verdad en
+`agent_registry` (testnet), el reporte del vault mostró el Mandato con
+`issuer` = la wallet (no la plataforma), y la revocación repitió el mismo
+patrón de dos firmas hasta confirmar `mandateHash` revocado. Salida
+completa en `evidencia/T35.md`. Además, se verificó en el navegador (Claude
+Browser) que el camino clásico —sin conectar ninguna wallet— sigue
+funcionando exactamente igual que antes, sin ninguna regresión visible ni
+error de consola.
+
+**Lo que esto NO hace todavía, dicho en voz alta.** El agente sigue
+gastando desde la cuenta compartida `AGENT_SECRET_KEY`, no desde una
+cuenta propia de cada tenant — ver `DECISIONES.md → C-16` para por qué
+quedó fuera de este hito a propósito, aun cuando la precondición de USDC
+que dio el usuario ya no lo bloquea como antes.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md`, `DECISIONES.md` `C-13` a `C-16`, `evidencia/T35.md`).
+Archivos nuevos: `packages/core/src/sep53.ts` (+ test, movido de
+`apps/web/src/wallet/verify-message.ts`), `packages/mandate/src/wallet-sign.ts`
+(+ test). Archivos tocados: `packages/mandate/src/anchor.ts` (+ test),
+`packages/mandate/src/testing.ts`, `packages/sdk/src/registry.ts`,
+`packages/sdk/src/index.ts`, `apps/agent/src/mandate/verifier.ts`,
+`apps/agent/src/agent.ts`, `apps/agent/src/tools/agent-tools.ts`,
+`apps/agent/src/testing/mandates.ts`, `apps/agent/src/index.ts`,
+`apps/web/src/server.ts`, `apps/web/public/index.html`.
+
+Pendiente: mergear `cc/wallet-signs-mandate` a `main` y pushear (a
+confirmar con el usuario). Siguiente decisión, sin resolver todavía:
+cablear `@agentpay/tenancy` (T32) dentro de `apps/web` para que cada
+tenant gaste desde su propia cuenta (`C-16`); y el rename completo a
+"TirevPay" (`P-8`) sigue congelado a pedido explícito del usuario, que va
+a traer nombres nuevos más adelante.
 

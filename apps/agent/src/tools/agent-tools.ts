@@ -343,7 +343,7 @@ async function buildSignedIntent(
   const freshCredential = await checkOwnCredential(verifier, credential.verified.jws);
   if (!freshCredential.usable) throw freshCredential.problem;
 
-  const freshMandate = await checkOwnMandate(mandateVerifier, mandate.verified.jws);
+  const freshMandate = await checkOwnMandate(mandateVerifier, mandate.verified.source);
   if (!freshMandate.usable) throw freshMandate.problem;
 
   // One point, all four checks, no partial credit (T19). No payment

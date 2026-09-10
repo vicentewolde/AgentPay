@@ -7,5 +7,9 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // apps/web is mostly HTTP glue over already-tested packages — it is
+    // normal for it to have zero test files between the rare pieces of
+    // pure logic (like T34's wallet signature check) that are worth one.
+    passWithNoTests: true,
   },
 });

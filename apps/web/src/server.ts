@@ -43,14 +43,24 @@ import {
   credentialRequestSchema,
   isAgentPassError,
   stellarAddressToDid,
+  verifyStellarMessage,
 } from "@agentpass/core";
 import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
-import { anchorMandate, createMandate, revokeMandate, type AnchoredMandate } from "@agentpay/mandate";
+import {
+  anchorMandate,
+  createMandate,
+  mandateChallengeMessage,
+  prepareWalletAnchor,
+  prepareWalletRevoke,
+  revokeMandate,
+  walletMandateHash,
+  type AgentPayMandate,
+} from "@agentpay/mandate";
 import { createPostgresMandateVault, type MandateVault } from "@agentpay/vault";
 
-import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, VenueId } from "@agentpay/agent";
+import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, MandateSource, VenueId } from "@agentpay/agent";
 import {
   anchorPaymentDecision,
   createAgent,
@@ -65,8 +75,6 @@ import {
   withVault,
   type PolicyRail,
 } from "@agentpay/agent";
-
-import { verifyStellarMessage } from "./wallet/verify-message.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const ENV_PATH = resolve(REPO_ROOT, ".env.local");
@@ -127,6 +135,22 @@ async function readEnvFile(path: string): Promise<Map<string, string>> {
   return entries;
 }
 
+/**
+ * What the session needs of its own Mandate — deliberately without `.jws`,
+ * unlike `AnchoredMandate` (`@agentpay/mandate`): a wallet-anchored mandate
+ * has no JWS at all (T35), and everything here reads identically whichever
+ * path produced it. `principalAddress` and `signature` are what a later
+ * revoke needs to know whether it must go through the wallet-signed path
+ * too — `signature` is `undefined` for a platform-signed mandate.
+ */
+interface DemoSessionMandate {
+  readonly hash: string;
+  readonly mandate: AgentPayMandate;
+  readonly transactionHash: string;
+  readonly principalAddress: string;
+  readonly signature: string | undefined;
+}
+
 interface DemoSession {
   readonly agentpass: AgentPass;
   readonly agent: Agent;
@@ -134,12 +158,14 @@ interface DemoSession {
   readonly policyRail: PolicyRail;
   readonly vault: MandateVault;
   readonly scope: Scope;
-  readonly mandate: AnchoredMandate;
+  readonly mandate: DemoSessionMandate;
   readonly credentialHash: string;
   readonly agentSecret: string;
   readonly issuerSecret: string;
   readonly baseUrl: string;
   readonly venueId: VenueId;
+  /** The connected wallet that is this session's mandate principal, if any (T35). Absent is the classic, platform-signed path. */
+  readonly walletAddress: string | undefined;
   /**
    * The deployed `policy_rail` smart account, when there is one
    * (`POLICY_RAIL_CONTRACT_ID`, written by `pnpm run deploy:policy-rail`).
@@ -165,11 +191,10 @@ const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;
 /**
  * The wallet address behind each session, once `/api/wallet/verify` accepts
  * its signature. Shown back to the visitor as proof of a real connection —
- * not yet the key that signs the credential or the Mandate (see
- * `docs/fase-6-agentguard-comercializacion/DECISIONES.md`): that still needs
- * `verifyMandate` to accept a SEP-0053-wrapped signature as an alternative to
- * the AgentPass JWS profile, a change to Fase 3's closed verification code
- * that deserves its own review before it lands.
+ * Since T35, a connected wallet also signs its own Mandate — see
+ * `startWalletSession`/`pendingWalletSessions` below. The credential's
+ * issuer stays the platform (`ISSUER_SECRET_KEY`): only the Mandate's
+ * principal becomes the connected wallet (`docs/fase-6-agentguard-comercializacion/DECISIONES.md → C-8`).
  */
 const walletAddressBySession = new Map<string, string>();
 
@@ -189,6 +214,75 @@ function challengeMessage(nonce: string): string {
 function walletTenantId(address: string): string {
   const hex = createHash("sha256").update(address, "utf8").digest("hex").slice(0, 32);
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+// ---- Wallet-signed Mandate (T35) ------------------------------------------
+
+/**
+ * A session mid-way through starting with a connected wallet as its
+ * principal — the credential is already issued, the Mandate is built but
+ * unsigned, and everything is waiting on the wallet to sign the consent
+ * message and then the anchor transaction, in that order, across three
+ * separate requests (a wallet interaction cannot happen inside one HTTP
+ * request/response — the browser has to be asked, twice).
+ */
+interface PendingWalletSession {
+  readonly agentpass: AgentPass;
+  readonly issuedCredentialJws: string;
+  readonly credentialHash: string;
+  readonly issuerSecret: string;
+  readonly mandate: AgentPayMandate;
+  readonly walletAddress: string;
+  readonly agentKeypair: Keypair;
+  readonly demoScope: CredentialRequest;
+  readonly baseUrl: string;
+  /** Set once `/api/session/wallet-consent` verifies the SEP-0053 signature. */
+  signature?: string;
+  /** Set once the anchor transaction is prepared — names which one `wallet-anchor` finishes. */
+  requestId?: string;
+}
+const pendingWalletSessions = new Map<string, PendingWalletSession>();
+const PENDING_WALLET_SESSION_TTL_MS = 10 * 60_000;
+const pendingWalletSessionExpiry = new Map<string, number>();
+
+function stashPendingWalletSession(sessionId: string, pending: PendingWalletSession): void {
+  pendingWalletSessions.set(sessionId, pending);
+  pendingWalletSessionExpiry.set(sessionId, Date.now() + PENDING_WALLET_SESSION_TTL_MS);
+}
+
+/** Reads the pending session without ending it — steps 2 and 3 of the wallet flow both need to see it. */
+function peekPendingWalletSession(sessionId: string): PendingWalletSession | undefined {
+  const expiresAt = pendingWalletSessionExpiry.get(sessionId);
+  if (expiresAt === undefined || Date.now() > expiresAt) {
+    pendingWalletSessions.delete(sessionId);
+    pendingWalletSessionExpiry.delete(sessionId);
+    return undefined;
+  }
+  return pendingWalletSessions.get(sessionId);
+}
+
+function clearPendingWalletSession(sessionId: string): void {
+  pendingWalletSessions.delete(sessionId);
+  pendingWalletSessionExpiry.delete(sessionId);
+}
+
+/**
+ * Anchoring a mandate under a wallet's address needs that address to be a
+ * registered, active issuer first — the contract's own rule (`M-17`),
+ * unchanged since T20. A wallet that just proved it controls its address
+ * (T34) gets registered automatically, no manual approval step: this pilot
+ * treats "connected and verified" as sufficient trust, a deliberate choice
+ * for a testnet demo, not a production policy (`docs/fase-6-agentguard-comercializacion/DECISIONES.md`).
+ */
+async function ensureWalletIsRegisteredIssuer(
+  agentpass: AgentPass,
+  admin: Keypair,
+  walletAddress: string,
+): Promise<void> {
+  const existing = await agentpass.issuerStatus(walletAddress);
+  if (existing.registered && existing.active) return;
+  const metaHash = createHash("sha256").update(walletAddress, "utf8").digest("hex");
+  await agentpass.registerIssuer({ admin, issuer: walletAddress, metaHash });
 }
 
 function parseCookies(header: string | undefined): Map<string, string> {
@@ -257,8 +351,85 @@ async function readEnv(): Promise<Map<string, string>> {
   return env;
 }
 
-/** Mirrors `pnpm demo`'s step 2: issue a credential, then a Mandate with its own (tighter) perDay. */
-async function startSession(sessionId: string): Promise<DemoSession> {
+interface FinishSessionParams {
+  readonly sessionId: string;
+  readonly env: ReadonlyMap<string, string>;
+  readonly agentpass: AgentPass;
+  readonly agentKeypair: Keypair;
+  readonly demoScope: CredentialRequest;
+  readonly baseUrl: string;
+  readonly issuedCredentialJws: string;
+  readonly credentialHash: string;
+  readonly issuerSecret: string;
+  readonly mandate: DemoSessionMandate;
+  readonly mandateSource: MandateSource;
+  readonly walletAddress: string | undefined;
+}
+
+/**
+ * The part of starting a session that never differs between a classic
+ * (platform-signed) Mandate and a wallet-signed one (T35): the catalogue,
+ * the vault, `PolicyRail`, and the agent itself only ever need a
+ * `MandateSource` the agent's own `MandateVerifier` can re-check — they do
+ * not know or care which kind produced it.
+ */
+async function finishSession(params: FinishSessionParams): Promise<DemoSession> {
+  const catalog = createBazaarCatalog({ baseUrl: params.baseUrl });
+  // Same vault backs both PolicyRail instances (G-5, T24) — the two
+  // authorise() calls a purchase makes (structural, then against the real
+  // 402) record the same intentId once, not twice. A MandateVault satisfies
+  // SpendLedger structurally (T27), so it drops in wherever the ledger did;
+  // withVault additionally keeps every refusal, not just every grant.
+  const vault = await createPostgresMandateVault({
+    connectionString: requireEnv(params.env, "DATABASE_URL"),
+    tenantId: params.sessionId,
+  });
+  const policyRail = withVault(createLocalPolicyRail({ ledger: vault }), vault);
+
+  const agent = await createAgent({
+    credential: params.issuedCredentialJws,
+    mandate: params.mandateSource,
+    catalog,
+    verifier: params.agentpass,
+    mandateVerifier: createOnChainMandateVerifier(params.agentpass),
+    signer: params.agentKeypair,
+    ledger: vault,
+    policyRail,
+  });
+
+  return {
+    agentpass: params.agentpass,
+    agent,
+    catalog,
+    policyRail,
+    vault,
+    scope: params.demoScope.scope,
+    mandate: params.mandate,
+    credentialHash: params.credentialHash,
+    agentSecret: params.agentKeypair.secret(),
+    issuerSecret: params.issuerSecret,
+    baseUrl: params.baseUrl,
+    venueId: catalog.venueId,
+    walletAddress: params.walletAddress,
+    railContractId: params.env.get("POLICY_RAIL_CONTRACT_ID"),
+  };
+}
+
+export type StartSessionResult =
+  | { readonly kind: "ready"; readonly session: DemoSession }
+  | { readonly kind: "pending-wallet-consent"; readonly credentialHash: string; readonly challengeMessage: string };
+
+/**
+ * Mirrors `pnpm demo`'s step 2: issue a credential, then a Mandate with its
+ * own (tighter) perDay. The credential's issuer is always the platform
+ * (`ISSUER_SECRET_KEY`) — but if this session has a wallet connected and
+ * verified (T34), the Mandate's principal becomes that wallet instead of the
+ * platform, and this returns `"pending-wallet-consent"` rather than a
+ * finished session: only the wallet itself can sign its own consent and its
+ * own anchor transaction, which cannot happen inside this one request.
+ * `/api/session/wallet-consent` and `/api/session/wallet-anchor` finish it.
+ */
+async function startSession(sessionId: string): Promise<StartSessionResult> {
   const env = await readEnv();
   const issuerSecret = requireEnv(env, "ISSUER_SECRET_KEY");
   const issuer = Keypair.fromSecret(issuerSecret);
@@ -277,6 +448,7 @@ async function startSession(sessionId: string): Promise<DemoSession> {
   ]);
 
   const issuerDid = stellarAddressToDid(issuer.publicKey(), "testnet");
+  const agentDid = stellarAddressToDid(agentKeypair.publicKey(), "testnet");
   const now = new Date();
   const validUntil = new Date(now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
@@ -286,15 +458,12 @@ async function startSession(sessionId: string): Promise<DemoSession> {
     issuer: issuerDid,
     validFrom: now.toISOString(),
     validUntil,
-    credentialSubject: {
-      id: stellarAddressToDid(agentKeypair.publicKey(), "testnet"),
-      agent: demoScope.agent,
-      principal: issuerDid,
-      scope: demoScope.scope,
-    },
+    credentialSubject: { id: agentDid, agent: demoScope.agent, principal: issuerDid, scope: demoScope.scope },
     credentialStatus: { type: AGENTPASS_STATUS_TYPE, registry: agentpass.config.contractId },
   };
   const issued = await agentpass.issue({ credential, issuer });
+
+  const walletAddress = walletAddressBySession.get(sessionId);
 
   // Same limits as the scope, not narrower (contrast `pnpm demo`, `G-8`): a
   // real purchase authorises twice — once structurally in
@@ -303,54 +472,57 @@ async function startSession(sessionId: string): Promise<DemoSession> {
   // `intentId`, so the second call's `spentToday` already includes the
   // first call's recorded amount. A `perDay` tight enough to demonstrate a
   // rejection here would reject the very first purchase.
-  const mandate = createMandate({
-    principal: issuerDid,
-    agent: stellarAddressToDid(agentKeypair.publicKey(), "testnet"),
+  const mandateDocument = createMandate({
+    principal: walletAddress === undefined ? issuerDid : stellarAddressToDid(walletAddress, "testnet"),
+    agent: agentDid,
     grant: demoScope.scope,
     registry: agentpass.config.contractId,
     validFrom: now.toISOString(),
     validUntil,
   });
-  const anchoredMandate = await anchorMandate(agentpass, { mandate, principal: issuer });
 
-  const catalog = createBazaarCatalog({ baseUrl });
-  // Same vault backs both PolicyRail instances (G-5, T24) — the two
-  // authorise() calls a purchase makes (structural, then against the real
-  // 402) record the same intentId once, not twice. A MandateVault satisfies
-  // SpendLedger structurally (T27), so it drops in wherever the ledger did;
-  // withVault additionally keeps every refusal, not just every grant.
-  const vault = await createPostgresMandateVault({
-    connectionString: requireEnv(env, "DATABASE_URL"),
-    tenantId: sessionId,
-  });
-  const policyRail = withVault(createLocalPolicyRail({ ledger: vault }), vault);
+  if (walletAddress === undefined) {
+    const anchoredMandate = await anchorMandate(agentpass, { mandate: mandateDocument, principal: issuer });
+    const session = await finishSession({
+      sessionId,
+      env,
+      agentpass,
+      agentKeypair,
+      demoScope,
+      baseUrl,
+      issuedCredentialJws: issued.jws,
+      credentialHash: issued.hash,
+      issuerSecret,
+      mandate: {
+        hash: anchoredMandate.hash,
+        mandate: anchoredMandate.mandate,
+        transactionHash: anchoredMandate.transactionHash,
+        principalAddress: issuer.publicKey(),
+        signature: undefined,
+      },
+      mandateSource: anchoredMandate.jws,
+      walletAddress: undefined,
+    });
+    return { kind: "ready", session };
+  }
 
-  const agent = await createAgent({
-    credential: issued.jws,
-    mandate: anchoredMandate.jws,
-    catalog,
-    verifier: agentpass,
-    mandateVerifier: createOnChainMandateVerifier(agentpass),
-    signer: agentKeypair,
-    ledger: vault,
-    policyRail,
-  });
+  // A wallet is connected — it must anchor its own Mandate as issuer, which
+  // needs it registered first (`M-17`, automated here — `C-8`).
+  await ensureWalletIsRegisteredIssuer(agentpass, Keypair.fromSecret(requireEnv(env, "ADMIN_SECRET_KEY")), walletAddress);
 
-  return {
+  stashPendingWalletSession(sessionId, {
     agentpass,
-    agent,
-    catalog,
-    policyRail,
-    vault,
-    scope: demoScope.scope,
-    mandate: anchoredMandate,
+    issuedCredentialJws: issued.jws,
     credentialHash: issued.hash,
-    agentSecret: agentKeypair.secret(),
     issuerSecret,
+    mandate: mandateDocument,
+    walletAddress,
+    agentKeypair,
+    demoScope,
     baseUrl,
-    venueId: catalog.venueId,
-    railContractId: env.get("POLICY_RAIL_CONTRACT_ID"),
-  };
+  });
+
+  return { kind: "pending-wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
 }
 
 interface Step {
@@ -502,13 +674,32 @@ interface RevokeResult {
   readonly credentialStatus: string;
 }
 
-async function revoke(current: DemoSession): Promise<RevokeResult> {
-  const revokeTx = await revokeMandate(current.agentpass, {
+type RevokeOutcome =
+  | { readonly kind: "done"; readonly result: RevokeResult }
+  | { readonly kind: "pending-wallet-signature"; readonly requestId: string; readonly xdr: string };
+
+/**
+ * The platform can revoke its own Mandate outright — it holds
+ * `ISSUER_SECRET_KEY`, the key that signed it. A wallet-anchored Mandate
+ * (T35) has no such key on this server: only the wallet itself, as the
+ * registered issuer, can sign the revoke transaction, so this returns the
+ * same "prepare, don't finish" shape `startSession`'s wallet branch does —
+ * `/api/session/wallet-revoke-submit` finishes it once the wallet signs.
+ */
+async function revoke(current: DemoSession): Promise<RevokeOutcome> {
+  if (current.walletAddress === undefined) {
+    const revokeTx = await revokeMandate(current.agentpass, {
+      mandateHash: current.mandate.hash,
+      principal: Keypair.fromSecret(current.issuerSecret),
+    });
+    const credentialStatus = await current.agentpass.status(current.credentialHash);
+    return { kind: "done", result: { mandateHash: current.mandate.hash, revokeTx, credentialStatus } };
+  }
+  const prepared = await prepareWalletRevoke(current.agentpass, {
     mandateHash: current.mandate.hash,
-    principal: Keypair.fromSecret(current.issuerSecret),
+    principalAddress: current.walletAddress,
   });
-  const credentialStatus = await current.agentpass.status(current.credentialHash);
-  return { mandateHash: current.mandate.hash, revokeTx, credentialStatus };
+  return { kind: "pending-wallet-signature", requestId: prepared.requestId, xdr: prepared.xdr };
 }
 
 interface WireVaultRecord {
@@ -720,20 +911,123 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   if (req.method === "POST" && pathname === "/api/session/start") {
     try {
       const sessionId = readSessionId(req) ?? randomUUID();
-      const started = await startSession(sessionId);
-      sessions.set(sessionId, started);
       withSessionCookie(res, sessionId);
+      const started = await startSession(sessionId);
+
+      if (started.kind === "pending-wallet-consent") {
+        sendJson(res, 200, {
+          ok: true,
+          pending: "wallet-consent",
+          credentialHash: started.credentialHash,
+          challengeMessage: started.challengeMessage,
+        });
+        return;
+      }
+
+      sessions.set(sessionId, started.session);
       sendJson(res, 200, {
         ok: true,
-        credentialHash: started.credentialHash,
-        mandateHash: started.mandate.hash,
-        agentStatus: started.agent.credential.usable ? "Active" : "unusable",
-        tools: started.agent.tools.list().map((tool) => tool.name),
-        venue: started.venueId,
-        perTx: `${started.scope.limits.perTx} ${started.scope.limits.currency}`,
-        perDay: `${started.scope.limits.perDay} ${started.scope.limits.currency}`,
-        policyRail: started.railContractId ?? null,
+        credentialHash: started.session.credentialHash,
+        mandateHash: started.session.mandate.hash,
+        agentStatus: started.session.agent.credential.usable ? "Active" : "unusable",
+        tools: started.session.agent.tools.list().map((tool) => tool.name),
+        venue: started.session.venueId,
+        perTx: `${started.session.scope.limits.perTx} ${started.session.scope.limits.currency}`,
+        perDay: `${started.session.scope.limits.perDay} ${started.session.scope.limits.currency}`,
+        policyRail: started.session.railContractId ?? null,
         walletAddress: walletAddressBySession.get(sessionId) ?? null,
+      });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/session/wallet-consent") {
+    const sessionId = readSessionId(req);
+    const pending = sessionId === undefined ? undefined : peekPendingWalletSession(sessionId);
+    if (sessionId === undefined || pending === undefined) {
+      sendJson(res, 400, {
+        ok: false,
+        code: "ConfigError",
+        message: "no hay ninguna sesión esperando la firma de la wallet — iniciá primero",
+      });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const signature = typeof body.signature === "string" ? body.signature : undefined;
+    if (signature === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta signature" });
+      return;
+    }
+    try {
+      const prepared = await prepareWalletAnchor(pending.agentpass, {
+        mandate: pending.mandate,
+        signature,
+      });
+      pending.signature = signature;
+      pending.requestId = prepared.requestId;
+      sendJson(res, 200, { ok: true, requestId: prepared.requestId, xdr: prepared.xdr });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/session/wallet-anchor") {
+    const sessionId = readSessionId(req);
+    const pending = sessionId === undefined ? undefined : peekPendingWalletSession(sessionId);
+    if (sessionId === undefined || pending === undefined || pending.signature === undefined) {
+      sendJson(res, 400, {
+        ok: false,
+        code: "ConfigError",
+        message: "no hay ninguna sesión esperando el anclaje — empezá el flujo de nuevo",
+      });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const requestId = typeof body.requestId === "string" ? body.requestId : undefined;
+    const signedXdr = typeof body.signedXdr === "string" ? body.signedXdr : undefined;
+    if (requestId === undefined || signedXdr === undefined || requestId !== pending.requestId) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta requestId o signedXdr, o no coincide" });
+      return;
+    }
+    try {
+      const transactionHash = await pending.agentpass.submitSigned(requestId, signedXdr);
+      const env = await readEnv();
+      const session = await finishSession({
+        sessionId,
+        env,
+        agentpass: pending.agentpass,
+        agentKeypair: pending.agentKeypair,
+        demoScope: pending.demoScope,
+        baseUrl: pending.baseUrl,
+        issuedCredentialJws: pending.issuedCredentialJws,
+        credentialHash: pending.credentialHash,
+        issuerSecret: pending.issuerSecret,
+        mandate: {
+          hash: walletMandateHash(pending.mandate),
+          mandate: pending.mandate,
+          transactionHash,
+          principalAddress: pending.walletAddress,
+          signature: pending.signature,
+        },
+        mandateSource: { mandate: pending.mandate, signature: pending.signature },
+        walletAddress: pending.walletAddress,
+      });
+      sessions.set(sessionId, session);
+      clearPendingWalletSession(sessionId);
+      sendJson(res, 200, {
+        ok: true,
+        credentialHash: session.credentialHash,
+        mandateHash: session.mandate.hash,
+        agentStatus: session.agent.credential.usable ? "Active" : "unusable",
+        tools: session.agent.tools.list().map((tool) => tool.name),
+        venue: session.venueId,
+        perTx: `${session.scope.limits.perTx} ${session.scope.limits.currency}`,
+        perDay: `${session.scope.limits.perDay} ${session.scope.limits.currency}`,
+        policyRail: session.railContractId ?? null,
+        walletAddress: session.walletAddress ?? null,
       });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });
@@ -783,8 +1077,35 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const result = await revoke(current);
-      sendJson(res, 200, { ok: true, ...result });
+      const outcome = await revoke(current);
+      if (outcome.kind === "pending-wallet-signature") {
+        sendJson(res, 200, { ok: true, pending: "wallet-signature", requestId: outcome.requestId, xdr: outcome.xdr });
+        return;
+      }
+      sendJson(res, 200, { ok: true, ...outcome.result });
+    } catch (error) {
+      sendJson(res, 200, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/session/wallet-revoke-submit") {
+    const current = getSession(req);
+    if (current === undefined) {
+      sendJson(res, 400, { ok: false, code: "ConfigError", message: "no active session — iniciá primero" });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const requestId = typeof body.requestId === "string" ? body.requestId : undefined;
+    const signedXdr = typeof body.signedXdr === "string" ? body.signedXdr : undefined;
+    if (requestId === undefined || signedXdr === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta requestId o signedXdr" });
+      return;
+    }
+    try {
+      const revokeTx = await current.agentpass.submitSigned(requestId, signedXdr);
+      const credentialStatus = await current.agentpass.status(current.credentialHash);
+      sendJson(res, 200, { ok: true, mandateHash: current.mandate.hash, revokeTx, credentialStatus });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });
     }

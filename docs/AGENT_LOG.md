@@ -1848,3 +1848,56 @@ Pendiente: el usuario tiene que copiar el `DATABASE_URL` corregido de su
 `.env.local` local al dashboard de Render y confirmar que "Iniciar sesión"
 ya funciona ahí. Con eso confirmado, sigue el hito ya acordado: la wallet
 conectada firmando de verdad el Mandato (`C-8`).
+
+## 2026-09-09 (7) — cc/wallet-signs-mandate
+
+Agente: Claude Code
+
+Qué: T35 cerrado — una wallet conectada (T34) ahora firma de verdad su
+propio Mandato, con dos firmas reales en Freighter (el mensaje-resumen del
+Mandato, después la transacción de anclaje) en vez de que la plataforma
+firme en su nombre; revocarlo también lo firma la wallet. Se construyó un
+camino de verificación paralelo (`packages/mandate/src/wallet-sign.ts`,
+`verifyWalletSignedMandate`) en vez de extender `verifyMandate` de la Fase
+3 — una wallet nunca puede producir una firma JWS válida (SEP-0053 firma
+un hash distinto al que firma un JWS EdDSA), así que ramificar la función
+cerrada habría sido tocarla en silencio. El anclaje/revocación on-chain se
+resolvió como flujo de dos fases (`Registry.prepareAnchor`/`prepareRevoke`
++ `submitSigned`, `packages/sdk`) reusando `AssembledTransaction` de la
+Fase 1 — preparar y simular acá, firmar en la wallet, enviar acá. Una
+wallet se registra como issuer automáticamente al anclar su primer
+Mandato, sin aprobación manual (confirmado con el usuario antes de
+construirlo). `MandateSource` en `apps/agent` pasa a ser
+`string | { mandate, signature }`, sin romper ningún código que ya pasaba
+un JWS crudo.
+
+Por qué: pedido explícito del usuario tras probar el bug de producción de
+la entrada anterior — "que la wallet firme de verdad el mandato, sí, eso
+hay que hacerlo", con alcance completo confirmado (firma + anclaje real),
+y auto-registro de issuer sin aprobación, las dos por pregunta directa
+antes de construir.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md`, `DECISIONES.md` `C-13` a `C-16`, `evidencia/T35.md`).
+Archivos nuevos: `packages/core/src/sep53.ts` (+ test, movido de
+`apps/web/src/wallet/verify-message.ts`), `packages/mandate/src/wallet-sign.ts`
+(+ test). Archivos tocados: `packages/mandate/src/anchor.ts` (+ test, de
+17 a 25), `packages/mandate/src/testing.ts`, `packages/sdk/src/registry.ts`,
+`packages/sdk/src/index.ts`, `apps/agent/src/mandate/verifier.ts`,
+`apps/agent/src/agent.ts`, `apps/agent/src/tools/agent-tools.ts`,
+`apps/agent/src/testing/mandates.ts`, `apps/agent/src/index.ts`,
+`apps/web/src/server.ts`, `apps/web/public/index.html`. 515 tests en
+verde (cero regresiones en los 421 de `apps/agent`), `pnpm
+typecheck`/`pnpm build` (monorepo completo) limpios. Verificado en vivo de
+punta a punta contra testnet real con una wallet simulada bit a bit como
+Freighter (fondeo por Friendbot, firma SEP-0053, firma de transacción vía
+`TransactionBuilder`) — ver `evidencia/T35.md`. El camino clásico (sin
+wallet) se verificó sin regresión en el navegador.
+
+Pendiente: mergear `cc/wallet-signs-mandate` a `main` y pushear (a
+confirmar con el usuario). Sin resolver todavía, a propósito: cablear
+`@agentpay/tenancy` (T32) dentro de `apps/web` para que cada tenant gaste
+desde su propia cuenta (`C-16` — el usuario ya sacó el bloqueante externo
+del fondeo de USDC, pero falta la conversación de producto sobre cómo se
+deriva el índice de cada tenant); el rename a "TirevPay" (`P-8`) sigue
+congelado, el usuario va a traer nombres nuevos.

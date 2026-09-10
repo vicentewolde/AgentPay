@@ -33,6 +33,8 @@ export {
   type Ed25519PublicJWK,
 } from "./jwk.js";
 
+export { signStellarMessage, verifyStellarMessage } from "./sep53.js";
+
 export {
   AGENTPASS_CREDENTIAL_TYPE,
   AGENTPASS_STATUS_TYPE,

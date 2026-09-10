@@ -35,11 +35,28 @@ export {
 
 export {
   anchorMandate,
+  prepareWalletAnchor,
+  prepareWalletRevoke,
   revokeMandate,
   verifyMandateOnChain,
+  verifyWalletSignedMandateOnChain,
   type AnchorMandateParams,
   type AnchoredMandate,
   type FullyVerifiedMandate,
+  type FullyVerifiedWalletMandate,
+  type PrepareWalletAnchorParams,
+  type PrepareWalletRevokeParams,
+  type PreparedRegistryWrite,
+  type PreparedWalletAnchor,
   type RegistryAccess,
   type RevokeMandateParams,
 } from "./anchor.js";
+
+export {
+  canonicalMandateJson,
+  mandateChallengeMessage,
+  verifyWalletSignedMandate,
+  walletMandateHash,
+  type VerifyWalletSignedMandateOptions,
+  type WalletVerifiedMandate,
+} from "./wallet-sign.js";

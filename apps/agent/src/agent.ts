@@ -14,7 +14,7 @@ import type { Keypair } from "@stellar/stellar-sdk/base";
 import type { CatalogAdapter } from "./catalog/catalog.js";
 import type { CredentialState, CredentialVerifier } from "./credential/verifier.js";
 import { checkOwnCredential } from "./credential/verifier.js";
-import type { MandateState, MandateVerifier } from "./mandate/verifier.js";
+import type { MandateSource, MandateState, MandateVerifier } from "./mandate/verifier.js";
 import { checkOwnMandate } from "./mandate/verifier.js";
 import { createInMemorySpendLedger, type SpendLedger } from "./ledger/spend-ledger.js";
 import type { PolicyRail } from "./policy/policy-rail.js";
@@ -32,14 +32,15 @@ export interface AgentConfig {
    */
   readonly verifier: CredentialVerifier;
   /**
-   * The principal's signed consent for this agent, as a compact JWS.
-   * Optional at the level of *configuration* — an agent can exist, and read
-   * the catalogue, before any principal has consented to anything — but its
-   * absence means `create_purchase_intent` is withheld exactly as it would be
-   * for a missing signer (T21). If supplied, {@link mandateVerifier} must be
-   * supplied too.
+   * The principal's signed consent for this agent — a compact JWS (a
+   * platform-held key signed it), or a `{ mandate, signature }` pair (a
+   * connected wallet signed it, T35). Optional at the level of
+   * *configuration* — an agent can exist, and read the catalogue, before any
+   * principal has consented to anything — but its absence means
+   * `create_purchase_intent` is withheld exactly as it would be for a missing
+   * signer (T21). If supplied, {@link mandateVerifier} must be supplied too.
    */
-  readonly mandate?: string;
+  readonly mandate?: MandateSource;
   /** Verifies the mandate against the registry. Required alongside `mandate`. */
   readonly mandateVerifier?: MandateVerifier;
   /**

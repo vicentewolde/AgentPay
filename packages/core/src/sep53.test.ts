@@ -3,13 +3,14 @@ import { createHash } from "node:crypto";
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 
-import { verifyStellarMessage } from "./verify-message.js";
+import { signStellarMessage, verifyStellarMessage } from "./sep53.js";
 
 const STELLAR_MESSAGE_PREFIX = "Stellar Signed Message:\n";
 
-/** Reference SEP-0053 signer — independent of `verify-message.ts`, so this
- * test can't pass by both sides sharing the same bug. */
-function signStellarMessage(keypair: Keypair, message: string): string {
+/** Reference SEP-0053 signer, hand-rolled independently of `signStellarMessage`
+ * — so the "accepts a signature produced per SEP-0053" test can't pass just
+ * because both sides share the same bug. */
+function referenceSignStellarMessage(keypair: Keypair, message: string): string {
   const payload = Buffer.concat([Buffer.from(STELLAR_MESSAGE_PREFIX, "utf8"), Buffer.from(message, "utf8")]);
   const hash = createHash("sha256").update(payload).digest();
   // `Keypair.sign` returns a plain Uint8Array, not a Node Buffer — its own
@@ -18,17 +19,26 @@ function signStellarMessage(keypair: Keypair, message: string): string {
   return Buffer.from(keypair.sign(hash)).toString("base64");
 }
 
-describe("verifyStellarMessage", () => {
-  it("accepts a signature produced per SEP-0053", () => {
+describe("signStellarMessage / verifyStellarMessage round trip", () => {
+  it("verifies its own signature", () => {
     const wallet = Keypair.random();
     const signature = signStellarMessage(wallet, "connect me");
+
+    expect(verifyStellarMessage(wallet.publicKey(), "connect me", signature)).toBe(true);
+  });
+});
+
+describe("verifyStellarMessage", () => {
+  it("accepts a signature produced per SEP-0053 by an independent reference signer", () => {
+    const wallet = Keypair.random();
+    const signature = referenceSignStellarMessage(wallet, "connect me");
 
     expect(verifyStellarMessage(wallet.publicKey(), "connect me", signature)).toBe(true);
   });
 
   it("rejects a signature over a different message", () => {
     const wallet = Keypair.random();
-    const signature = signStellarMessage(wallet, "connect me");
+    const signature = referenceSignStellarMessage(wallet, "connect me");
 
     expect(verifyStellarMessage(wallet.publicKey(), "connect someone else", signature)).toBe(false);
   });
@@ -36,7 +46,7 @@ describe("verifyStellarMessage", () => {
   it("rejects a signature from a different wallet than claimed", () => {
     const wallet = Keypair.random();
     const impostor = Keypair.random();
-    const signature = signStellarMessage(impostor, "connect me");
+    const signature = referenceSignStellarMessage(impostor, "connect me");
 
     expect(verifyStellarMessage(wallet.publicKey(), "connect me", signature)).toBe(false);
   });

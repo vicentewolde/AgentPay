@@ -85,6 +85,7 @@ export {
 export {
   checkOwnMandate,
   createOnChainMandateVerifier,
+  type MandateSource,
   type MandateState,
   type MandateVerifier,
   type UnusableMandate,

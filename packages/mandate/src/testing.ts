@@ -7,14 +7,14 @@
  * fakes the signature would let a break in the signing path pass every test
  * that uses it.
  */
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import type { Scope, StellarDid } from "@agentpass/core";
 import { AgentPassError, stellarAddressToDid } from "@agentpass/core";
 import type { CredStatus } from "@agentpass/sdk";
 import { Keypair, StrKey } from "@stellar/stellar-sdk/base";
 
-import type { RegistryAccess } from "./anchor.js";
+import type { PreparedRegistryWrite, RegistryAccess } from "./anchor.js";
 import type { AgentPayMandate } from "./mandate.js";
 import { createMandate } from "./create.js";
 
@@ -88,6 +88,11 @@ export function createFakeRegistryAccess(
   const clock = options.now ?? (() => new Date());
   const issuers = new Map<string, boolean>();
   const creds = new Map<string, FakeCredRecord>();
+  const pending = new Map<
+    string,
+    | { readonly kind: "anchor"; readonly credentialHash: string; readonly subject: string; readonly expiresAtMs: number; readonly issuerAddress: string }
+    | { readonly kind: "revoke"; readonly credentialHash: string; readonly issuerAddress: string }
+  >();
 
   return {
     config: { contractId },
@@ -156,6 +161,77 @@ export function createFakeRegistryAccess(
       }
       record.revoked = true;
       return `fake-tx-${credentialHash.slice(0, 8)}`;
+    },
+
+    async prepareAnchor({ credentialHash, subject, expiresAt, issuerAddress }): Promise<PreparedRegistryWrite> {
+      const requestId = randomUUID();
+      pending.set(requestId, {
+        kind: "anchor",
+        credentialHash,
+        subject,
+        expiresAtMs: expiresAt.getTime(),
+        issuerAddress,
+      });
+      return { requestId, xdr: `fake-xdr-anchor-${requestId}` };
+    },
+
+    async prepareRevoke({ credentialHash, issuerAddress }): Promise<PreparedRegistryWrite> {
+      const requestId = randomUUID();
+      pending.set(requestId, { kind: "revoke", credentialHash, issuerAddress });
+      return { requestId, xdr: `fake-xdr-revoke-${requestId}` };
+    },
+
+    // The fake never inspects `signedXdr` — nothing here builds real XDR to
+    // check it against. What a real signature does and does not authorise is
+    // covered by the SDK's own integration tests against live testnet, not
+    // by this in-memory double.
+    async submitSigned(requestId: string, _signedXdr: string): Promise<string> {
+      const request = pending.get(requestId);
+      if (request === undefined) {
+        throw new AgentPassError("ConfigError", "no pending transaction for this requestId", {
+          details: { requestId },
+        });
+      }
+      pending.delete(requestId);
+
+      if (request.kind === "anchor") {
+        if (!issuers.has(request.issuerAddress)) {
+          throw new AgentPassError("IssuerNotRegistered", "issuer is not registered", {
+            details: { issuer: request.issuerAddress },
+          });
+        }
+        if (issuers.get(request.issuerAddress) === false) {
+          throw new AgentPassError("IssuerInactive", "issuer has been deactivated", {
+            details: { issuer: request.issuerAddress },
+          });
+        }
+        if (creds.has(request.credentialHash)) {
+          throw new AgentPassError("NetworkError", "anchor was rejected by the network", {
+            details: { reason: "CredentialAlreadyAnchored" },
+          });
+        }
+        creds.set(request.credentialHash, {
+          issuer: request.issuerAddress,
+          subject: request.subject,
+          expiresAtMs: request.expiresAtMs,
+          revoked: false,
+        });
+        return `fake-tx-${request.credentialHash.slice(0, 8)}`;
+      }
+
+      const record = creds.get(request.credentialHash);
+      if (record === undefined) {
+        throw new AgentPassError("NetworkError", "revoke was rejected by the network", {
+          details: { reason: "CredentialUnknown" },
+        });
+      }
+      if (record.issuer !== request.issuerAddress) {
+        throw new AgentPassError("NetworkError", "revoke was rejected by the network", {
+          details: { reason: "NotCredentialIssuer" },
+        });
+      }
+      record.revoked = true;
+      return `fake-tx-${request.credentialHash.slice(0, 8)}`;
     },
   };
 }

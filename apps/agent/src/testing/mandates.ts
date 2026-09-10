@@ -14,7 +14,7 @@ import { AgentPassError, stellarAddressToDid } from "@agentpass/core";
 import { createMandate, signMandate, verifyMandate, type AgentPayMandate } from "@agentpay/mandate";
 import { Keypair } from "@stellar/stellar-sdk/base";
 
-import type { MandateVerifier, VerifiedOwnMandate } from "../mandate/verifier.js";
+import type { MandateSource, MandateVerifier, VerifiedOwnMandate } from "../mandate/verifier.js";
 import { PILOT_SCOPE, TEST_REGISTRY } from "./credentials.js";
 
 function didOf(keypair: Keypair): StellarDid {
@@ -86,14 +86,20 @@ export function createStubMandateVerifier(options: StubMandateVerifierOptions = 
   const status = options.status ?? "Active";
 
   return {
-    async verify(jws: string, verifyOptions = {}): Promise<VerifiedOwnMandate> {
-      const verified = await verifyMandate(jws, verifyOptions);
+    async verify(source: MandateSource, verifyOptions = {}): Promise<VerifiedOwnMandate> {
+      // JWS only — this stub exists to simulate the registry lookup around a
+      // real `verifyMandate`, not to also simulate the wallet-signed path
+      // (`wallet-sign.ts`'s own tests already cover that offline check).
+      if (typeof source !== "string") {
+        throw new AgentPassError("ConfigError", "createStubMandateVerifier only simulates JWS-signed mandates", {});
+      }
+      const verified = await verifyMandate(source, verifyOptions);
 
       if (options.failWith !== undefined) throw options.failWith;
 
       switch (status) {
         case "Active":
-          return verified;
+          return { ...verified, source };
         case "Revoked":
           throw new AgentPassError("MandateRevoked", "the registry reports this mandate as revoked", {
             details: { hash: verified.hash },

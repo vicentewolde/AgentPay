@@ -533,6 +533,10 @@ var T = {
   walletConnected: { en: "Wallet connected and verified.", es: "Wallet conectada y verificada." },
   walletFailed: { en: "Could not connect wallet: ", es: "No se pudo conectar la wallet: " },
   walletRejected: { en: "Connection cancelled in Freighter.", es: "Conexión cancelada en Freighter." },
+  walletSigningMandate: { en: "Sign the Mandate in Freighter…", es: "Firmá el Mandato en Freighter…" },
+  walletSigningAnchor: { en: "Sign the anchor transaction in Freighter…", es: "Firmá la transacción de anclaje en Freighter…" },
+  walletAnchoring: { en: "Anchoring on testnet…", es: "Anclando en testnet…" },
+  walletSigningRevoke: { en: "Sign the revoke transaction in Freighter…", es: "Firmá la transacción de revocación en Freighter…" },
   identityCredential: { en: "credential (on-chain)", es: "credencial (en cadena)" },
   identityMandate: { en: "mandate (on-chain)", es: "mandato (en cadena)" },
   stateRevoked: { en: "revoked", es: "revocada" },
@@ -592,6 +596,8 @@ function translateStepValue(rawLabel, value) {
 }
 
 /* ---------- app logic ---------- */
+var TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
+
 async function api(path, options) {
   const res = await fetch(path, options);
   return { status: res.status, body: await res.json() };
@@ -726,7 +732,7 @@ document.getElementById("wallet-btn").addEventListener("click", async () => {
     setStatus(status, true, t("walletSigning"));
     const signed = await freighterApi.signMessage(challenge.message, {
       address: address,
-      networkPassphrase: "Test SDF Network ; September 2015",
+      networkPassphrase: TESTNET_PASSPHRASE,
     });
     if (signed.error) throw new Error(signed.error);
 
@@ -751,6 +757,53 @@ document.getElementById("wallet-btn").addEventListener("click", async () => {
   }
 });
 
+/**
+ * When the connected wallet is the Mandate's principal (T35), starting a
+ * session cannot finish in one request: only the wallet itself can sign its
+ * own consent and its own on-chain anchor transaction, each a separate
+ * Freighter prompt. `pending.challengeMessage` is the same text
+ * `mandateChallengeMessage` (server-side) built; signing it and posting the
+ * signature to `/api/session/wallet-consent` gets back an unsigned anchor
+ * transaction (`xdr`) to sign next, which `/api/session/wallet-anchor`
+ * submits to finish the session.
+ */
+async function runWalletMandateFlow(pending, status) {
+  if (typeof freighterApi === "undefined") throw new Error(t("walletMissing"));
+  const access = await freighterApi.requestAccess();
+  if (access.error) throw new Error(access.error);
+  const address = access.address;
+
+  setStatus(status, true, t("walletSigningMandate"));
+  const signed = await freighterApi.signMessage(pending.challengeMessage, {
+    address: address,
+    networkPassphrase: TESTNET_PASSPHRASE,
+  });
+  if (signed.error) throw new Error(signed.error);
+
+  const { body: consent } = await api("/api/session/wallet-consent", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ signature: signedMessageToBase64(signed.signedMessage) }),
+  });
+  if (!consent.ok) throw new Error(consent.message || t("sessionFailed"));
+
+  setStatus(status, true, t("walletSigningAnchor"));
+  const signedTx = await freighterApi.signTransaction(consent.xdr, {
+    address: address,
+    networkPassphrase: TESTNET_PASSPHRASE,
+  });
+  if (signedTx.error) throw new Error(signedTx.error);
+
+  setStatus(status, true, t("walletAnchoring"));
+  const { body: anchored } = await api("/api/session/wallet-anchor", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requestId: consent.requestId, signedXdr: signedTx.signedTxXdr }),
+  });
+  if (!anchored.ok) throw new Error(anchored.message || t("sessionFailed"));
+  return anchored;
+}
+
 document.getElementById("start-btn").addEventListener("click", async () => {
   const btn = document.getElementById("start-btn");
   const status = document.getElementById("session-status");
@@ -766,9 +819,10 @@ document.getElementById("start-btn").addEventListener("click", async () => {
       var detail = body.details && body.details.cause;
       throw new Error((body.message ?? t("sessionFailed")) + (detail ? " — " + detail : ""));
     }
-    lastSession = body;
-    renderSessionFacts(body);
-    document.getElementById("buy-rail-btn").disabled = body.policyRail === null;
+    const final = body.pending === "wallet-consent" ? await runWalletMandateFlow(body, status) : body;
+    lastSession = final;
+    renderSessionFacts(final);
+    document.getElementById("buy-rail-btn").disabled = final.policyRail === null;
     document.getElementById("revoke-btn").disabled = false;
     document.getElementById("vault-btn").disabled = false;
   } catch (error) {
@@ -891,6 +945,33 @@ function renderRevokeFacts(body) {
   setStatus(document.getElementById("revoke-status"), true, t("revoked"));
 }
 
+/**
+ * A wallet-anchored Mandate (T35) has no key on this server that can revoke
+ * it — only the wallet, as the registered issuer, can sign the revoke
+ * transaction `/api/session/revoke` prepares. One more Freighter prompt,
+ * then `/api/session/wallet-revoke-submit` finishes it.
+ */
+async function runWalletRevokeFlow(pending, status) {
+  if (typeof freighterApi === "undefined") throw new Error(t("walletMissing"));
+  const access = await freighterApi.requestAccess();
+  if (access.error) throw new Error(access.error);
+
+  setStatus(status, true, t("walletSigningRevoke"));
+  const signedTx = await freighterApi.signTransaction(pending.xdr, {
+    address: access.address,
+    networkPassphrase: TESTNET_PASSPHRASE,
+  });
+  if (signedTx.error) throw new Error(signedTx.error);
+
+  const { body } = await api("/api/session/wallet-revoke-submit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requestId: pending.requestId, signedXdr: signedTx.signedTxXdr }),
+  });
+  if (!body.ok) throw new Error((body.code ?? "error") + ": " + body.message);
+  return body;
+}
+
 document.getElementById("revoke-btn").addEventListener("click", async () => {
   const btn = document.getElementById("revoke-btn");
   const status = document.getElementById("revoke-status");
@@ -899,8 +980,9 @@ document.getElementById("revoke-btn").addEventListener("click", async () => {
   try {
     const { body } = await api("/api/session/revoke", { method: "POST" });
     if (!body.ok) throw new Error((body.code ?? "error") + ": " + body.message);
-    lastRevoke = body;
-    renderRevokeFacts(body);
+    const final = body.pending === "wallet-signature" ? await runWalletRevokeFlow(body, status) : body;
+    lastRevoke = final;
+    renderRevokeFacts(final);
   } catch (error) {
     setStatus(status, false, error.message);
     btn.disabled = false;

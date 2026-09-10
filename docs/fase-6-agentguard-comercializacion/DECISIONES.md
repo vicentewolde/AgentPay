@@ -308,3 +308,128 @@ agrega un archivo más para mantener sincronizado si Supabase rota su CA,
 a cambio de una garantía que no cambia el riesgo real del proyecto (los
 datos que viajan por acá son la bitácora de un piloto en testnet, no
 información sensible de producción).
+
+### C-13 · La wallet firma el Mandato por un camino de verificación paralelo, no extendiendo `verifyMandate` (JWS) · `Vigente` — resuelve el hueco de `C-8`
+**Fecha:** 2026-09-09 (T35)
+
+`packages/mandate/src/wallet-sign.ts` agrega `verifyWalletSignedMandate` como
+una función nueva e independiente de `verifyMandate` — no una rama dentro de
+ella. Un Mandato firmado por wallet no tiene JWS: es el documento en JSON
+canónico más una firma SEP-0053 sobre un mensaje-resumen legible
+(`mandateChallengeMessage`), verificada con `verifyStellarMessage` (`C-9`,
+Fase 6, ya existente desde T34's wallet-connect).
+
+**Motivo, con la incompatibilidad criptográfica real detrás — la misma que
+`C-8` dejó anotada sin resolver.** Un JWS compacto EdDSA firma los bytes
+crudos de `header.payload`, sin ningún prehash. SEP-0053 (lo único que una
+wallet expone para firmar texto arbitrario) firma
+`sha256("Stellar Signed Message:\n" + mensaje)` — un esquema de bytes
+distinto, no una variante del mismo. Ninguna wallet puede producir jamás una
+firma JWS válida; no es una limitación de Freighter en particular, es cómo
+está diseñado el estándar (para que un sitio no pueda hacer firmar a ciegas
+algo que parece un mensaje pero es otra cosa). Extender `verifyMandate` para
+aceptar además una firma SEP-0053 habría significado ramificar una función
+de una fase cerrada (Fase 3) según de dónde vino la firma — exactamente el
+tipo de cambio silencioso a una decisión cerrada que `CLAUDE.md` prohíbe sin
+avisar primero. Se avisó (con esta evidencia) antes de construir nada.
+
+**Cómo quedó separado, en la práctica.** `MandateSource` (`apps/agent`) es
+ahora `string | { mandate, signature }` — una unión, no un envoltorio con
+discriminador — así que todo el código que ya pasaba un JWS crudo (agente,
+tools, tests) sigue compilando sin cambios. `checkOwnMandate` y
+`createOnChainMandateVerifier` despachan según `typeof source` hacia
+`verifyMandate`+`verifyMandateOnChain` (JWS) o hacia
+`verifyWalletSignedMandate`+`verifyWalletSignedMandateOnChain` (wallet) — las
+dos ramas comparten el chequeo on-chain (`checkOnChainStatus`, extraído en
+este hito) pero nunca comparten la verificación offline de la firma.
+
+**Alternativa descartada.** Ramificar `verifyMandate` internamente según la
+forma del string recibido (JWS vs. algo más). Se descartó de inmediato por
+la razón de arriba — tocar una función cerrada de la Fase 3 en vez de sumar
+una nueva al lado.
+
+### C-14 · Anclar y revocar un Mandato firmado por wallet es un flujo de dos fases (`prepare` → firma en la wallet → `submit`), reusando `AssembledTransaction` de la Fase 1 · `Vigente`
+**Fecha:** 2026-09-09 (T35)
+
+`Registry.prepareAnchor`/`prepareRevoke` (`packages/sdk`) arman y simulan la
+misma llamada al contrato que `anchor()`/`revoke()` ya hacían, pero se
+detienen antes de firmar: devuelven `{ requestId, xdr }` (la transacción sin
+firmar, serializada). `Registry.submitSigned(requestId, signedTxXdr)` la
+retoma más tarde y la envía, usando el `signedTxXdr` que la wallet devolvió
+como si fuera la respuesta de un `signTransaction` normal
+(`.signAndSend({ signTransaction: async () => ({ signedTxXdr }) })`).
+
+**Motivo.** Anclar un Mandato en `agent_registry` exige que quien lo firma
+sea `issuer.require_auth()` — la wallet, no este servidor, que nunca tuvo ni
+va a tener su llave secreta. Una transacción no se puede firmar a mitad de
+una petición HTTP y esperar a que el navegador la apruebe: hacen falta como
+mínimo dos idas y vueltas (preparar, firmar en la wallet, enviar). En vez de
+reconstruir esto a mano contra XDR/RPC crudo, se usó
+`AssembledTransaction` — la misma abstracción de `@stellar/stellar-sdk/contract`
+que la Fase 1 ya trae adentro de `Client.from(...)` — porque ya expone
+exactamente esta forma: `.toXdr()` para serializar sin firmar, y
+`.signAndSend({ signTransaction })` acepta cualquier callback con la firma
+de una wallet real, sin que este proyecto tenga que saber nada del formato
+interno de la transacción.
+
+**Por qué el `Registry` recuerda la transacción preparada en memoria, por
+`requestId`, en vez de que el cliente la reenvíe completa.** Enviar solo la
+firma (no la transacción entera de vuelta) es más chico y evita que un
+cliente que edite el XDR a mano cuele una transacción distinta a la que se
+simuló. El costo es que `pendingWrites` vive en memoria del proceso — con
+TTL de 10 minutos, igual que `pendingWalletSessions` en `apps/web` — y por
+eso las tres peticiones del flujo (`start` → `wallet-consent` → `wallet-anchor`)
+tienen que compartir la misma instancia de `AgentPass`/`Registry`: una
+instancia nueva por petición no sabría nada del `requestId` que una
+petición anterior generó. `apps/web` lo resuelve guardando la instancia
+completa en `PendingWalletSession`, no solo sus datos.
+
+**Alternativa descartada.** Reconstruir la transacción a mano (leer el XDR,
+armar los `Operation`, firmar) sin pasar por `AssembledTransaction`. Se
+descartó por riesgo — reimplementar algo que el propio SDK de Stellar ya
+resuelve y prueba, con auth entries de Soroban que son fáciles de armar mal
+a mano.
+
+### C-15 · Una wallet conectada se registra como issuer automáticamente, sin aprobación manual · `Vigente`
+**Fecha:** 2026-09-09 (T35)
+
+`ensureWalletIsRegisteredIssuer` (`apps/web/src/server.ts`) llama a
+`registerIssuer` con la llave de administrador apenas una wallet verificada
+(T34) intenta anclar su propio Mandato, si todavía no está registrada o
+activa — sin ningún paso intermedio de revisión humana.
+
+**Motivo.** Confirmado explícitamente con el usuario (pregunta directa,
+antes de construir esto): para un piloto en testnet, "conectó y probó
+criptográficamente que controla la wallet" ya es suficiente confianza para
+dejarla anclar sus propios Mandatos — pedir una aprobación manual agregaría
+fricción a la demo sin una amenaza real detrás en este contexto (testnet,
+sin fondos reales en juego). Es una elección deliberada para esta etapa, no
+una política que se vaya a llevar a producción sin revisarla de nuevo.
+
+**Alternativa descartada.** Una cola de aprobación manual (el admin revisa y
+aprueba cada wallet nueva antes de que pueda anclar). Se descartó por
+alcance — resuelve un problema de confianza que este piloto todavía no
+tiene (no hay fondos reales en juego, es testnet) a cambio de fricción real
+en cada demo.
+
+### C-16 · Deferred, sin construir en este hito: cuentas propias fondeadas por tenant, aunque la precondición de USDC ya no lo bloquea · `Vigente`
+**Fecha:** 2026-09-09 (T35)
+
+Con la wallet ahora firmando de verdad su propio Mandato, el agente sigue
+gastando desde la cuenta compartida `AGENT_SECRET_KEY` — `@agentpay/tenancy`
+(T32) sigue sin cablearse dentro de `apps/web`. El usuario ya removió el
+bloqueante de fondeo de `C-11` (asumiendo que quien conecta su wallet ya
+tiene USDC de testnet cargado de antes), pero eso resuelve la mitad del
+problema, no las dos.
+
+**Motivo.** Cablear identidad Stellar propia por tenant es una pieza
+independiente de que la wallet firme el Mandato — el usuario pidió
+explícitamente "dale con la firma del mandato" como alcance de este hito,
+no "dale con todo lo de tenancy". Sumarlo de pasada habría sido expandir el
+alcance sin que el usuario lo pidiera, la misma razón que ya justificó
+`C-6` en T33.
+
+**Alternativa descartada:** cablear `@agentpay/tenancy` en el mismo hito ya
+que la precondición de USDC lo desbloquea. Se descartó por alcance — sigue
+faltando decidir cómo y cuándo se deriva el índice de tenant de cada
+wallet nueva, una conversación de producto que no se tuvo todavía.

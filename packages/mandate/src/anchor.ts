@@ -28,6 +28,8 @@ import type { Keypair } from "@stellar/stellar-sdk/base";
 import type { AgentPayMandate } from "./mandate.js";
 import type { SignedMandate, VerifiedMandate, VerifyMandateOptions } from "./sign.js";
 import { signMandate, verifyMandate } from "./sign.js";
+import type { VerifyWalletSignedMandateOptions, WalletVerifiedMandate } from "./wallet-sign.js";
+import { verifyWalletSignedMandate } from "./wallet-sign.js";
 
 /**
  * The one capability this module needs from `@agentpass/sdk`. A real
@@ -35,6 +37,13 @@ import { signMandate, verifyMandate } from "./sign.js";
  * `anchor.test.ts` — because every method here is already document-agnostic in
  * the SDK; nothing had to be added *for* Mandate, only exposed.
  */
+export interface PreparedRegistryWrite {
+  /** Names which call this is, when submitted back later — nothing else identifies it. */
+  readonly requestId: string;
+  /** The unsimulated-but-assembled transaction, base64 XDR, for the wallet to sign as-is. */
+  readonly xdr: string;
+}
+
 export interface RegistryAccess {
   readonly config: { readonly contractId: string };
   anchor(params: {
@@ -46,6 +55,34 @@ export interface RegistryAccess {
   status(hash: string): Promise<CredStatus>;
   issuerStatus(address: string): Promise<{ readonly registered: boolean; readonly active: boolean }>;
   revoke(params: { readonly credentialHash: string; readonly issuer: Keypair }): Promise<string>;
+  /**
+   * `anchor`'s two-phase twin, for a principal this codebase never holds the
+   * secret key for: assembles and simulates the same call against
+   * `issuerAddress` as the transaction's source, but does not sign it — a
+   * wallet's own signature is the only thing that can satisfy the
+   * contract's `issuer.require_auth()` for that address.
+   */
+  prepareAnchor(params: {
+    readonly credentialHash: string;
+    readonly subject: string;
+    readonly expiresAt: Date;
+    readonly issuerAddress: string;
+  }): Promise<PreparedRegistryWrite>;
+  /** `revoke`'s two-phase twin — same reasoning as {@link RegistryAccess.prepareAnchor}. */
+  prepareRevoke(params: {
+    readonly credentialHash: string;
+    readonly issuerAddress: string;
+  }): Promise<PreparedRegistryWrite>;
+  /**
+   * Finishes a `prepareAnchor`/`prepareRevoke` call once the wallet has
+   * signed the XDR it returned. `requestId` names which pending transaction
+   * this is — a signed XDR carries no marker of which prepared call it
+   * answers, so the caller must remember and pass it back.
+   *
+   * @throws AgentPassError `ConfigError` if `requestId` names no pending
+   * transaction — already submitted, or its TTL passed.
+   */
+  submitSigned(requestId: string, signedXdr: string): Promise<string>;
 }
 
 export interface AnchorMandateParams {
@@ -160,9 +197,34 @@ export async function verifyMandateOnChain(
 ): Promise<FullyVerifiedMandate> {
   // Offline: signature, then the validity window. No network call yet.
   const verified = await verifyMandate(jws, options);
+  const principalAddress = await checkOnChainStatus(registry, verified);
+  return { ...verified, status: "Active", principalAddress };
+}
+
+/**
+ * The two network checks every fully-verified mandate needs, regardless of
+ * which signature scheme proved the document authentic: is the anchored
+ * hash still active, and is the principal who anchored it still trusted.
+ * Same order `AgentPass.verify()` uses for credentials, for the same
+ * reason — a forged document should never get far enough to learn anything
+ * about the registry. Shared by {@link verifyMandateOnChain} (JWS) and
+ * {@link verifyWalletSignedMandateOnChain} (a wallet's SEP-0053 signature) —
+ * once a document is proven authentic and in-window, what the registry has
+ * to say about it does not depend on how that proof was produced.
+ *
+ * @throws AgentPassError `MandateRevoked` / `MandateUnknown` if the registry
+ * reports the anchored hash as revoked, or never anchored.
+ * @throws AgentPassError `MandateExpired` if the registry reports it expired
+ * though the signed window has not closed.
+ * @throws AgentPassError `IssuerNotRegistered` / `IssuerInactive` if the
+ * principal is not registered, or was deactivated.
+ */
+async function checkOnChainStatus(
+  registry: RegistryAccess,
+  verified: { readonly hash: string; readonly mandate: AgentPayMandate; readonly principal: StellarDid },
+): Promise<string> {
   assertTrustedRegistry(verified.mandate, registry);
 
-  // Is the anchored hash still active?
   const status = await registry.status(verified.hash);
   switch (status) {
     case "Active":
@@ -184,7 +246,6 @@ export async function verifyMandateOnChain(
       );
   }
 
-  // Is the principal who anchored it still trusted?
   const principalAddress = addressOf(verified.principal);
   const principal = await registry.issuerStatus(principalAddress);
   if (!principal.registered) {
@@ -198,6 +259,31 @@ export async function verifyMandateOnChain(
     });
   }
 
+  return principalAddress;
+}
+
+export interface FullyVerifiedWalletMandate extends WalletVerifiedMandate {
+  readonly status: Extract<CredStatus, "Active">;
+  readonly principalAddress: string;
+}
+
+/**
+ * {@link verifyMandateOnChain}'s twin for a mandate whose principal is a
+ * connected wallet: the offline check is {@link verifyWalletSignedMandate}
+ * (a SEP-0053 signature, not a JWS) instead of {@link verifyMandate}; the two
+ * network checks after it are identical, and identically strict — a wallet
+ * principal is registered and revoked exactly the way a platform-held one
+ * is, because `agent_registry` (Fase 1) never learned that a Mandate exists,
+ * let alone how its principal got its key.
+ */
+export async function verifyWalletSignedMandateOnChain(
+  registry: RegistryAccess,
+  mandate: unknown,
+  signature: string,
+  options: VerifyWalletSignedMandateOptions = {},
+): Promise<FullyVerifiedWalletMandate> {
+  const verified = await verifyWalletSignedMandate(mandate, signature, options);
+  const principalAddress = await checkOnChainStatus(registry, verified);
   return { ...verified, status: "Active", principalAddress };
 }
 
@@ -211,4 +297,58 @@ export async function revokeMandate(
   { mandateHash, principal }: RevokeMandateParams,
 ): Promise<string> {
   return registry.revoke({ credentialHash: mandateHash, issuer: principal });
+}
+
+export interface PrepareWalletAnchorParams {
+  readonly mandate: AgentPayMandate;
+  /** The wallet's SEP-0053 signature over {@link mandateChallengeMessage}. */
+  readonly signature: string;
+}
+
+export interface PreparedWalletAnchor extends PreparedRegistryWrite {
+  /** `walletMandateHash(mandate)` — what this transaction, once signed and sent, will anchor. */
+  readonly hash: string;
+}
+
+/**
+ * Verifies the wallet's off-chain consent first — the same fail-closed
+ * order every write in this codebase uses, so an invalid mandate never gets
+ * as far as spending a real transaction slot — then prepares (but does not
+ * sign) the on-chain anchor. Only the wallet itself can finish signing this:
+ * `registry.prepareAnchor` builds the transaction with the wallet's address
+ * as the source, and the contract's `issuer.require_auth()` accepts nothing
+ * else.
+ *
+ * @throws Whatever {@link verifyWalletSignedMandate} throws for a mandate
+ * that fails its own offline checks.
+ */
+export async function prepareWalletAnchor(
+  registry: RegistryAccess,
+  { mandate, signature }: PrepareWalletAnchorParams,
+): Promise<PreparedWalletAnchor> {
+  assertTrustedRegistry(mandate, registry);
+  const verified = await verifyWalletSignedMandate(mandate, signature);
+
+  const prepared = await registry.prepareAnchor({
+    credentialHash: verified.hash,
+    subject: addressOf(mandate.credentialSubject.id),
+    expiresAt: new Date(mandate.validUntil),
+    issuerAddress: addressOf(verified.principal),
+  });
+
+  return { ...prepared, hash: verified.hash };
+}
+
+export interface PrepareWalletRevokeParams {
+  readonly mandateHash: string;
+  /** Must be the address that anchored it; the contract refuses otherwise. */
+  readonly principalAddress: string;
+}
+
+/** {@link revokeMandate}'s two-phase twin — see {@link prepareWalletAnchor} for why one is needed at all. */
+export async function prepareWalletRevoke(
+  registry: RegistryAccess,
+  { mandateHash, principalAddress }: PrepareWalletRevokeParams,
+): Promise<PreparedRegistryWrite> {
+  return registry.prepareRevoke({ credentialHash: mandateHash, issuerAddress: principalAddress });
 }
