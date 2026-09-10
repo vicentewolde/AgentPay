@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-09 · **Último hito cerrado:** T35 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T36 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
 misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
@@ -34,6 +34,7 @@ pero cablear la identidad propia por tenant queda para un hito aparte
 | T33 | `MandateVault` sobre Postgres, reemplaza el JSONL en disco efímero de Render; cableado en `apps/web` | ✅ cerrado 2026-09-09 |
 | T34 | Conectar wallet (Freighter) con verificación criptográfica real (SEP-0053); da a cada wallet un `tenant_id` estable en el vault | ✅ cerrado 2026-09-09 |
 | T35 | La wallet conectada firma de verdad el Mandato (SEP-0053) y ancla/revoca la transacción on-chain con su propia firma | ✅ cerrado 2026-09-09 |
+| T36 | Blindar `apps/web`: costuras testeables extraídas de `server.ts` y 49 tests donde antes no había ninguno | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -472,3 +473,74 @@ tenant gaste desde su propia cuenta (`C-16`); y el rename completo a
 "TirevPay" (`P-8`) sigue congelado a pedido explícito del usuario, que va
 a traer nombres nuevos más adelante.
 
+
+## T36 · Blindar `apps/web` — costuras testeables y cobertura real — cerrado 2026-09-10
+
+**Qué quedó funcionando, en palabras llanas.** Los tres fallos que
+aparecieron en producción al probar T35 tenían algo en común que no se
+había dicho en voz alta: todos ocurrieron en el único archivo del proyecto
+que no tenía ni un solo test. `apps/web/src/server.ts` eran ~1030 líneas
+que hacían todo —leer configuración, armar los documentos firmados,
+manejar cookies y nonces, rutear HTTP— y que no se podían testear porque
+importarlo levanta un servidor. Ahora la lógica que de verdad falla vive en
+tres módulos aparte que no tocan la red, y tiene 49 tests donde antes había
+cero.
+
+**Por qué estas tres costuras y no otras.** No se eligieron por prolijidad,
+se eligieron mirando dónde falló: dos de los tres fallos de producción
+fueron leyendo configuración (`ADMIN_SECRET_KEY` sin declarar en Render,
+después cargada con una clave pública en vez del secreto) y el tercero
+armando los documentos (`C-17`). Las tres costuras nuevas son exactamente
+esas dos, más el ciclo de vida de nonces y sesiones de wallet, que carga
+peso de seguridad real y hasta ahora sólo se verificaba a mano en el
+navegador:
+
+- `env.ts` — leer `.env.local` con `process.env` detrás, y rechazar
+  configuración inválida nombrando la variable (19 tests).
+- `session-documents.ts` — construir la credencial y el Mandato desde un
+  único principal (9 tests).
+- `wallet-session.ts` — cookies, nonces de un solo uso, y el estado
+  efímero del flujo de wallet (21 tests).
+
+**El test que más importa, y la prueba de que sirve.** El invariante que
+rompió `C-17` —credencial y Mandato tienen que nombrar al mismo principal—
+ahora es un test, y de hecho ahora es difícil de romper: los dos documentos
+derivan el principal de un solo valor. Para confirmar que el test no es
+decorativo se reintrodujo el bug a propósito y se corrió la suite: 3 tests
+fallaron, y el camino clásico siguió pasando — exactamente el patrón que se
+vio en producción, donde comprar sin wallet andaba y con wallet no. Después
+se restauró el código correcto.
+
+**Dos mejoras de comportamiento que salieron del camino.** Las sesiones de
+wallet a medio terminar vivían en dos `Map` paralelos que había que
+sincronizar a mano; ahora hay un solo store con vencimiento, compartido con
+los nonces. Y el nonce del challenge se consume **antes** de verificar la
+firma, no después: se gasta por ser presentado, así que una firma
+incorrecta ya no se puede reintentar contra el mismo challenge. Detalle en
+`DECISIONES.md → C-18`.
+
+**Un hallazgo que conviene recordar.** El primer intento de estos tests
+pasaba en verde con los tipos rotos: `vitest` no chequea tipos, y el
+fixture del scope tenía una forma que no existe. Lo agarró `pnpm
+typecheck`, no la suite. Vale para cualquier test que se escriba de acá en
+adelante, propio o delegado: verde en `pnpm test` no quiere decir que
+compile.
+
+**Evidencia técnica.** 49 tests nuevos en `apps/web` (de 0), 734 en total
+en la suite rápida, `pnpm typecheck`/`pnpm build` limpios. Sin regresión
+verificada de dos formas: el flujo completo de wallet corrido de punta a
+punta contra testnet después de la refactorización —incluida una compra
+real liquidada por `policy_rail` con su anclaje— y el camino clásico
+probado en el navegador. Ver `evidencia/T36.md`.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md`, `DECISIONES.md` `C-18`, `evidencia/T36.md`). Archivos
+nuevos: `apps/web/src/env.ts`, `session-documents.ts`, `wallet-session.ts`,
+y el test de cada uno. Archivos tocados: `apps/web/src/server.ts` (de 1030
+a 991 líneas, ahora cableado y rutas).
+
+Pendiente: es el primer hito que deja lista una superficie para delegarle
+trabajo a Codex — costuras acotadas, sin red, donde ampliar cobertura no
+toca ningún punto de autorización. Sigue sin resolver, a propósito:
+cablear `@agentpay/tenancy` (T32) para que cada tenant gaste desde su
+propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).

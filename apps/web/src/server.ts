@@ -34,12 +34,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { AgentPassCredential, CredentialRequest, Scope } from "@agentpass/core";
+import type { CredentialRequest, Scope } from "@agentpass/core";
 import {
-  AGENTPASS_CREDENTIAL_TYPE,
-  AGENTPASS_STATUS_TYPE,
   AgentPassError,
-  VC_CONTEXT_V2,
   credentialRequestSchema,
   isAgentPassError,
   stellarAddressToDid,
@@ -50,7 +47,6 @@ import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 import {
   anchorMandate,
-  createMandate,
   mandateChallengeMessage,
   prepareWalletAnchor,
   prepareWalletRevoke,
@@ -76,6 +72,19 @@ import {
   type PolicyRail,
 } from "@agentpay/agent";
 
+import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
+import { buildSessionDocuments } from "./session-documents.js";
+import {
+  PENDING_WALLET_SESSION_TTL_MS,
+  SESSION_COOKIE,
+  WALLET_CHALLENGE_TTL_MS,
+  challengeMessage,
+  createExpiringStore,
+  isValidSessionId,
+  parseCookies,
+  walletTenantId,
+} from "./wallet-session.js";
+
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const ENV_PATH = resolve(REPO_ROOT, ".env.local");
 const SCOPE_PATH = resolve(REPO_ROOT, "examples/scope-stellar-bazaar.json");
@@ -93,47 +102,6 @@ const TESTNET = {
   rpcUrl: "https://soroban-testnet.stellar.org",
   horizonUrl: "https://horizon-testnet.stellar.org",
 } as const;
-
-/**
- * A read-only subset of `scripts/lib/env-file.ts`'s `.env` parser, duplicated
- * rather than imported: `apps/web` and `scripts/` sit in separate TypeScript
- * project-reference graphs (`tsc -b`'s composite build vs.
- * `tsconfig.scripts.json`'s standalone one), so a cross-import would put a
- * file outside this project's `rootDir`. The format (`KEY="value"`, `#`
- * comments) is small enough that copying it is cheaper than restructuring
- * either build.
- */
-const ENV_LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/;
-
-function unquoteEnvValue(raw: string): string {
-  const value = raw.trim();
-  const first = value[0];
-  const quoted = value.length >= 2 && (first === '"' || first === "'") && value[value.length - 1] === first;
-  if (!quoted) return value;
-  const inner = value.slice(1, -1);
-  return first === '"' ? inner.replaceAll('\\"', '"').replaceAll("\\\\", "\\") : inner;
-}
-
-async function readEnvFile(path: string): Promise<Map<string, string>> {
-  let contents: string;
-  try {
-    contents = await readFile(path, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new Map();
-    throw new AgentPassError("ConfigError", `could not read ${path}`, { cause: error, details: { path } });
-  }
-  const entries = new Map<string, string>();
-  for (const line of contents.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-    const match = ENV_LINE.exec(line);
-    if (match === null) continue;
-    const [, key, rawValue] = match;
-    if (key === undefined || rawValue === undefined) continue;
-    entries.set(key, unquoteEnvValue(rawValue));
-  }
-  return entries;
-}
 
 /**
  * What the session needs of its own Mandate — deliberately without `.jws`,
@@ -176,45 +144,20 @@ interface DemoSession {
 
 const sessions = new Map<string, DemoSession>();
 
-const SESSION_COOKIE = "agentpay_sid";
-// Only ever set by this server (see `randomUUID()` below) — validated on the
-// way back in so a forged cookie can't be used as another visitor's
-// `tenantId` when reading or writing their rows in `vault_records`.
-const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 // ---- Wallet connect (T34) -------------------------------------------------
 
-/** Nonces this server issued and hasn't consumed yet, with when they expire. */
-const walletChallenges = new Map<string, number>();
-const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;
+/** Nonces this server issued and hasn't consumed yet. Single-use: see `take`. */
+const walletChallenges = createExpiringStore<true>(WALLET_CHALLENGE_TTL_MS);
 
 /**
  * The wallet address behind each session, once `/api/wallet/verify` accepts
  * its signature. Shown back to the visitor as proof of a real connection —
  * Since T35, a connected wallet also signs its own Mandate — see
- * `startWalletSession`/`pendingWalletSessions` below. The credential's
+ * `startSession`/`pendingWalletSessions` below. The credential's
  * issuer stays the platform (`ISSUER_SECRET_KEY`): only the Mandate's
  * principal becomes the connected wallet (`docs/fase-6-agentguard-comercializacion/DECISIONES.md → C-8`).
  */
 const walletAddressBySession = new Map<string, string>();
-
-function challengeMessage(nonce: string): string {
-  return `VynGent quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
-}
-
-/**
- * A stable, cookie-safe id derived from a wallet address, so the same wallet
- * reconnecting always lands on the same MandateVault `tenant_id` (T33)
- * instead of a fresh random one per visit. Not a real UUID v5 (no
- * namespace/version bits) — just `sha256(address)` reshaped to satisfy
- * `SESSION_ID_RE`, since nothing downstream needs RFC 4122 compliance, only
- * a stable, collision-resistant string shaped like the ones `randomUUID()`
- * already produces.
- */
-function walletTenantId(address: string): string {
-  const hex = createHash("sha256").update(address, "utf8").digest("hex").slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-}
 
 // ---- Wallet-signed Mandate (T35) ------------------------------------------
 
@@ -241,30 +184,8 @@ interface PendingWalletSession {
   /** Set once the anchor transaction is prepared — names which one `wallet-anchor` finishes. */
   requestId?: string;
 }
-const pendingWalletSessions = new Map<string, PendingWalletSession>();
-const PENDING_WALLET_SESSION_TTL_MS = 10 * 60_000;
-const pendingWalletSessionExpiry = new Map<string, number>();
-
-function stashPendingWalletSession(sessionId: string, pending: PendingWalletSession): void {
-  pendingWalletSessions.set(sessionId, pending);
-  pendingWalletSessionExpiry.set(sessionId, Date.now() + PENDING_WALLET_SESSION_TTL_MS);
-}
-
-/** Reads the pending session without ending it — steps 2 and 3 of the wallet flow both need to see it. */
-function peekPendingWalletSession(sessionId: string): PendingWalletSession | undefined {
-  const expiresAt = pendingWalletSessionExpiry.get(sessionId);
-  if (expiresAt === undefined || Date.now() > expiresAt) {
-    pendingWalletSessions.delete(sessionId);
-    pendingWalletSessionExpiry.delete(sessionId);
-    return undefined;
-  }
-  return pendingWalletSessions.get(sessionId);
-}
-
-function clearPendingWalletSession(sessionId: string): void {
-  pendingWalletSessions.delete(sessionId);
-  pendingWalletSessionExpiry.delete(sessionId);
-}
+/** Steps 2 and 3 of the wallet flow both read this without ending it, so `peek`, not `take`. */
+const pendingWalletSessions = createExpiringStore<PendingWalletSession>(PENDING_WALLET_SESSION_TTL_MS);
 
 /**
  * Anchoring a mandate under a wallet's address needs that address to be a
@@ -289,22 +210,9 @@ async function ensureWalletIsRegisteredIssuer(
   await agentpass.registerIssuer({ admin, issuer: walletAddress, metaHash });
 }
 
-function parseCookies(header: string | undefined): Map<string, string> {
-  const cookies = new Map<string, string>();
-  if (header === undefined) return cookies;
-  for (const part of header.split(";")) {
-    const eq = part.indexOf("=");
-    if (eq === -1) continue;
-    const key = part.slice(0, eq).trim();
-    if (key === "") continue;
-    cookies.set(key, decodeURIComponent(part.slice(eq + 1).trim()));
-  }
-  return cookies;
-}
-
 function readSessionId(req: IncomingMessage): string | undefined {
   const raw = parseCookies(req.headers.cookie).get(SESSION_COOKIE);
-  return raw !== undefined && SESSION_ID_RE.test(raw) ? raw : undefined;
+  return isValidSessionId(raw) ? raw : undefined;
 }
 
 function getSession(req: IncomingMessage): DemoSession | undefined {
@@ -314,38 +222,6 @@ function getSession(req: IncomingMessage): DemoSession | undefined {
 
 function withSessionCookie(res: ServerResponse, sessionId: string): void {
   res.setHeader("set-cookie", `${SESSION_COOKIE}=${sessionId}; Path=/; HttpOnly; SameSite=Lax`);
-}
-
-function requireEnv(env: ReadonlyMap<string, string>, key: string): string {
-  const value = env.get(key);
-  if (value === undefined || value === "") {
-    throw new AgentPassError("ConfigError", `${key} is missing from .env.local and process.env`, {
-      details: { fix: "run `pnpm run bootstrap` and `pnpm run deploy:registry` first, or set it as an env var", key },
-    });
-  }
-  return value;
-}
-
-/**
- * Every Stellar secret this server reads from the environment goes through
- * here. Handed a public key (`G...`) where a secret seed (`S...`) belongs,
- * `Keypair.fromSecret` throws a raw strkey error — "invalid version byte.
- * expected 144, got 48" — that names neither the variable at fault nor what
- * to do about it. That is exactly what the live deploy showed the first time
- * `ADMIN_SECRET_KEY` was set, so the version bytes stay inside the SDK and
- * the operator gets the variable's name and the fix instead.
- */
-function requireSecretKey(env: ReadonlyMap<string, string>, key: string): Keypair {
-  const value = requireEnv(env, key);
-  try {
-    return Keypair.fromSecret(value);
-  } catch (error) {
-    throw new AgentPassError(
-      "ConfigError",
-      `${key} must be an S... secret seed, not a G... address — the value set for it is not a Stellar secret key`,
-      { cause: error, details: { key, startsWith: `${value.slice(0, 1)}...` } },
-    );
-  }
 }
 
 async function readScope(): Promise<CredentialRequest> {
@@ -361,20 +237,9 @@ async function readScope(): Promise<CredentialRequest> {
   return parsed.data;
 }
 
-/**
- * `.env.local` is how local dev sets secrets (per the project's own
- * convention — see CLAUDE.md). Render, and any other host that injects
- * config straight into the process, has no such file on disk: it sets
- * `process.env` instead. Fall back to it for any key the file doesn't
- * have, so the same code works in both places.
- */
-async function readEnv(): Promise<Map<string, string>> {
-  const fromFile = await readEnvFile(ENV_PATH);
-  const env = new Map(fromFile);
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !env.has(key)) env.set(key, value);
-  }
-  return env;
+/** This server's own `.env.local`, with `process.env` behind it — see `env.ts`. */
+function readEnv(): Promise<Map<string, string>> {
+  return readEnvFrom(ENV_PATH);
 }
 
 interface FinishSessionParams {
@@ -473,48 +338,19 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     readScope(),
   ]);
 
-  const issuerDid = stellarAddressToDid(issuer.publicKey(), "testnet");
-  const agentDid = stellarAddressToDid(agentKeypair.publicKey(), "testnet");
   const now = new Date();
-  const validUntil = new Date(now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000).toISOString();
-
   const walletAddress = walletAddressBySession.get(sessionId);
-  // The one party both signed documents must agree on. `checkMandate` (T17)
-  // refuses an intent whose principal — read off the credential — is not the
-  // mandate's own issuer, so naming the connected wallet in the Mandate while
-  // the credential still named the platform made every purchase fail with
-  // `MandatePrincipalMismatch`. Derived once, used by both, so the two cannot
-  // drift apart again. The credential's *issuer* stays the platform: it
-  // attests the agent's identity and scope, which is a different role from
-  // being the principal the agent acts for (`C-17`).
-  const principalDid = walletAddress === undefined ? issuerDid : stellarAddressToDid(walletAddress, "testnet");
 
-  const credential: AgentPassCredential = {
-    "@context": [VC_CONTEXT_V2],
-    type: ["VerifiableCredential", AGENTPASS_CREDENTIAL_TYPE],
-    issuer: issuerDid,
-    validFrom: now.toISOString(),
-    validUntil,
-    credentialSubject: { id: agentDid, agent: demoScope.agent, principal: principalDid, scope: demoScope.scope },
-    credentialStatus: { type: AGENTPASS_STATUS_TYPE, registry: agentpass.config.contractId },
-  };
-  const issued = await agentpass.issue({ credential, issuer });
-
-  // Same limits as the scope, not narrower (contrast `pnpm demo`, `G-8`): a
-  // real purchase authorises twice — once structurally in
-  // `create_purchase_intent`, once against the real 402 in
-  // `executeBazaarPayment` — and `checkDailyLimit` has no notion of
-  // `intentId`, so the second call's `spentToday` already includes the
-  // first call's recorded amount. A `perDay` tight enough to demonstrate a
-  // rejection here would reject the very first purchase.
-  const mandateDocument = createMandate({
-    principal: principalDid,
-    agent: agentDid,
-    grant: demoScope.scope,
-    registry: agentpass.config.contractId,
-    validFrom: now.toISOString(),
-    validUntil,
+  const { credential, mandate: mandateDocument } = buildSessionDocuments({
+    issuerAddress: issuer.publicKey(),
+    agentAddress: agentKeypair.publicKey(),
+    walletAddress,
+    scope: demoScope,
+    registryContractId: agentpass.config.contractId,
+    now,
+    validUntil: new Date(now.getTime() + CREDENTIAL_VALID_DAYS * 24 * 60 * 60 * 1000),
   });
+  const issued = await agentpass.issue({ credential, issuer });
 
   if (walletAddress === undefined) {
     const anchoredMandate = await anchorMandate(agentpass, { mandate: mandateDocument, principal: issuer });
@@ -545,7 +381,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
   // needs it registered first (`M-17`, automated here — `C-8`).
   await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
 
-  stashPendingWalletSession(sessionId, {
+  pendingWalletSessions.set(sessionId, {
     agentpass,
     issuedCredentialJws: issued.jws,
     credentialHash: issued.hash,
@@ -905,7 +741,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/wallet/challenge") {
     const nonce = randomUUID();
-    walletChallenges.set(nonce, Date.now() + WALLET_CHALLENGE_TTL_MS);
+    walletChallenges.set(nonce, true);
     sendJson(res, 200, { ok: true, nonce, message: challengeMessage(nonce) });
     return;
   }
@@ -915,20 +751,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     const address = typeof body.address === "string" ? body.address : undefined;
     const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
     const signature = typeof body.signature === "string" ? body.signature : undefined;
-    const expiresAt = nonce === undefined ? undefined : walletChallenges.get(nonce);
 
-    if (address === undefined || nonce === undefined || signature === undefined || expiresAt === undefined) {
+    if (address === undefined || nonce === undefined || signature === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta address, nonce o signature" });
+      return;
+    }
+    // Consumed here, before the signature is checked: a nonce is spent by
+    // being presented at all, so a wrong signature cannot be retried against
+    // the same challenge.
+    if (walletChallenges.take(nonce) === undefined) {
       sendJson(res, 400, {
         ok: false,
         code: "InvalidArguments",
-        message: "falta address, nonce o signature, o el nonce ya se usó",
+        message: "ese challenge no existe, ya se usó, o venció — pedí uno nuevo",
       });
-      return;
-    }
-    walletChallenges.delete(nonce); // single-use, whether or not it verifies below
-
-    if (Date.now() > expiresAt) {
-      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "el challenge venció — pedí uno nuevo" });
       return;
     }
     if (!verifyStellarMessage(address, challengeMessage(nonce), signature)) {
@@ -980,7 +816,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/session/wallet-consent") {
     const sessionId = readSessionId(req);
-    const pending = sessionId === undefined ? undefined : peekPendingWalletSession(sessionId);
+    const pending = sessionId === undefined ? undefined : pendingWalletSessions.peek(sessionId);
     if (sessionId === undefined || pending === undefined) {
       sendJson(res, 400, {
         ok: false,
@@ -1011,7 +847,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/session/wallet-anchor") {
     const sessionId = readSessionId(req);
-    const pending = sessionId === undefined ? undefined : peekPendingWalletSession(sessionId);
+    const pending = sessionId === undefined ? undefined : pendingWalletSessions.peek(sessionId);
     if (sessionId === undefined || pending === undefined || pending.signature === undefined) {
       sendJson(res, 400, {
         ok: false,
@@ -1051,7 +887,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         walletAddress: pending.walletAddress,
       });
       sessions.set(sessionId, session);
-      clearPendingWalletSession(sessionId);
+      pendingWalletSessions.delete(sessionId);
       sendJson(res, 200, {
         ok: true,
         credentialHash: session.credentialHash,

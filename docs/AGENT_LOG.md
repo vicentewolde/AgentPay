@@ -1956,3 +1956,59 @@ su propia cuenta (`C-16`), y el rename a "TirevPay" (`P-8`) sigue
 congelado a pedido del usuario. Nota: `docs/fase-0-fundamentos/prompt-delegar-codex.md`
 quedó sin trackear en la carpeta de trabajo — es un archivo del usuario,
 no se commiteó.
+
+## 2026-09-10 (2) — cc/rename-vyngent + cc/harden-web
+
+Agente: Claude Code
+
+Qué: dos cosas. (1) El usuario cambió el nombre de marca a **VynGent**
+(`P-9`, supersede a `P-8`/TirevPay). El rename completo sigue congelado por
+las mismas razones que en `P-8` — repo, paquetes, servicio de Render,
+landing y README siguen diciendo "AgentPay" — pero el nombre viejo aparecía
+en **un** lugar del código (el mensaje que la wallet firma al conectarse,
+que el usuario lee dentro de Freighter) y ese sí se cambió. Las otras 15
+apariciones son documentación histórica y no se tocan.
+
+(2) **T36 cerrado**: se extrajeron de `apps/web/src/server.ts` tres
+costuras testeables sin red — `env.ts`, `session-documents.ts`,
+`wallet-session.ts` — y se les escribieron 49 tests, en el único módulo del
+proyecto que no tenía ninguno. Las costuras no se eligieron por prolijidad
+sino mirando dónde falló de verdad: dos de los tres fallos de producción de
+T35 fueron leyendo configuración y el tercero armando los documentos
+firmados (`C-17`). El invariante de `C-17` es ahora un test, verificado
+reintroduciendo el bug a propósito (3 tests fallaron, el camino clásico
+siguió pasando — el mismo patrón que en producción). De paso: las sesiones
+de wallet pendientes pasaron de dos `Map` paralelos a un solo store con
+vencimiento, y el nonce del challenge se consume antes de verificar la
+firma, no después. Ver `C-18`.
+
+Por qué: el usuario preguntó si convenía delegarle más trabajo a Codex para
+acelerar la fase. La respuesta corta fue que el tiempo de esta fase no se va
+en escribir código sino en comportamiento no documentado de terceros,
+verificación en vivo y consistencia entre capas — nada de eso lo acelera un
+agente que arranca en frío. Lo que sí hay es un carril paralelo vacío:
+`apps/web` sin tests. T36 lo abre. El usuario eligió T36 = blindar
+`apps/web`, y delegar a Codex **una vez que existan las costuras**, no
+antes.
+
+Documentación tocada: `docs/DECISIONES.md` (`P-8` marcada Superada, `P-9`
+nueva), `docs/fase-6-agentguard-comercializacion/` (`BITACORA.md`,
+`DECISIONES.md` `C-18`, `evidencia/T36.md`). Archivos nuevos:
+`apps/web/src/{env,session-documents,wallet-session}.ts` y el test de cada
+uno. Archivos tocados: `apps/web/src/server.ts` (1030 → 991 líneas).
+
+Verificado: 734 tests en verde (49 nuevos), `pnpm typecheck`/`pnpm build`
+limpios, flujo completo de wallet corrido de punta a punta contra testnet
+después de refactorizar —incluida compra real liquidada por `policy_rail`—
+y camino clásico probado en el navegador. Hallazgo a recordar: el primer
+intento de estos tests pasó 9/9 en vitest **con los tipos rotos** (vitest no
+chequea tipos); lo agarró `pnpm typecheck`. Vale para cualquier test
+delegado.
+
+Pendiente: **la primera delegación real a Codex ya tiene superficie** —
+ampliar cobertura sobre estas tres costuras, que no tocan ningún punto de
+autorización. Antes de delegar: el worktree `~/dev/AgentPay-codex` está
+atrasado (estaba en `3ac4ffc`), hay que actualizarlo, y hay que pushear
+`main` primero porque su rama parte de `origin/main`. Sin resolver, a
+propósito: cablear `@agentpay/tenancy` (T32) para que cada tenant gaste
+desde su propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).

@@ -469,3 +469,38 @@ el chequeo que prueba que quien consintió es quien dice el intent; aflojarlo
 sería exactamente el tipo de bypass que `B-25` (Fase 2) dejó documentado
 como inaceptable. El problema nunca estuvo en el chequeo, sino en cómo
 `apps/web` armaba los documentos.
+
+### C-18 · `apps/web` se testea por costuras extraídas, no levantando el servidor · `Vigente`
+**Fecha:** 2026-09-10 (T36)
+
+`server.ts` se partió en tres módulos que no tocan la red ni el estado del
+servidor — `env.ts` (leer y validar configuración), `session-documents.ts`
+(construir la credencial y el Mandato) y `wallet-session.ts` (cookies,
+nonces, y el estado efímero del flujo de wallet) — y los tests apuntan a
+esos módulos. `server.ts` queda como cableado, rutas y `listen`.
+
+**Motivo, elegido a partir de dónde fallaron las cosas de verdad.** Los tres
+fallos de producción de T35 estuvieron exactamente en dos de esas costuras:
+dos en la lectura de configuración (`ADMIN_SECRET_KEY` sin declarar, después
+con una clave pública en vez del secreto) y uno en la construcción de los
+documentos (`C-17`). Ninguno era un bug de red ni de HTTP; los tres eran
+lógica pura que no tenía un solo test porque vivía dentro de un archivo que
+levanta un servidor apenas se lo importa. Extraer la lógica pura es lo que
+la vuelve testeable sin base de datos, sin testnet y sin puerto.
+
+**Alternativa descartada:** exportar `handle(req, res)` y testear al nivel
+de HTTP con `req`/`res` simulados. Se descartó porque el camino más
+interesante —iniciar sesión— llama a testnet, a Postgres y al bazaar en la
+misma función: un test así necesitaría simular todo eso para llegar a la
+línea que importa, y terminaría probando los dobles más que el código. Los
+caminos HTTP siguen verificándose como hasta ahora, de punta a punta contra
+testnet real, que es donde ese tipo de camino sí se prueba de verdad.
+
+**Un cambio de comportamiento chico, deliberado, en el mismo movimiento.**
+Las sesiones de wallet a medio terminar vivían en dos `Map` paralelos (el
+valor en uno, su vencimiento en el otro) que había que mantener sincronizados
+a mano en cada llamada. Ahora hay un solo `createExpiringStore`, con el
+vencimiento chequeado al leer, compartido con los nonces del challenge. De
+paso, el nonce se consume **antes** de verificar la firma, no después: un
+nonce se gasta por ser presentado, así que una firma incorrecta ya no puede
+reintentarse contra el mismo challenge.
