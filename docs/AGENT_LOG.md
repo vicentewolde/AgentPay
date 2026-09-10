@@ -2180,3 +2180,50 @@ emitir de nuevo. Es el primero que toca `apps/web`, revisarlo con más
 cuidado que este. La rama `cc/t38-directory` queda **sin mergear y sin
 pushear**, esperando revisión. Sigue pendiente: cablear `@agentpay/tenancy`
 (`C-16`, F4) y el rename a VynGent (`P-9`).
+
+## 2026-09-10 (6) — cc/t38-directory (addendum de planificación)
+
+Agente: Claude Code
+
+Qué: extensión de `PLATAFORMA-PARTNERS.md` (T37) con la estrategia de
+colaboración Claude Code / Codex: una sección de reglas generales (6.1) y,
+al final de cada una de las diez fases, una tabla de delegación con
+ticket, dueño, dependencias, riesgo, archivos permitidos/prohibidos y
+verificación requerida. A pedido del usuario, antes de arrancar T39. No es
+un hito de código — sin número propio, mismo tratamiento que "Licencia del
+repo" (housekeeping de proceso).
+
+Por qué: el usuario quiere usar a Codex como segunda línea de ejecución
+continua sin diluir responsabilidad técnica ni de seguridad, y pidió una
+lista explícita de qué se queda siempre en Claude Code.
+
+**Hallazgo, no pedido explícitamente:** al escribir esa lista se notó que
+`AGENTS.md` (lo que Codex lee al arrancar) y `CLAUDE.md` § "Coordinación
+con Codex" tenían un perímetro más angosto que el que el usuario acababa
+de pedir — no nombraban custodia, gestión de claves, firma de wallet,
+cuentas pagadoras ni flujo de fondos, ni regulación/estrategia comercial
+más allá de la narrativa de SCF. Con `C-20` ya decidido (un `policy_rail`
+por tenant, fondeado por el principal), F4 y F6 van a escribir código que
+controla dinero de un tercero — exactamente la superficie que faltaba
+nombrar. Se actualizaron los dos archivos y se registró la decisión en
+`docs/DECISIONES.md → P-10`, siguiendo lo que ya señala la nota de memoria
+de este proyecto: un cambio al perímetro de Codex en `DECISIONES.md` tiene
+que reflejarse también en `AGENTS.md`, no solo documentarse.
+
+Cómo quedaron las diez fases: F1, F6, F9 (en su mayor parte) y F10 sin
+tickets de Codex — F1/F10 son evaluación pura, F6 toca contrato y
+custodia, F9 es coordinación de producto con un único ticket delegable
+(panel interno de solo lectura, dependiente de F5). F2 documentada en
+retrospectiva (T38 ya cerrado sin delegar nada). F3, F4, F5, F7 y F8 tienen
+tickets concretos para Codex, todos detrás de una interfaz que Claude Code
+tiene que congelar y mergear primero.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`PLATAFORMA-PARTNERS.md`, `BITACORA.md`), `AGENTS.md`, `CLAUDE.md`,
+`docs/DECISIONES.md` (`P-10`), este archivo. Cero código.
+
+Pendiente: sigue siendo **T39** (F3 — persistencia de sesión) el próximo
+hito de código, con su tabla de delegación ya lista en
+`PLATAFORMA-PARTNERS.md` § F3. La rama `cc/t38-directory` sigue sin
+mergear ni pushear — lleva ahora T38 y este addendum. Sigue pendiente:
+cablear `@agentpay/tenancy` (`C-16`, F4) y el rename a VynGent (`P-9`).

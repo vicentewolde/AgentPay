@@ -111,9 +111,16 @@ dos herramientas pise trabajo de la otra ni pierda contexto:
    ese tipo de bug.
 6. **Contratos (AgentPass, PolicyRail, Mandato), MandateVault, la integración
    con el bazaar del embajador, y cualquier decisión que afecte la narrativa
-   de la postulación a SCF se quedan en Claude Code.** No se delegan a Codex
-   sin que el usuario o Claude Code den el visto bueno explícito primero —
-   Codex no tiene ese contexto regulatorio ni narrativo.
+   de la postulación a SCF se quedan en Claude Code.** Desde 2026-09-10
+   (Fase 6 — ver `docs/DECISIONES.md → P-10`) esto se extiende
+   explícitamente a **custodia, gestión de claves, firma de wallet,
+   revocación, cuentas pagadoras y flujo de fondos**, y a **regulación,
+   estrategia comercial y decisiones de producto difíciles de revertir**. No
+   se delegan a Codex sin que el usuario o Claude Code den el visto bueno
+   explícito primero — Codex no tiene ese contexto regulatorio ni narrativo,
+   y esta clase de error no es recuperable de la misma forma que un test
+   roto. El desglose fase por fase de qué sí es delegable vive en
+   `docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md` § F.
 7. **Al cerrar cualquier sesión o hito, agregá una entrada a
    `docs/AGENT_LOG.md`** antes de terminar: branch, qué, por qué, qué queda
    pendiente. Esto no es opcional ni algo para hacer "si da tiempo" — es lo

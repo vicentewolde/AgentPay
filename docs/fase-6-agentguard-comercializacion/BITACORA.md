@@ -700,3 +700,34 @@ volver desde otro navegador encuentre lo ya firmado en vez de emitir de nuevo.
 Es el primero que toca `apps/web`, así que conviene revisarlo con más cuidado
 que este. Sigue pendiente de antes: cablear `@agentpay/tenancy` (`C-16`, F4) y
 el rename a VynGent (`P-9`).
+
+---
+
+## Addendum (sin numerar): plan de delegación Claude Code / Codex por fase — 2026-09-10
+
+No es un hito de código — es una extensión de `PLATAFORMA-PARTNERS.md` (T37),
+a pedido del usuario, antes de arrancar T39. Mismo patrón que "Licencia del
+repo" más arriba: housekeeping de proceso, no producto.
+
+**Qué se agregó.** Una sección 6.1 con las reglas de coordinación que
+aplican a esta fase, y al final de cada una de las diez fases (F1 a F10)
+una tabla de delegación con ticket, dueño, dependencias, riesgo, archivos
+permitidos y verificación requerida — lo que el usuario pidió para poder
+usar a Codex como segunda línea de ejecución sin diluir quién es
+responsable de cada pieza.
+
+**El hallazgo real de este addendum, no en la lista original del
+usuario.** Al escribir la sección se notó que `AGENTS.md` —lo que Codex lee
+al arrancar— y `CLAUDE.md` § "Coordinación con Codex" tenían una lista de
+áreas restringidas más corta que la que el usuario acababa de pedir: no
+nombraban explícitamente custodia, gestión de claves, firma de wallet,
+cuentas pagadoras ni flujo de fondos, ni regulación/estrategia comercial
+más allá de la narrativa de SCF. Con `C-20` (un `policy_rail` por tenant)
+ya decidido, F4 y F6 van a escribir código que controla dinero de un
+tercero — exactamente el tipo de superficie que esa lista debía nombrar y
+no nombraba. Se corrigieron los dos archivos y se registró
+`docs/DECISIONES.md → P-10`.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (§6.1 y las diez tablas de
+delegación), `AGENTS.md`, `CLAUDE.md`, `docs/DECISIONES.md` (`P-10`),
+`docs/AGENT_LOG.md`. Cero código.

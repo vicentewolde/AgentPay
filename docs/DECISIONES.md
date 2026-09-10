@@ -425,3 +425,56 @@ nombre definitivo. Se descartó por el mismo motivo que en `P-8` y porque
 el usuario eligió `T36` (blindar `apps/web`) como el trabajo siguiente —
 el rename compite por la misma superficie (`apps/web`) y conviene hacerlo
 después, sobre código que ya tenga tests.
+
+---
+
+### P-10 · El perímetro de "nunca Codex" se amplía: custodia, claves, fondos, regulación y producto irreversible · `Vigente`
+**Fecha:** 2026-09-10
+
+`P-4`/`P-5` establecieron el protocolo de Codex como segundo agente; su lista
+de áreas restringidas —contratos, `checkMandate`, `scope.limits`/`perDay`,
+MandateVault, la integración del bazaar, la narrativa de SCF— se escribió
+antes de que existiera un modelo de fondos multi-tenant (`C-20`). El usuario
+pidió, al diseñar cómo Codex participa de la Fase 6, una lista explícita de
+lo que Claude Code conserva siempre, y esa lista agrega dos categorías que
+antes no estaban nombradas:
+
+- **Custodia, gestión de claves, firma de wallet, revocación, cuentas
+  pagadoras y flujo de fondos.** Con `C-20` (un `policy_rail` por tenant,
+  fondeado por el principal) y `C-21` (identidad on-chain creada de forma
+  perezosa), F4 y F6 van a escribir código que decide quién controla una
+  clave capaz de mover dinero real de un tercero, aunque sea testnet. Eso no
+  estaba cubierto por el texto anterior salvo por inferencia.
+- **Regulación, estrategia comercial y decisiones de producto difíciles de
+  revertir.** Cubría antes solo "la narrativa de SCF"; la Fase 6 introduce
+  decisiones —modelo de negocio, a qué categoría CMF exponerse, cuándo
+  considerar mainnet— que no son SCF pero son del mismo tipo: equivocarse no
+  se arregla con un revert.
+
+**Motivo, dicho igual que `P-4`/`P-5` ya lo dicen para el resto de esta
+lista:** Codex no tiene el contexto regulatorio ni narrativo de estas
+piezas, y un error acá —una clave mal manejada, un límite aflojado en el
+camino de pago, un fondo enrutado al lugar equivocado— no es recuperable de
+la misma forma que un test roto o una rama borrada. El precedente que ya
+motivó `P-4` (el bypass de `checkMandate` de Devin, `B-25`) es exactamente
+la clase de daño que esta ampliación busca no repetir sobre una superficie
+nueva: dinero de un tercero, no solo lógica de autorización.
+
+**Dónde vive el detalle operativo.** Esta decisión solo fija el perímetro.
+El desglose fase por fase de qué sí es delegable a Codex, con tickets
+concretos, archivos permitidos/prohibidos y criterios de verificación, vive
+en `docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md` § F — no
+se duplica acá porque es específico de la Fase 6 y va a cambiar fase a fase.
+
+**Archivos actualizados en el mismo movimiento:** `AGENTS.md` (la lista
+"Nunca tuyo" que Codex lee directamente) y `CLAUDE.md` § "Coordinación con
+Codex", punto 6 — el memo interno de este proyecto ya señalaba que un cambio
+de `DECISIONES.md` que toque el perímetro de Codex debe reflejarse también
+en `AGENTS.md`, no solo documentarse acá.
+
+**Alternativa descartada:** dejarlo implícito, confiando en que "cualquier
+punto de autorización" ya cubría custodia y fondos por extensión. Se
+descartó porque `AGENTS.md` es lo que Codex lee al arrancar, y una regla que
+solo existe por inferencia en un documento que Codex no necesariamente abre
+(`docs/DECISIONES.md`) no protege nada — la Fase 2 ya probó, con `B-25`, que
+la ambigüedad en este perímetro específico tiene consecuencias reales.

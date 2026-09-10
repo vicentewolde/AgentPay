@@ -28,8 +28,16 @@ la misma información en formato más rápido de repasar.
 primero:** los contratos (AgentPass, PolicyRail, Mandato), `checkMandate` y
 cualquier punto de enforcement de `scope.limits`/`perDay`, MandateVault, la
 integración con el bazaar del embajador, o cualquier decisión que afecte la
-narrativa de la postulación a Stellar Community Fund. No tenés el contexto
-regulatorio ni narrativo de esas piezas.
+narrativa de la postulación a Stellar Community Fund. Desde 2026-09-10
+(Fase 6) esta lista también incluye, explícitamente: **custodia, gestión
+de claves, firma de wallet, revocación, cuentas pagadoras y cualquier cosa
+que mueva o controle fondos**, y **regulación, estrategia comercial o
+cualquier decisión de producto difícil de revertir** — ver
+`docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md` § F para el
+detalle fase por fase de qué sí te llega. No tenés el contexto regulatorio ni
+narrativo de esas piezas, y un error ahí (una clave mal manejada, un límite
+aflojado, un fondo mal enrutado) no es recuperable de la misma forma que un
+test roto.
 
 **Por qué esto es explícito y no una formalidad:** el agente anterior en este
 rol (Devin) generó, en una rama que terminó borrada por completo, un

@@ -553,6 +553,70 @@ antes de encadenar la siguiente, como el resto del proyecto.
 
 ---
 
+### 6.1 · Cómo se reparte cada fase entre Claude Code y Codex
+
+> Esto no reemplaza el protocolo de [CLAUDE.md § "Coordinación con
+> Codex"](../../CLAUDE.md) ni la lista de `AGENTS.md` — los aplica a esta
+> fase, hito por hito. El perímetro de qué nunca se delega está fijado en
+> `docs/DECISIONES.md → P-10` (2026-09-10, ampliado a partir de este mismo
+> diseño); lo que sigue es el desglose operativo.
+
+**Lo que Claude Code conserva siempre, sin excepción, en cualquier fase de
+este plan:**
+
+- Arquitectura, decisiones y los documentos que las registran.
+- Los contratos AgentPass, PolicyRail y Mandato.
+- `checkMandate`, el enforcement de `scope.limits`/`perDay`, y cualquier
+  punto de autorización.
+- MandateVault.
+- Custodia, gestión de claves, firma de wallet, revocación, cuentas
+  pagadoras y cualquier cosa que mueva o controle fondos.
+- La integración con el bazaar y con cualquier comercio.
+- La narrativa de SCF, regulación, estrategia comercial y cualquier
+  decisión de producto difícil de revertir.
+
+**Los dos carriles.**
+
+**Carril A — Claude Code.** Define arquitectura, interfaces, modelo de
+amenazas, decisiones y criterios de aceptación de cada hito. Implementa o
+revisa personalmente todo lo que toca la lista de arriba. Publica el
+contrato técnico —firma de función, esquema, forma de error— **antes** de
+abrir cualquier ticket para Codex que dependa de él: Codex nunca es quien
+estabiliza una interfaz, solo quien construye contra una ya estable.
+
+**Carril B — Codex.** Recibe tareas chicas, cerradas, mecánicas y
+verificables: tests sobre un contrato ya publicado, scaffolding, scripts
+auxiliares, documentación técnica, mocks, generación de SDK/OpenAPI a partir
+de esquemas ya definidos, ejemplos, UI no sensible, refactors puntuales. No
+recibe nada que exija decidir autorización, custodia o narrativa — y no
+recibe una tarea abierta ("hacé la API", "implementá multi-tenancy"): cada
+ticket nombra archivos permitidos, archivos prohibidos, contrato de
+entrada/salida, pruebas esperadas y criterio de "listo", como los que
+siguen al final de cada fase.
+
+**Reglas de coordinación, tal como las aplica esta fase:**
+
+- Codex siempre arranca desde `origin/main` actualizado, en su propio
+  worktree (`P-5`) — nunca sobre una rama `cc/*` sin mergear.
+- Ningún ticket de Codex depende de código que viva solo en una rama
+  `cc/*` todavía no mergeada a `main`: si una tarea de Codex necesita algo
+  que Claude Code construyó, ese algo se mergea primero.
+- Claude Code estabiliza la interfaz —tipos, esquema zod, forma del
+  error— antes de abrir el ticket de implementación correspondiente.
+  Un ticket que dice "una vez que Claude publique X" no se abre hasta que
+  X esté mergeado.
+- Codex trabaja en `codex/<tarea>`, deja todo commiteado, agrega su
+  entrada a `docs/AGENT_LOG.md`, y abre PR — nunca mergea directo.
+- Claude Code revisa el diff completo y corre las pruebas —incluida
+  `test:integration` cuando el ticket la toca— antes de mergear cualquier
+  PR de Codex, con atención particular a cualquier cambio directo o
+  indirecto sobre la lista de arriba (`B-25` es el precedente de por qué).
+
+Cada fase de la sección 6 termina con su propia tabla de delegación. Una
+fase sin filas en su tabla —F1, F6, F9 en su mayor parte, F10— significa
+que, en esta etapa del proyecto, esa fase no tiene trabajo delegable: no es
+un olvido, está dicho así a propósito.
+
 ### F1 · Arquitectura y decisiones de producto 🟡
 
 - **Objetivo llano.** Ponerse de acuerdo en qué se construye antes de
@@ -569,27 +633,73 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Listo cuando.** Las siete preguntas están respondidas y las decisiones,
   registradas.
 
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Todo. Esta fase es decisión pura —
+   ninguna línea de código se escribe en ella.
+2. **Qué puede delegarse a Codex en paralelo.** Nada.
+3. **Qué depende de que Claude termine o mergee primero.** F2 a F10
+   dependen de que esta fase cierre — no hay nada que Codex pueda adelantar
+   sin una decisión tomada debajo.
+4. **Tareas independientes asignables a Codex sin colisión.** Ninguna.
+5. **Revisión de seguridad antes de mergear.** No aplica — no hay código.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| — | — | — | — | — | Sin tickets: esta fase no genera trabajo delegable |
+
 ---
 
 ### F2 · Modelo partner/tenant y persistencia ⚪
 
 - **Objetivo llano.** Que AgentPay sepa quiénes son sus partners y sus
   clientes, y no se olvide al reiniciar.
-- **Alcance.** Paquete nuevo `@agentpay/registry-datos`: migraciones y
+- **Alcance.** Paquete nuevo `@agentpay/directory` (nombrado así en
+  `C-26`, no `registry-datos` como decía este párrafo antes de construirlo):
   repositorios para partner, api_key, tenant, principal, vinculación,
-  instancia de agente, credencial, mandato. Asignación durable de
-  `tenant_index`, monotónica y sin reuso. Validación de `external_ref` que
-  rechaza lo que parezca email o RUT.
+  instancia de agente, credencial, mandato. Asignación durable del índice de
+  derivación, monotónica y sin reuso. Validación de `external_ref` que
+  rechaza lo que parezca email, RUT o teléfono.
 - **Fuera de alcance.** Derivar o usar llaves. Tocar `apps/web`. Cualquier
   API pública. El vault.
 - **Decisiones previas.** D4 y D5.
-- **Entregables.** El paquete, sus migraciones, sus tests.
+- **Entregables.** El paquete, sus tests.
 - **Evidencia.** Tests de unicidad `(partner_id, external_ref)`, de no reuso
-  del índice bajo escrituras concurrentes, y de rechazo de PII. `evidencia/T37.md`.
+  del índice bajo escrituras concurrentes, y de rechazo de PII.
+  `evidencia/T38.md`.
 - **Riesgos.** Bajo. No toca ningún camino de autorización.
+- **✅ Cerrado 2026-09-10 (T38).** Ver `BITACORA.md` → T38 y `DECISIONES.md`
+  → `C-26` a `C-32`.
 - **Listo cuando.** Se pueden crear dos partners con la misma wallet como
   principal y quedan en tenants distintos, con índices distintos, demostrado
   por un test.
+
+**Delegación Claude Code / Codex.**
+
+**Cerrada (T38), construida enteramente por Claude Code — sin delegar
+nada.** Las interfaces de `@agentpay/directory` no existían todavía cuando
+se hizo, así que no había contrato estable contra el cual abrir un ticket
+de Codex. Se documenta igual, como ejemplo de qué sí habría sido delegable
+una vez publicado el paquete: cobertura de tests adicional sobre `ids.ts` y
+`external-ref.ts` — los dos módulos puros del paquete, sin llaves, sin red,
+sin punto de autorización — habría sido un candidato razonable de Carril B.
+No se abrió ese ticket porque el hito completo tomó menos de una sesión.
+
+1. **Qué debe hacer Claude Code.** Todo lo que se hizo: el esquema, el
+   repositorio, la asignación del índice, los tests.
+2. **Qué puede delegarse a Codex en paralelo.** En retrospectiva: tests
+   adicionales sobre los módulos puros, una vez publicados.
+3. **Qué depende de que Claude termine o mergee primero.** F3 y F4 dependen
+   de este paquete, ya cerrado.
+4. **Tareas independientes asignables a Codex sin colisión.** Ninguna se
+   abrió.
+5. **Revisión de seguridad antes de mergear.** Autorevisión de Claude Code:
+   `git diff --stat` contra `apps/` y `contracts/` confirmando cero cambios
+   (ver `evidencia/T38.md`).
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T38 | Claude | Ninguna | Bajo — no toca autorización | `packages/directory/**`, `packages/core/src/errors.ts` | ✅ cerrado — 759 tests offline, 16 de integración, `typecheck`/`build` limpios |
 
 ---
 
@@ -614,6 +724,40 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Listo cuando.** El ciclo completo funciona sin que se emita ninguna
   credencial ni mandato nuevo al volver.
 
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Persistir credencial y Mandato contra el
+   tenant en cada emisión/anclaje; rehidratar la sesión desde
+   `@agentpay/directory` cuando una wallet vuelve a probar control;
+   mantener el invariante de `buildSessionDocuments` que `C-17` ya rompió
+   una vez. Todo esto toca `apps/web/src/server.ts`,
+   `session-documents.ts` y `wallet-session.ts` — el camino que arma los
+   documentos firmados.
+2. **Qué puede delegarse a Codex en paralelo.** Nada que dependa de T39
+   antes de que esté mergeado. Una vez mergeado: la vista de solo lectura
+   del historial (tarjetas de mandatos/compras pasadas) en
+   `apps/web/public/index.html`, que consume el endpoint ya construido sin
+   decidir nada; y actualizar `packages/directory/README.md` con un
+   ejemplo de cómo `apps/web` lo usa.
+3. **Qué depende de que Claude termine o mergee primero.** T40, T41 y T42
+   —todos— dependen de T39 en `main`. Nada de esto empieza en un worktree
+   de Codex mientras T39 siga solo en `cc/t39-persistencia`.
+4. **Tareas independientes asignables a Codex sin colisión.** T40 (UI de
+   historial) y T42 (docs) no colisionan entre sí — archivos distintos,
+   ningún tercero las bloquea entre ellas.
+5. **Revisión de seguridad antes de mergear.** Corrida completa contra
+   testnet real del ciclo firmar → reiniciar el proceso → volver desde otro
+   navegador → ver historial → revocar, confirmando que no se emite ninguna
+   credencial ni Mandato nuevos. Revisión línea por línea de cualquier
+   cambio a `buildSessionDocuments` o a qué identifica al `principal`.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T39 | Claude | F2 (`@agentpay/directory`) cerrada | Alto — toca el seam de `C-17` | `apps/web/src/server.ts`, `session-documents.ts`, `wallet-session.ts` | Ciclo completo contra testnet grabado en `evidencia/`; el invariante de `C-17` sigue cubierto por test |
+| T40 | Codex | T39 mergeado a `main` | Bajo — solo presentación | `apps/web/public/index.html` (prohibido: cualquier `.ts` de `apps/web/src`) | Renderiza lo que el endpoint de T39 devuelve; no agrega lógica de decisión |
+| T41 | Codex | T39 mergeado; solo si Claude publica una función pura delegable | Bajo | Únicamente archivos `*.test.ts` de `apps/web/src/` | Cobertura nueva en verde, sin tocar el archivo bajo prueba |
+| T42 | Codex | Ninguna (independiente de T39) | Bajo — solo docs | `packages/directory/README.md`, `PLATAFORMA-PARTNERS.md` (prosa, no decisiones) | Revisión de lectura por Claude antes de mergear |
+
 ---
 
 ### F4 · Identidad técnica por tenant y llaves 🟡
@@ -634,6 +778,30 @@ antes de encadenar la siguiente, como el resto del proyecto.
   cuentas. Un índice mal asignado hace colisionar tenants.
 - **Listo cuando.** `AGENT_SECRET_KEY` ya no participa de ninguna compra.
 
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Todo lo que toca custodia por
+   definición de `P-10`: cablear `deriveTenantKeypair` usando el
+   `key_index` de `@agentpay/directory`, decidir e integrar el gestor de
+   secretos para el seed maestro, y el flujo de fondeo (Friendbot para
+   XLM). Nada de esto se delega, ni siquiera como scaffolding.
+2. **Qué puede delegarse a Codex en paralelo.** Únicamente la pantalla
+   explicativa "tu wallet no tiene USDC de testnet todavía" — copy estático
+   y un link al faucet de Circle, sin lógica.
+3. **Qué depende de que Claude termine o mergee primero.** T44 depende de
+   que T43 defina el punto exacto del flujo donde esa pantalla aparece.
+4. **Tareas independientes asignables a Codex sin colisión.** Ninguna otra.
+5. **Revisión de seguridad antes de mergear.** Esta fase entera la revisa
+   Claude Code porque la escribe Claude Code. Verificación explícita de que
+   `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY` fijos ya no participan de ningún
+   camino de pago, y de que el seed maestro no queda en ningún log ni
+   commit.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T43 | Claude | F2, F3 cerradas; 4.1 y D1 resueltas (ya lo están, `C-20`/`C-25`) | 🔴 Alto — custodia y fondos | `apps/web/src/server.ts`, integración del gestor de secretos, `scripts/` | Dos tenants comprando en paralelo desde cuentas distintas, `perDay` independiente, verificado en el explorador de testnet |
+| T44 | Codex | T43 mergeado | Bajo — solo copy/UI | `apps/web/public/*.html` | Revisión visual por Claude; no introduce ningún llamado de red nuevo |
+
 ---
 
 ### F5 · API y SDK para partners ⚪🟡
@@ -653,6 +821,47 @@ antes de encadenar la siguiente, como el resto del proyecto.
   real. Mitigación: marcar `/v1` como inestable hasta el piloto de F9.
 - **Listo cuando.** Existe un `curl` que crea un tenant, abre un
   consentimiento y consulta un mandato.
+
+**Delegación Claude Code / Codex.**
+
+Es la fase con más superficie delegable del plan, y solo después de que
+Claude Code congele el contrato.
+
+1. **Qué debe hacer Claude Code.** Definir y congelar los esquemas zod de
+   `/v1` (tenants, agentes, `consent_sessions`, mandatos de solo lectura),
+   el contrato de autenticación (API key, header, formato del secreto) y de
+   scopes, la semántica exacta de idempotencia, y cablear el middleware que
+   decide quién puede llamar qué — ese punto es, por definición, un punto
+   de autorización.
+2. **Qué puede delegarse a Codex en paralelo, una vez congelado el
+   contrato.** Generar el OpenAPI 3.1 a partir de los esquemas zod ya
+   publicados; construir el paquete cliente (`packages/partner-sdk`) como
+   envoltorios tipados sin lógica de negocio propia; el worker de entrega de
+   webhooks (POST + backoff exponencial + reintentos) — el *cuándo* dispara
+   un webhook lo decide código de Claude, el *cómo* entregarlo de forma
+   confiable es mecánico; la guía de integración con comandos `curl`
+   exactos, una vez que la API responde de verdad.
+3. **Qué depende de que Claude termine o mergee primero.** T46, T47, T48 y
+   T50 dependen todos de que T45 esté en `main`; T50 además depende de T49
+   (el middleware de auth) para poder mostrar un `curl` que realmente
+   autentique.
+4. **Tareas independientes asignables a Codex sin colisión.** T46 (OpenAPI),
+   T47 (SDK) y T48 (webhooks) tocan tres paquetes distintos y no colisionan
+   entre sí — pueden correr en tres worktrees de Codex a la vez.
+5. **Revisión de seguridad antes de mergear.** Revisión línea por línea de
+   T49 (el middleware de auth) por ser el punto que decide autorización de
+   acceso a la API — no solo autorización de gasto, pero de la misma
+   familia de riesgo. Confirmar que ninguna ruta nueva expone un secreto
+   Stellar ni el seed maestro en una respuesta o en un log (`C-32`).
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T45 | Claude | F2, F3, F4 cerradas; D2, D3 | Medio — define el contrato que todo lo demás asume | Esquemas zod nuevos (paquete a definir) | Congelado y documentado antes de abrir T46-T49 |
+| T46 | Codex | T45 mergeado | Bajo — generación mecánica | `docs/api/openapi.yaml`, `scripts/generate-openapi.ts` (prohibido: `packages/directory/src/**`) | El spec generado valida contra los esquemas de T45 sin editarlos |
+| T47 | Codex | T45 mergeado | Bajo — envoltorios tipados, sin lógica | `packages/partner-sdk/**` (nuevo) (prohibido: `apps/web/**`, `packages/directory/**`) | Compila contra la API real de un entorno de prueba |
+| T48 | Codex | Forma del evento de webhook publicada por Claude (no requiere T45 completo) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | Reintentos con backoff verificados con un endpoint de prueba que falla intermitentemente |
+| T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | Una API key revocada deja de poder llamar cualquier ruta, verificado por test |
+| T50 | Codex | T45 y T49 mergeados | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo |
 
 ---
 
@@ -676,6 +885,27 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Listo cuando.** Dos tenants gastan de rails distintos y el exceso lo
   rechaza el contrato, no el software.
 
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Toda la fase. Cambia un contrato
+   Soroban desplegado (`policy_rail`) y decide sobre fondos de un tercero
+   — las dos cosas más restringidas de la lista de `P-10`.
+2. **Qué puede delegarse a Codex en paralelo.** Nada, incluido scaffolding.
+   Ni siquiera un test de un contrato que Claude no haya escrito y
+   revisado antes.
+3. **Qué depende de que Claude termine o mergee primero.** F7, y
+   cualquier hito posterior que asuma una cuenta pagadora por tenant.
+4. **Tareas independientes asignables a Codex sin colisión.** Ninguna.
+5. **Revisión de seguridad antes de mergear.** Toda la fase se trata como
+   una revisión de seguridad en sí misma: auditoría propia del cambio a
+   `contracts/policy-rail` antes de desplegar nada, y confirmación explícita
+   del usuario sobre `G9` (retiro por parte del principal) antes de fondear
+   con montos que no sean puramente simbólicos.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| — | — | — | — | — | Sin tickets de Codex — 🔴 toda la fase se queda en Claude Code, incluido el scaffolding |
+
 ---
 
 ### F7 · Comercio x402 genérico ⚪
@@ -694,6 +924,36 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Riesgos.** Generalizar de más y perder el fallo cerrado que hoy protege
   el mapeo de assets.
 - **Listo cuando.** Agregar un comercio no toca ningún archivo `.ts`.
+
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Diseñar el esquema de comercios/assets
+   y reescribir el equivalente de `mapAsset` como una función guiada por
+   configuración que siga fallando cerrado ante un asset no reconocido —
+   es una decisión de qué puede autorizarse a gastar, de la misma familia
+   que `checkScope`/`checkMandate` aunque viva en la capa de catálogo.
+2. **Qué puede delegarse a Codex en paralelo, una vez publicado el
+   esquema.** Un segundo comercio de referencia (mock x402) para probar
+   contra algo que no sea el bazaar del embajador; un script de alta de
+   comercio que inserte una fila siguiendo el esquema ya definido, sin
+   interpretar nada; tests del adaptador genérico sobre sus caminos
+   guiados por configuración.
+3. **Qué depende de que Claude termine o mergee primero.** T52, T53 y T54
+   dependen de que T51 esté en `main`.
+4. **Tareas independientes asignables a Codex sin colisión.** T52
+   (comercio de referencia) y T53 (script de alta) tocan carpetas
+   distintas y pueden correr en paralelo.
+5. **Revisión de seguridad antes de mergear.** Confirmar que un asset o
+   venue no reconocido sigue produciendo `InvalidProduct` y no un valor
+   por omisión silencioso — el mismo fallo cerrado que protege `mapAsset`
+   hoy, ahora expresado sobre datos en vez de código.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T51 | Claude | F5 cerrada | Medio — decide qué se puede pagar | `apps/agent/src/catalog/*` | Un asset o venue desconocido sigue fallando cerrado, cubierto por test |
+| T52 | Codex | T51 mergeado | Bajo — aislado en `examples/` | `examples/reference-merchant/**` (nuevo) (prohibido: `apps/agent/src/**`) | El comercio de referencia responde `402` real y liquida contra testnet |
+| T53 | Codex | T51 mergeado | Bajo — inserción pura, sin interpretación | `scripts/register-venue.ts` (nuevo) | El script solo escribe filas con el esquema exacto que T51 definió |
+| T54 | Codex | T51 mergeado | Bajo | Archivos `*.test.ts` de `apps/agent/src/catalog/` | Cobertura del camino feliz y del rechazo por asset desconocido |
 
 ---
 
@@ -716,6 +976,39 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Listo cuando.** Dos instancias corren sin exceder `perDay` ni romper la
   cadena del vault.
 
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Corregir `spentOn` para que lea un
+   total consistente en vez del caché en memoria (`G4`) — toca el
+   enforcement de `perDay` del camino de cuenta clásica, así que se queda
+   en Claude Code aunque el cambio termine siendo chico. Revisar y
+   correr personalmente la prueba de carga que demuestra que dos procesos
+   ya no pueden exceder el límite.
+2. **Qué puede delegarse a Codex en paralelo.** La verificación de CA en
+   el pool de Postgres (`G11`) como tarea mecánica, con revisión cercana
+   de Claude por tocar la capa de seguridad de transporte; logging
+   estructurado y métricas no sensibles; el harness de la prueba de carga
+   en sí (el script que simula dos procesos), dado que Claude especifica
+   exactamente qué debe afirmar.
+3. **Qué depende de que Claude termine o mergee primero.** T58 (el
+   harness de carga) necesita que T55 esté mergeado para tener algo que
+   medir; T56 y T57 son independientes de T55.
+4. **Tareas independientes asignables a Codex sin colisión.** T56
+   (CA de Postgres) y T57 (logging/métricas) tocan archivos distintos y
+   no dependen una de la otra.
+5. **Revisión de seguridad antes de mergear.** Esta fase es, en sí misma,
+   la de más chance de introducir un bug de autorización por descuido —
+   revisión línea por línea de T55 y T56 sin excepción, y corrida personal
+   de T58 antes de cerrar el hito.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T55 | Claude | Ninguna | 🔴 Alto — enforcement de `perDay` | `packages/vault/src/postgres-vault.ts` | Dos procesos compitiendo por el mismo `perDay`, el segundo rechazado correctamente |
+| T56 | Codex | Ninguna | Medio — seguridad de transporte, revisión cercana | `packages/vault/src/postgres-vault.ts` (solo opción `ssl`), `packages/directory/src/directory.ts` (solo opción `ssl`) | Falla cerrado si la CA no verifica, no degrada en silencio |
+| T57 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | Ningún log serializa un error crudo (`C-32`) — cubierto por test |
+| T58 | Codex | T55 mergeado | Bajo — mide, no decide | `scripts/loadtest-perday.ts` (nuevo) | Reproduce la condición de carrera que T55 corrige |
+| T59 | Claude | T55, T56, T57, T58 mergeados | — | — | Corrida personal de T58; revisión final de todo el hito antes de cerrar |
+
 ---
 
 ### F9 · Piloto externo en testnet 🟡
@@ -731,6 +1024,29 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Listo cuando.** El partner completó el flujo sin nuestra intervención
   manual.
 
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Incorporar al partner real, mediar el
+   piloto, y decidir si se cumplió el criterio de éxito de `C-24`. Es
+   trabajo de producto y de conversación, no de código — se queda en
+   Claude Code por naturaleza, no solo por regla.
+2. **Qué puede delegarse a Codex en paralelo.** Un panel interno de solo
+   lectura (pagos recientes, rechazos, salud de la cadena del vault) para
+   monitorear el piloto mientras corre — siempre que la API de F5 ya
+   exista y el panel no tenga ningún camino de escritura.
+3. **Qué depende de que Claude termine o mergee primero.** T61 depende de
+   que F5 esté cerrada.
+4. **Tareas independientes asignables a Codex sin colisión.** Solo hay una
+   tarea delegable en esta fase.
+5. **Revisión de seguridad antes de mergear.** Confirmar que el panel no
+   expone ningún endpoint capaz de disparar un pago o una revocación —
+   debe ser estrictamente de lectura.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| T60 | Claude | F5 a F8 cerradas; partner y métrica de éxito decididos (preguntas 2 y 6) | — | Coordinación, no código | El partner completó el flujo sin intervención manual nuestra |
+| T61 | Codex | F5 cerrada | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | Ningún endpoint del panel puede mutar estado, verificado por test |
+
 ---
 
 ### F10 · Evaluación de mainnet 🔴
@@ -744,6 +1060,21 @@ antes de encadenar la siguiente, como el resto del proyecto.
 - **Entregables.** Un informe y una recomendación.
 - **Riesgos.** Cruzar por entusiasmo y no por evidencia.
 - **Listo cuando.** Existe una decisión escrita, en cualquier dirección.
+
+**Delegación Claude Code / Codex.**
+
+1. **Qué debe hacer Claude Code.** Toda la evaluación: categoría CMF,
+   custodia, seguro, auditoría de contratos, y la recomendación final.
+2. **Qué puede delegarse a Codex en paralelo.** Nada — es evaluación, no
+   implementación.
+3. **Qué depende de que Claude termine o mergee primero.** Cualquier
+   trabajo de mainnet posterior a esta fase, que no existe todavía.
+4. **Tareas independientes asignables a Codex sin colisión.** Ninguna.
+5. **Revisión de seguridad antes de mergear.** No aplica — no hay código.
+
+| Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
+|---|---|---|---|---|---|
+| — | — | — | — | — | Sin tickets: esta fase es solo evaluación |
 
 ---
 
@@ -781,6 +1112,15 @@ Solo las que cambian una decisión material. Sin ellas, F1 no cierra.
 ---
 
 ## 8. Primer hito recomendado
+
+> **F2 se cerró el 2026-09-10 como T38** (`@agentpay/directory`) — ver
+> `BITACORA.md` → T38 y `evidencia/T38.md`. Se conserva el razonamiento
+> original sin editar, porque sigue siendo la explicación de por qué ese
+> orden y no otro. El siguiente hito recomendado es **F3 = T39**:
+> persistir credencial y mandato contra el tenant y rehidratar la sesión
+> desde Postgres — ver la tabla de delegación de F3 arriba (§6). Requiere
+> revisión más cercana que T38 porque es el primero que toca
+> `apps/web/src/server.ts` y el seam de `C-17`.
 
 **F2 — el modelo de datos de partner/tenant, como paquete nuevo.**
 
