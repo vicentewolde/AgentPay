@@ -115,7 +115,17 @@ export type AgentPassErrorCode =
   /** A `MandateVault` file is not well-formed JSON Lines of vault records. */
   | "VaultCorrupted"
   /** A tenant index is negative, non-integer, or outside BIP-32's hardened range. */
-  | "InvalidTenantIndex";
+  | "InvalidTenantIndex"
+  /** A partner-supplied external reference is malformed, or looks like personal data. */
+  | "InvalidExternalRef"
+  /** No partner in the directory has that id. */
+  | "PartnerNotFound"
+  /** No tenant in the directory has that id. */
+  | "TenantNotFound"
+  /** This partner already has a tenant for that external reference. */
+  | "TenantAlreadyExists"
+  /** No agent instance in the directory has that id. */
+  | "AgentNotFound";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

@@ -1,0 +1,184 @@
+/**
+ * The shapes this directory stores, as zod schemas.
+ *
+ * Every row that comes back from Postgres is parsed through one of these
+ * before it is handed to a caller — the same rule the rest of the project
+ * applies to anything crossing a boundary. A database is a boundary: a
+ * column added by hand, a migration half-applied, or a `json` column holding
+ * something from an older shape all arrive here as `unknown`, and the parse
+ * is what turns "probably fine" into "checked".
+ */
+import { stellarAddressSchema, stellarDidSchema } from "@agentpass/core";
+import { z } from "zod";
+
+import { ID_PREFIXES, ULID_LENGTH } from "./ids.js";
+
+const CROCKFORD_CLASS = "[0-9ABCDEFGHJKMNPQRSTVWXYZ]";
+
+function idSchema(kind: keyof typeof ID_PREFIXES) {
+  return z.string().regex(new RegExp(`^${ID_PREFIXES[kind]}_${CROCKFORD_CLASS}{${ULID_LENGTH}}$`), {
+    message: `expected a ${kind} id (${ID_PREFIXES[kind]}_...)`,
+  });
+}
+
+export const partnerIdSchema = idSchema("partner");
+export const apiKeyIdSchema = idSchema("apiKey");
+export const principalIdSchema = idSchema("principal");
+export const bindingIdSchema = idSchema("binding");
+export const agentIdSchema = idSchema("agent");
+export const credentialIdSchema = idSchema("credential");
+export const mandateIdSchema = idSchema("mandate");
+
+export const tenantIdSchema = z
+  .string()
+  .regex(new RegExp(`^${ID_PREFIXES.partner}_${CROCKFORD_CLASS}{${ULID_LENGTH}}:${CROCKFORD_CLASS}{${ULID_LENGTH}}$`), {
+    message: "expected a tenant id (ptn_...:...)",
+  });
+
+/**
+ * A partner is archived, never deleted: every tenant, mandate and vault
+ * record under it stays readable, which is the whole promise of the
+ * evidence chain.
+ */
+export const partnerStatusSchema = z.enum(["active", "suspended", "archived"]);
+export const tenantStatusSchema = z.enum(["active", "suspended"]);
+export const agentStatusSchema = z.enum(["active", "retired"]);
+
+/**
+ * Whether this agent's derived identity exists on Stellar yet (`C-21`).
+ * `derived` is the normal state of the overwhelming majority of agents: the
+ * keypair is computed, and nothing has been paid for.
+ */
+export const onchainStateSchema = z.enum(["derived", "funded"]);
+
+/** How a mandate was signed — the two paths T35 left in place. */
+export const mandateSignatureKindSchema = z.enum(["wallet-sep53", "platform-jws"]);
+
+export const partnerSchema = z.strictObject({
+  id: partnerIdSchema,
+  name: z.string().min(1).max(200),
+  status: partnerStatusSchema,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const apiKeySchema = z.strictObject({
+  id: apiKeyIdSchema,
+  partnerId: partnerIdSchema,
+  name: z.string().min(1).max(200),
+  /** `sha256` of the secret, hex. The secret itself is shown once and never stored. */
+  keyHash: z.string().regex(/^[0-9a-f]{64}$/),
+  scopes: z.array(z.string().min(1)),
+  createdAt: z.date(),
+  revokedAt: z.date().nullable(),
+});
+
+export const tenantSchema = z.strictObject({
+  id: tenantIdSchema,
+  partnerId: partnerIdSchema,
+  /** Opaque, partner-scoped, validated non-PII — see `external-ref.ts`. */
+  externalRef: z.string().min(1).max(128),
+  label: z.string().max(200).nullable(),
+  status: tenantStatusSchema,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const principalSchema = z.strictObject({
+  id: principalIdSchema,
+  address: stellarAddressSchema,
+  did: stellarDidSchema,
+  createdAt: z.date(),
+});
+
+/**
+ * One wallet's consent to act inside one tenant, with the proof it gave.
+ *
+ * The nonce and signature are kept because "this wallet proved control at
+ * this time" is a claim someone may need to re-verify later, and a claim
+ * whose evidence was thrown away is just an assertion.
+ */
+export const principalBindingSchema = z.strictObject({
+  id: bindingIdSchema,
+  tenantId: tenantIdSchema,
+  principalId: principalIdSchema,
+  proofNonce: z.string().min(1),
+  proofSignature: z.string().min(1),
+  boundAt: z.date(),
+  revokedAt: z.date().nullable(),
+});
+
+export const agentInstanceSchema = z.strictObject({
+  id: agentIdSchema,
+  tenantId: tenantIdSchema,
+  /**
+   * The SEP-0005 index this agent's keypair derives from — allocated once,
+   * globally monotonic, never reused. Per **agent**, not per tenant: a tenant
+   * may hold several agents, and each needs a key of its own.
+   */
+  keyIndex: z.number().int().nonnegative(),
+  address: stellarAddressSchema,
+  did: stellarDidSchema,
+  label: z.string().max(200).nullable(),
+  status: agentStatusSchema,
+  onchainState: onchainStateSchema,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export const credentialRecordSchema = z.strictObject({
+  id: credentialIdSchema,
+  agentId: agentIdSchema,
+  /** `sha256(compact JWS)`, hex — the value anchored in `agent_registry`. */
+  credentialHash: z.string().regex(/^[0-9a-f]{64}$/),
+  issuerDid: stellarDidSchema,
+  principalDid: stellarDidSchema,
+  jws: z.string().min(1),
+  validFrom: z.date(),
+  validUntil: z.date(),
+  anchorTx: z.string().min(1),
+  revokedAt: z.date().nullable(),
+  createdAt: z.date(),
+});
+
+export const mandateRecordSchema = z.strictObject({
+  id: mandateIdSchema,
+  tenantId: tenantIdSchema,
+  agentId: agentIdSchema,
+  principalId: principalIdSchema,
+  mandateHash: z.string().regex(/^[0-9a-f]{64}$/),
+  signatureKind: mandateSignatureKindSchema,
+  /**
+   * The `AgentPayMandate` exactly as it was signed. Typed as an object here
+   * rather than re-validated against the mandate schema: `@agentpay/mandate`
+   * owns that shape, and this package deliberately does not depend on it —
+   * storing a document is not the same job as deciding it is valid.
+   */
+  document: z.record(z.string(), z.unknown()),
+  /** SEP-0053 signature, for a wallet-signed mandate. */
+  signature: z.string().nullable(),
+  /** Compact JWS, for a platform-signed mandate. */
+  jws: z.string().nullable(),
+  validFrom: z.date(),
+  validUntil: z.date(),
+  anchorTx: z.string().min(1),
+  /** The mandate this one renews, if any — a renewal never creates an agent. */
+  supersedesId: mandateIdSchema.nullable(),
+  revokedAt: z.date().nullable(),
+  revokeTx: z.string().nullable(),
+  createdAt: z.date(),
+});
+
+export type Partner = z.infer<typeof partnerSchema>;
+export type ApiKey = z.infer<typeof apiKeySchema>;
+export type Tenant = z.infer<typeof tenantSchema>;
+export type Principal = z.infer<typeof principalSchema>;
+export type PrincipalBinding = z.infer<typeof principalBindingSchema>;
+export type AgentInstance = z.infer<typeof agentInstanceSchema>;
+export type CredentialRecord = z.infer<typeof credentialRecordSchema>;
+export type MandateRecord = z.infer<typeof mandateRecordSchema>;
+export type PartnerStatus = z.infer<typeof partnerStatusSchema>;
+export type TenantStatus = z.infer<typeof tenantStatusSchema>;
+export type AgentStatus = z.infer<typeof agentStatusSchema>;
+export type OnchainState = z.infer<typeof onchainStateSchema>;
+export type MandateSignatureKind = z.infer<typeof mandateSignatureKindSchema>;

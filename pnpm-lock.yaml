@@ -109,6 +109,25 @@ importers:
         specifier: ^2.4.0
         version: 2.4.0
 
+  packages/directory:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../core
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.0
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@agentpay/tenancy':
+        specifier: workspace:*
+        version: link:../tenancy
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+
   packages/mandate:
     dependencies:
       '@agentpass/core':

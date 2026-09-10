@@ -7,6 +7,7 @@
     { "path": "./packages/mandate" },
     { "path": "./packages/vault" },
     { "path": "./packages/tenancy" },
+    { "path": "./packages/directory" },
     { "path": "./apps/agent" },
     { "path": "./apps/web" }
   ]

@@ -32,6 +32,7 @@ imposible de saltar por prompt injection.
 | [docs/fase-5-mandatevault/DECISIONES.md](docs/fase-5-mandatevault/DECISIONES.md) | Decisiones de la Fase 5 (prefijo `V-`) |
 | [docs/fase-6-agentguard-comercializacion/CONTEXTO.md](docs/fase-6-agentguard-comercializacion/CONTEXTO.md) | **Fase en curso, iniciada 2026-09-09.** Qué prueba la mitad de "comercialización", qué sigue sin alcance (AgentGuard) y por qué |
 | [docs/fase-6-agentguard-comercializacion/BITACORA.md](docs/fase-6-agentguard-comercializacion/BITACORA.md) | Bitácora hito a hito, empieza en T32 |
+| [docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md](docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md) | **El plano de la plataforma para partners** (T37): modelo de entidades, brechas contra el repo real, plan de diez fases con puertas de aprobación |
 | [docs/fase-6-agentguard-comercializacion/DECISIONES.md](docs/fase-6-agentguard-comercializacion/DECISIONES.md) | Decisiones de la Fase 6 (prefijo `C-`) |
 | [docs/AGENT_LOG.md](docs/AGENT_LOG.md) | **Leer siempre, antes de tocar nada.** Bitácora corta compartida entre Claude Code y Codex: qué se hizo, en qué branch, qué queda pendiente |
 | [docs/fase-0-fundamentos/metodologia-claude-codex.html](docs/fase-0-fundamentos/metodologia-claude-codex.html) | Resumen visual del protocolo de coordinación Claude Code ↔ Codex — roles, el ciclo vía git, qué hace el usuario en cada punto. Abrir en el navegador |

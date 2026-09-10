@@ -28,6 +28,10 @@ Testnet only. No mainnet, no fiat rails, no PSP — deliberately.
 | `packages/sdk` | `issue()` / `verify()` / `revoke()` — core plus Soroban RPC. |
 | `packages/cli` | The `agentpass` binary. |
 | `packages/mandate` | Phase 3: `@agentpay/mandate` — the principal's signed consent. Depends on core, nothing depends on it. |
+| `packages/vault` | Phase 5: `@agentpay/vault` — the hash-chained record of every grant, refusal and anchor. |
+| `packages/tenancy` | Phase 6: `@agentpay/tenancy` — one Stellar keypair per derived identity, from a single master seed (SEP-0005). **No I/O.** |
+| `packages/directory` | Phase 6: `@agentpay/directory` — the durable record of partners, tenants, principals, agents, credentials and mandates. |
+| `contracts/policy-rail` | Soroban smart account that enforces `per_tx` / `per_day` inside the transfer itself. |
 | `contracts/agent-registry` | Soroban contract holding credential hashes, their status, and the issuer set. |
 | `deployments/testnet.json` | The only artefact shared between the TypeScript and Rust sides. |
 

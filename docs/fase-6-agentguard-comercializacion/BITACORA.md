@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T37 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T38 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
 misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
@@ -36,6 +36,7 @@ pero cablear la identidad propia por tenant queda para un hito aparte
 | T35 | La wallet conectada firma de verdad el Mandato (SEP-0053) y ancla/revoca la transacción on-chain con su propia firma | ✅ cerrado 2026-09-09 |
 | T36 | Blindar `apps/web`: costuras testeables extraídas de `server.ts` y 49 tests donde antes no había ninguno | ✅ cerrado 2026-09-10 |
 | T37 | Diseño de la plataforma para partners: modelo de entidades, modelo de fondos, plan de diez fases — **sin una línea de código** | ✅ cerrado 2026-09-10 |
+| T38 | `@agentpay/directory`: el registro durable de partners, tenants, principals, agentes, credenciales y mandatos | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -610,3 +611,92 @@ partner y tenant como paquete nuevo — no toca ninguna área restringida y no
 depende de nada que quede sin decidir. Sigue pendiente de antes: cablear
 `@agentpay/tenancy` (`C-16`, ahora parte de F4) y el rename a VynGent
 (`P-9`).
+
+---
+
+## T38 · `@agentpay/directory` — el registro durable de quién existe — cerrado 2026-09-10
+
+**Qué quedó funcionando, en palabras llanas.** Hasta hoy, AgentPay no sabía
+quién era nadie. Todo lo que el piloto conoce de un visitante vive en la
+memoria del servidor y desaparece cuando el servidor se reinicia — por eso
+apretar "Iniciar sesión" una segunda vez emite una credencial nueva y un
+Mandato nuevo en vez de encontrar los que ya están firmados y anclados.
+
+Este hito construye la libreta que faltaba: una empresa que integra
+(**partner**), cada uno de sus usuarios (**tenant**), la wallet que consiente
+(**principal**), el agente que actúa, y los documentos firmados que lo
+autorizan. Todo en Postgres, todo sobrevive a un reinicio.
+
+Lo que prueba que funciona es un caso concreto: **la misma persona, con la
+misma wallet, y hasta con el mismo identificador de usuario, dándose de alta
+en dos partners distintos, termina con dos espacios separados** — dos tenants,
+dos agentes, dos cuentas Stellar distintas. Hoy eso no pasaba: el identificador
+de tenant era el hash de la dirección de la wallet, así que esa persona caía
+en un único espacio compartido entre los dos partners.
+
+**Lo que este paquete deliberadamente no hace.** No deriva llaves: reparte el
+índice y le pide a quien lo llama que derive, así el seed maestro nunca entra
+en su alcance. No verifica firmas ni decide nada: guardar un documento firmado
+y juzgarlo son trabajos distintos, y este hace solo el primero. Y no lee
+variables de entorno.
+
+**Cero cambios en ningún punto de autorización.** `git diff` contra `apps/` y
+`contracts/` no devuelve nada: `checkMandate`, `checkScope`, `checkDailyLimit`,
+`policy_rail` y `agent_registry` quedan byte por byte como estaban. Lo único
+que cambió fuera del paquete nuevo son cinco códigos de error agregados a la
+unión de `packages/core` —aditivo, el mismo patrón que T32— y tres archivos de
+documentación.
+
+**Tres decisiones que salieron de construirlo, no de planificarlo.**
+
+1. **El índice de derivación es por agente, no por tenant** (`C-27`). El
+   modelo objetivo pide que un tenant pueda tener varios agentes, y con un
+   índice por tenant el segundo no tiene de dónde derivar llaves. `C-1` y
+   `C-2` se escribieron en T32, antes de que ese modelo existiera. El esquema
+   de derivación de T32 no se tocó: lo único que cambia es quién recibe un
+   índice. Se confirmó leyendo el código que el owner del `policy_rail` es la
+   llave del agente, así que "identidad derivada" y "cuenta que puede gastar"
+   son la misma cosa.
+2. **El índice sale de una secuencia de Postgres, no de `max + 1`** (`C-28`).
+   Dos transacciones que leen el máximo antes de que la otra escriba obtienen
+   el mismo número, y del otro lado de esa colisión no hay un id duplicado
+   sino **dos agentes derivando el mismo par de llaves del seed maestro**. Una
+   secuencia deja huecos y no colisiona; un hueco no le cuesta nada a nadie.
+3. **La derivación entra como callback** (`C-29`). Con dos llamadas separadas
+   —pedir el índice, después guardar el agente— es cuestión de tiempo que
+   alguien guarde una fila cuya dirección no corresponde a su propio índice, y
+   esa fila mentiría sin que nada lo note hasta que alguien intente firmar con
+   ella.
+
+**Un fallo real, y lo que enseñó.** La primera corrida del test de integración
+murió después de 18 minutos con `EADDRNOTAVAIL`: agotamiento de puertos
+efímeros locales, no del servidor. Ocho creaciones en paralelo, `pg` abriendo
+una conexión por consulta hasta su máximo por omisión, y cada conexión nueva
+contra el pooler de Supabase pagando un handshake TLS entero. Con el pool
+acotado (`C-31`), la misma suite pasa entera en 71 segundos — quince veces más
+rápido, además de estable.
+
+Al diagnosticarlo apareció algo que vale más que el arreglo: **el volcado de
+error de `pg` contiene la contraseña de la base en texto plano**, dentro de
+`connectionParameters`. Se verificó que ni este paquete ni el vault filtran
+—los dos registran `error.message`, nunca el objeto— pero queda anotado como
+requisito para la superficie de API de F5: ningún log estructurado serializa
+un error crudo (`C-32`).
+
+**Evidencia técnica.** 25 tests nuevos sin red (759 en total, de 734) y 16
+contra Postgres real, todos en verde; `pnpm typecheck` y `pnpm build`
+limpios. Salidas crudas y el diagnóstico completo del fallo en
+[evidencia/T38.md](evidencia/T38.md).
+
+Documentación tocada: `README.md` (la tabla de piezas listaba cuatro de siete
+paquetes), `CLAUDE.md` (índice), `docs/AGENT_LOG.md`, y en esta carpeta
+`BITACORA.md`, `DECISIONES.md` (`C-26` a `C-32`) y `evidencia/T38.md`.
+Archivos nuevos: `packages/directory/` completo. Archivos de código tocados
+fuera del paquete: `packages/core/src/errors.ts` y `tsconfig.json`.
+
+Pendiente: el siguiente hito propuesto es **F3 = T39** — persistir credencial
+y mandato contra el tenant y rehidratar la sesión desde Postgres, para que
+volver desde otro navegador encuentre lo ya firmado en vez de emitir de nuevo.
+Es el primero que toca `apps/web`, así que conviene revisarlo con más cuidado
+que este. Sigue pendiente de antes: cablear `@agentpay/tenancy` (`C-16`, F4) y
+el rename a VynGent (`P-9`).

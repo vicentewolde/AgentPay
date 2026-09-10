@@ -1,0 +1,27 @@
+{
+  "name": "@agentpay/directory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@agentpass/core": "workspace:*",
+    "pg": "^8.13.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@agentpay/tenancy": "workspace:*",
+    "@types/pg": "^8.11.0"
+  }
+}

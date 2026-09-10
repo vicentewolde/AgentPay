@@ -709,3 +709,176 @@ Cerradas sin discusión aparte, siguiendo las recomendaciones de
 **Diferidas a pedido del usuario, sin decidir:** qué pasa cuando alguien
 conecta varias wallets, y toda condición previa a mainnet. Ninguna de las dos
 bloquea el trabajo inmediato.
+
+---
+
+### C-26 · El paquete se llama `@agentpay/directory`, no `registry` · `Vigente`
+**Fecha:** 2026-09-10 (T38)
+
+El paquete que guarda partners, tenants, principals, agentes, credenciales y
+mandatos se llama **directory**.
+
+**Motivo.** "Registry" ya está tomado dos veces en este monorepo y las dos
+veces significa otra cosa: `agent_registry` es el contrato Soroban donde se
+anclan y revocan hashes (Fase 1), y `packages/sdk/src/registry.ts` es su
+cliente. Un tercer "registry" que nombrara un conjunto de tablas Postgres
+obligaría, para siempre, a preguntar cuál de los tres es en cada conversación
+—y la confusión caería justo sobre la palabra que nombra el punto de
+revocación—.
+
+**Alternativa descartada:** meterlo dentro de `@agentpay/tenancy`. Se descartó
+porque ese paquete es deliberadamente puro: no lee entorno, no hace I/O, no
+tiene dependencias fuera de la derivación (`C-3`). Agregarle un `Pool` de
+Postgres rompería exactamente la propiedad que lo hace testeable sin nada
+alrededor.
+
+---
+
+### C-27 · El índice de derivación se asigna por **agente**, no por tenant · `Vigente` — refina `C-1`
+**Fecha:** 2026-09-10 (T38)
+
+`deriveTenantKeypair(masterMnemonic, tenantIndex, role)` (T32) mapea un índice
+a un par de llaves. Lo que ese índice identifica, desde este hito, es **una
+identidad derivada** — y un tenant tiene una o varias, no exactamente una.
+
+**Motivo.** El modelo objetivo pide explícitamente que un tenant pueda tener
+más de un agente, y que renovar un mandato no cree un agente nuevo. Con un
+índice por tenant, el segundo agente de un tenant no tendría de dónde derivar
+llaves. `C-1` y `C-2` se escribieron en T32, antes de que existiera el modelo
+de entidades de `C-19`, y asumían la correspondencia uno a uno que ese modelo
+después descartó.
+
+**Qué cambia y qué no.** El esquema de derivación de T32 no se toca: sigue
+siendo `m/44'/148'/<índice>'` con paridad par/impar para el rol, y sigue
+siendo cierto que dos índices distintos nunca colisionan. Lo único que cambia
+es quién recibe un índice. `@agentpay/tenancy` no se modificó en este hito;
+cuando F4 lo cablee habrá que decidir si el parámetro se renombra o se
+documenta el mapeo — anotado, no resuelto.
+
+**Confirmado leyendo el código, no supuesto:** el owner del `policy_rail` es
+la llave del agente (`apps/web/src/server.ts`, `ownerSecret: current.agentSecret`),
+así que "una identidad derivada" y "una cuenta que puede gastar" son la misma
+cosa, y por eso la unidad correcta de asignación es el agente.
+
+**Alternativa descartada:** darle un índice al tenant y derivar los agentes
+como sub-rutas de ese índice. Se descartó porque exigiría cambiar el esquema
+de derivación de T32 —una pieza cerrada y testeada— para resolver algo que la
+asignación de índices ya resuelve sin tocarla.
+
+---
+
+### C-28 · El índice sale de una secuencia de Postgres, no de `max(key_index) + 1` · `Vigente`
+**Fecha:** 2026-09-10 (T38)
+
+`directory_key_index_seq`, leída con `nextval`, fuera de la transacción que
+inserta el agente.
+
+**Motivo.** El requisito real es **nunca reusar un índice**, no "no dejar
+huecos". Una secuencia entrega un valor sin esperar a que termine la
+transacción que lo pidió, así que dos creaciones concurrentes no pueden
+recibir el mismo número. `max(key_index) + 1` sí puede: dos transacciones que
+lean antes de que la otra escriba obtienen el mismo máximo. Y lo que está del
+otro lado de esa colisión no es un id duplicado sino **dos agentes derivando
+el mismo par de llaves Stellar del seed maestro** — dos tenants gastando de la
+misma cuenta.
+
+Los huecos que una secuencia deja al fallar una transacción son gratis: un
+índice quemado no le cuesta nada a nadie, y el espacio derivable es de mil
+millones de tenants (`InvalidTenantIndex` acota en 2³¹−1 y el rol consume la
+paridad).
+
+**Alternativa descartada:** una tabla contador con `update ... returning`. Es
+correcta —el lock de fila serializa— pero convierte cada alta de agente en un
+punto de contención global, y no compra nada frente a la secuencia.
+
+---
+
+### C-29 · La derivación entra como callback; el seed maestro nunca toca este paquete · `Vigente`
+**Fecha:** 2026-09-10 (T38)
+
+`createAgent({ tenantId, derive })` asigna el índice, se lo pasa a `derive` y
+guarda la dirección que le devuelvan.
+
+**Motivo, dos razones distintas.** La primera es de seguridad: el seed maestro
+es el único secreto de todo el esquema multi-tenant, y un paquete que habla
+con Postgres no tiene por qué tenerlo en su alcance. La segunda es de
+corrección: con dos llamadas separadas —"dame un índice", después "guardá este
+agente"— es cuestión de tiempo que alguien guarde un agente cuya dirección no
+corresponde a su propio índice, y esa fila mentiría de forma indetectable
+hasta que alguien intente firmar con ella. Con un callback, no hay forma de
+expresar esa combinación.
+
+**Alternativa descartada:** que el paquete importe `@agentpay/tenancy` y
+derive él mismo. Se descartó por lo anterior; `@agentpay/tenancy` sí aparece
+como **devDependency**, usado solo en el test de integración, porque la
+afirmación que hay que sostener no es "guarda un número" sino "dos tenants
+terminan con identidades Stellar distintas", y eso solo lo muestra la
+derivación real.
+
+---
+
+### C-30 · El rechazo de PII en `external_ref` es una heurística declarada, no una garantía · `Vigente`
+**Fecha:** 2026-09-10 (T38)
+
+`assertOpaqueExternalRef` rechaza lo que parece un email, un RUT o un teléfono
+inequívoco, además de espacios, comillas y ángulos.
+
+**Motivo, dicho sin adornos.** Ningún chequeo sintáctico puede impedir que un
+partner decidido mande datos personales — puede mandar el email en base64 y
+pasa. Lo que sí atrapa es **el error honesto**: el integrador que cablea
+`user.email` porque era el string único a mano. Ese error es común y este es
+barato; la malicia es rara y esto no la detiene. El resto lo carga el contrato
+con el partner, no el código.
+
+**Una consecuencia de diseño que sale de tomarse esto en serio:** el error
+**no** devuelve el valor rechazado en `details`. Repetir un email dentro de un
+error que va a un log es exactamente la fuga que la función existe para
+evitar. Devuelve el largo y una pista de qué mandar en su lugar.
+
+Se rechaza a propósito una tentación: un string de puros dígitos **se acepta**.
+Es muchísimo más frecuente que sea un id de usuario que un teléfono, y
+rechazarlo rompería integraciones honestas para atrapar un caso que las reglas
+del `+` y los separadores ya cubren.
+
+---
+
+### C-31 · El pool de conexiones es acotado y configurable · `Vigente`
+**Fecha:** 2026-09-10 (T38)
+
+`createDirectory` acepta `maxConnections`, y el test de integración usa pools
+chicos.
+
+**Motivo, encontrado corriendo el propio test y no leyendo documentación.** La
+primera corrida del test de integración —ocho creaciones de tenant y ocho de
+agente en paralelo— murió con `EADDRNOTAVAIL` (errno −49) después de 18
+minutos: agotamiento de **puertos efímeros locales**, no del servidor. La base
+del piloto es un session pooler de Supabase, cada conexión nueva paga un
+handshake TLS completo, y `pg` abre una por consulta concurrente hasta llegar
+a su `max`. Con el pool acotado las conexiones se reusan, que es a la vez más
+rápido y estable.
+
+Queda anotado para el hito de hardening (`G4`/`G11`): el mismo razonamiento
+aplica a `createPostgresMandateVault`, que hoy no expone la opción.
+
+---
+
+### C-32 · Un error de `pg` lleva la contraseña adentro — nunca serializar el `cause` crudo · `Vigente`
+**Fecha:** 2026-09-10 (T38)
+
+**Hallazgo, no decisión de diseño.** Cuando vitest volcó el error de conexión
+de la corrida fallida de `C-31`, el volcado incluía la contraseña de la base
+en texto plano: `pg` guarda `connectionParameters` (usuario, host, y
+**password**) dentro del objeto de error, y cualquier cosa que serialice ese
+objeto la publica.
+
+**Qué se verificó de nuestro lado.** El código de este paquete registra y
+propaga solo `error.message`, nunca el objeto: `console.error` recibe el
+mensaje, y `details.cause` es el mensaje, no el error. Lo mismo hace
+`createPostgresMandateVault` (T33). Ninguno de los dos filtra hoy.
+
+**Qué queda como riesgo latente y para dónde va.** `AgentPassError` conserva el
+`cause` original, que es lo correcto para depurar. El riesgo es un
+`JSON.stringify` sobre un error atrapado, o un logger que serialice el objeto
+completo — algo que la superficie de API de F5 va a tener que hacer bien
+desde el primer día. Se anota como requisito de F5/F8: **ningún log
+estructurado serializa un error crudo**. No se cambia nada ahora.

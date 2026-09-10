@@ -2115,3 +2115,68 @@ toca ninguna área restringida, no depende de nada sin decidir, y desbloquea
 F3, F4 y F5. **Esperando visto bueno antes de arrancar.** La rama sigue sin
 mergear y sin pushear. Sigue pendiente de antes: cablear `@agentpay/tenancy`
 (`C-16`, ahora F4) y el rename a VynGent (`P-9`).
+
+## 2026-09-10 (5) — cc/t38-directory (T38 cerrado)
+
+Agente: Claude Code
+
+Qué: **T38 cerrado.** Paquete nuevo `@agentpay/directory` — el registro
+durable de partners, tenants, principals, vinculaciones, instancias de
+agente, credenciales y mandatos, sobre Postgres. Es F2 del plan de T37, el
+primer hito implementable sin tocar ninguna área restringida.
+
+Por qué: sin una tabla de tenants no hay multi-partner posible. Hoy el
+`tenant_id` es `sha256(dirección de la wallet)`, así que la misma wallet con
+dos partners cae en un solo espacio compartido — la brecha `G2`, y la más
+barata de arreglar ahora y más cara después, porque cada día hay más filas
+escritas bajo ese esquema.
+
+**Cero cambios en puntos de autorización**, verificado:
+`git diff --stat bad4c47..HEAD -- apps contracts` no devuelve nada.
+`checkMandate`, `checkScope`, `checkDailyLimit`, `policy_rail` y
+`agent_registry` intactos. Fuera del paquete nuevo solo cambian cinco
+códigos de error agregados a la unión de `packages/core` (aditivo, mismo
+patrón que T32), `tsconfig.json`, y documentación.
+
+Tres decisiones que salieron de construir, no de planificar — `C-27` el
+índice de derivación es por **agente** y no por tenant (el modelo objetivo
+pide varios agentes por tenant; se confirmó leyendo el código que el owner
+del `policy_rail` es la llave del agente, así que la unidad correcta es esa);
+`C-28` el índice sale de una secuencia de Postgres y no de `max + 1`, porque
+del otro lado de esa colisión hay dos agentes derivando el mismo par de
+llaves del seed maestro; `C-29` la derivación entra como callback, así el
+seed maestro nunca toca este paquete y no existe forma de guardar un agente
+cuya dirección no corresponda a su índice.
+
+Hallazgo de seguridad, encontrado depurando y no buscando: **el volcado de
+error de `pg` lleva la contraseña de la base en texto plano** dentro de
+`connectionParameters`. Se verificó que ni este paquete ni
+`createPostgresMandateVault` filtran (los dos registran `error.message`,
+nunca el objeto). Queda como requisito para F5: ningún log estructurado
+serializa un error crudo. Ver `C-32`. Por eso `evidencia/T38.md` transcribe
+el diagnóstico del fallo y no el volcado.
+
+Verificado: 759 tests offline en verde (25 nuevos, de 734), 16 tests de
+integración contra Postgres real en verde, `pnpm typecheck` y `pnpm build`
+limpios. El test que sostiene el hito: la misma wallet y el mismo
+`external_ref` con dos partners producen dos tenants, dos índices y dos
+direcciones Stellar distintas, derivadas con `deriveTenantKeypair` de T32.
+
+Nota de operación para la próxima sesión: la primera corrida del test de
+integración murió con `EADDRNOTAVAIL` a los 18 minutos — agotamiento de
+puertos efímeros locales por abrir una conexión nueva por consulta
+concurrente contra el pooler de Supabase. Con `maxConnections` acotado
+(`C-31`) la misma suite pasa en 71 segundos. Si algo vuelve a tardar
+minutos contra esa base, mirar el tamaño del pool antes que la consulta.
+
+Documentación tocada: `README.md`, `CLAUDE.md`, `docs/AGENT_LOG.md`, y en
+`docs/fase-6-agentguard-comercializacion/`: `BITACORA.md`, `DECISIONES.md`
+(`C-26` a `C-32`), `evidencia/T38.md`.
+
+Pendiente: siguiente hito propuesto **T39** (F3 del plan) — persistir
+credencial y mandato contra el tenant y rehidratar la sesión desde Postgres,
+para que volver desde otro navegador encuentre lo ya firmado en vez de
+emitir de nuevo. Es el primero que toca `apps/web`, revisarlo con más
+cuidado que este. La rama `cc/t38-directory` queda **sin mergear y sin
+pushear**, esperando revisión. Sigue pendiente: cablear `@agentpay/tenancy`
+(`C-16`, F4) y el rename a VynGent (`P-9`).
