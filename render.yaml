@@ -32,6 +32,13 @@ services:
         sync: false
       - key: AGENT_REGISTRY_CONTRACT_ID
         sync: false
+      # T35 — signs `register_issuer` when a connected wallet anchors its
+      # first Mandate (ensureWalletIsRegisteredIssuer). Same admin key
+      # deploy:registry already uses locally; missing here is exactly why
+      # a wallet-signed session fails at "Iniciar sesión" with
+      # "ADMIN_SECRET_KEY is missing".
+      - key: ADMIN_SECRET_KEY
+        sync: false
       # T33 — a Postgres connection string (e.g. Supabase). Required: without
       # it the MandateVault has nowhere durable to write, which is exactly
       # the bug this hito fixes (the old JSONL file lived on Render's
