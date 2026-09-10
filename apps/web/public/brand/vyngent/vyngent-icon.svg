@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">VynGent icon</title>
+  <desc id="desc">Geometric V and open G monogram with an electric-blue terminal.</desc>
+  <g fill="none" stroke="#171A1F" stroke-width="64" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M80 80 252 406 338 278"/>
+    <path d="M244 222 292 154c24-30 56-44 96-44h20"/>
+    <path d="M330 278h98v78l-58 58H258"/>
+  </g>
+  <path d="M408 110h46" fill="none" stroke="#176BFF" stroke-width="64" stroke-linecap="butt"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">VynGent horizontal logo</title>
+  <desc id="desc">VynGent wordmark with a geometric V and open G monogram.</desc>
+  <g transform="translate(24 18) scale(.75)" fill="none" stroke="#171A1F" stroke-width="64" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M80 80 252 406 338 278"/>
+    <path d="M244 222 292 154c24-30 56-44 96-44h20"/>
+    <path d="M330 278h98v78l-58 58H258"/>
+  </g>
+  <path d="M330 100.5h34.5" fill="none" stroke="#176BFF" stroke-width="48" stroke-linecap="butt"/>
+  <text x="420" y="276" fill="#171A1F" font-family="Inter, Satoshi, Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="176" font-weight="650" letter-spacing="-8">VynGent</text>
+</svg>

@@ -2012,3 +2012,27 @@ atrasado (estaba en `3ac4ffc`), hay que actualizarlo, y hay que pushear
 `main` primero porque su rama parte de `origin/main`. Sin resolver, a
 propósito: cablear `@agentpay/tenancy` (T32) para que cada tenant gaste
 desde su propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).
+
+## 2026-09-10 (3) — codex/vyngent-brand-assets
+
+Agente: Codex
+
+Qué: se creó el paquete inicial de identidad visual de **VynGent** en
+`apps/web/public/brand/vyngent/`: monograma geométrico `VG`, composición
+horizontal, variantes para fondos claros y oscuros, SVG maestros y PNGs de
+32, 192, 512 y 1280 px. También se agregó `vyngent-brand-kit.zip` como descarga
+única. El acento azul eléctrico `#176BFF` aparece únicamente en el remate
+superior del símbolo.
+
+Por qué: el usuario aprobó la dirección visual y pidió archivos descargables
+que también quedaran disponibles para Claude Code mediante el repositorio.
+
+Verificado: los cuatro SVG pasan validación XML; los PNG se renderizaron desde
+los SVG maestros y se revisaron visualmente, incluido el favicon de 32 px. El
+ZIP contiene los nueve archivos esperados. `pnpm build` limpio y 734 tests en
+verde.
+
+Pendiente: revisión visual del usuario y de Claude Code antes de mergear. El
+wordmark del SVG horizontal usa una pila sans-serif del sistema; para un master
+de marca definitivo conviene fijar la tipografía licenciada y convertirla a
+curvas después de la aprobación final.
