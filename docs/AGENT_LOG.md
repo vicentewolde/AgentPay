@@ -2530,15 +2530,17 @@ de decidir cuándo se emite cada evento y de conectar los emisores reales.
 
 Agente: Codex
 
-Qué: se creó un paquete inicial de identidad visual para **AienGent** en
-`apps/web/public/brand/aiengent/`: monograma geométrico `AI`, composición
-horizontal, variantes para fondos claros y oscuros, SVG maestros y PNGs de
-32, 192, 512 y 1280 px. También se agregó `aiengent-brand-kit.zip`, compatible
-con Finder, como descarga única. El acento azul eléctrico `#176BFF` aparece
-solamente en el terminal superior de la I.
+Qué: se creó y refinó un paquete inicial de identidad visual para **AienGent**
+en `apps/web/public/brand/aiengent/`: monograma geométrico entrelazado `AiG`,
+composición horizontal, variantes para fondos claros y oscuros, SVG maestros y
+PNGs de 32, 192, 512 y 1280 px. También se agregó `aiengent-brand-kit.zip`,
+compatible con Finder, como descarga única. El acento azul eléctrico `#176BFF`
+aparece solamente como punto de la i.
 
 Por qué: el usuario pidió un pack similar al de VynGent y AgenGent, pero
-adaptado al nombre AienGent, para usarlo y compartirlo mediante el repositorio.
+adaptado al nombre AienGent. Tras revisar el primer símbolo `AI`, se sustituyó
+por `AiG` para evitar una lectura genérica y hacer visible el juego de las tres
+iniciales en una sola marca.
 
 Verificado: los cuatro SVG pasan validación XML; los PNG se renderizaron desde
 los SVG maestros y se revisaron visualmente, incluido el favicon de 32 px. El

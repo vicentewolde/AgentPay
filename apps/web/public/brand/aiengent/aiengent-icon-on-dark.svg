@@ -1,10 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">AienGent icon for dark backgrounds</title>
-  <desc id="desc">Geometric A and I monogram with an electric-blue terminal.</desc>
-  <g fill="none" stroke="#F5F7FA" stroke-width="62" stroke-linecap="butt" stroke-linejoin="miter">
-    <path d="M76 420 222 86l128 334"/>
-    <path d="M144 286h156"/>
-    <path d="M408 142v250"/>
+  <desc id="desc">Interlocked geometric A, i, and open G monogram with an electric-blue dot.</desc>
+  <g fill="none" stroke="#F5F7FA" stroke-width="58" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M64 416 198 92l94 258"/>
+    <path d="M124 282h140"/>
+    <path d="M314 212v96"/>
+    <path d="M330 116h64l54 54v178l-64 64H286"/>
+    <path d="M390 282h-64"/>
   </g>
-  <path d="M376 112h64" fill="none" stroke="#176BFF" stroke-width="62" stroke-linecap="butt"/>
+  <path d="M314 140v32" fill="none" stroke="#176BFF" stroke-width="58" stroke-linecap="butt"/>
 </svg>

@@ -1,11 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
   <title id="title">AienGent horizontal logo</title>
-  <desc id="desc">AienGent wordmark with a geometric A and I monogram.</desc>
-  <g transform="translate(22 18) scale(.75)" fill="none" stroke="#171A1F" stroke-width="62" stroke-linecap="butt" stroke-linejoin="miter">
-    <path d="M76 420 222 86l128 334"/>
-    <path d="M144 286h156"/>
-    <path d="M408 142v250"/>
+  <desc id="desc">AienGent wordmark with an interlocked geometric A, i, and open G monogram.</desc>
+  <g transform="translate(22 18) scale(.75)" fill="none" stroke="#171A1F" stroke-width="58" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M64 416 198 92l94 258"/>
+    <path d="M124 282h140"/>
+    <path d="M314 212v96"/>
+    <path d="M330 116h64l54 54v178l-64 64H286"/>
+    <path d="M390 282h-64"/>
   </g>
-  <path d="M304 102h48" fill="none" stroke="#176BFF" stroke-width="46.5" stroke-linecap="butt"/>
+  <path d="M257.5 123v24" fill="none" stroke="#176BFF" stroke-width="43.5" stroke-linecap="butt"/>
   <text x="420" y="276" fill="#171A1F" font-family="Inter, Satoshi, Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="168" font-weight="650" letter-spacing="-8">AienGent</text>
 </svg>
