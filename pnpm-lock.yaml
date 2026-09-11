@@ -172,6 +172,18 @@ importers:
         specifier: ^17.0.1
         version: 17.0.1(debug@4.4.3)
 
+  packages/partner-sdk:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../core
+      '@agentpay/partner-api':
+        specifier: workspace:*
+        version: link:../partner-api
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+
   packages/sdk:
     dependencies:
       '@agentpass/core':
