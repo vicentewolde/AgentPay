@@ -281,3 +281,10 @@ vuelta** para confirmar `owner`/`asset`/límites, escribe
 el rail fondeado con USDC propio. Un wasm distinto del registrado detiene el
 script y pide `--redeploy` — un redeploy es un contract id nuevo, y el viejo se
 queda con su saldo.
+
+> **Actualizado en T57 (Fase 6).** El comando ahora exige
+> `--principal <G...>`: la wallet que es dueña del dinero del rail y la única
+> que puede retirarlo o rotar la llave de gasto. El contrato ganó
+> `principal` en su `Config`, más `withdraw` y `set_owner`; `__check_auth`
+> —todo lo descrito arriba— no cambió. Ver
+> `docs/fase-6-agentguard-comercializacion/DECISIONES.md` → `C-61`.

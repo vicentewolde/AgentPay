@@ -227,14 +227,18 @@ pnpm run demo:pay-real
 ```
 
 pays from the agent's own classic account (T24). Deploy the `policy_rail` smart
-account once:
+account once, naming the wallet that owns the money in it:
 
 ```bash
-pnpm run deploy:policy-rail
+pnpm run deploy:policy-rail -- --principal GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 ```
 
-and the same purchase can be paid by the contract instead, with its `perTx` and
-`perDay` limits enforced by the network inside the transfer itself (T31):
+`--principal` is required and has no default. That wallet is the only one that
+can withdraw the rail's balance or rotate the key allowed to spend from it
+(T57); the agent's key can spend within the limits and nothing else. Once
+deployed, the same purchase can be paid by the contract instead, with its
+`perTx` and `perDay` limits enforced by the network inside the transfer itself
+(T31):
 
 ```bash
 pnpm run demo:pay-real -- --payer=policy-rail

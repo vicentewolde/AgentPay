@@ -26,6 +26,14 @@ export const policyRailDeploymentSchema = z.strictObject({
   wasmHash: z.string().regex(/^[0-9a-f]{64}$/),
   /** The Ed25519 key whose signature `__check_auth` accepts — the agent's. */
   owner: stellarAddressSchema,
+  /**
+   * The wallet with the last word over the rail: the only one that can
+   * `withdraw` its balance or rotate `owner` (T57, `C-61`). Nullable only for
+   * the one rail deployed before that constructor existed — the shared pilot
+   * rail, which has no `principal` on chain to record. Every rail deployed
+   * from here on writes a real address.
+   */
+  principal: stellarAddressSchema.nullable().default(null),
   /** The one SEP-41 token this rail can move. */
   asset: stellarContractIdSchema,
   perTx: z.string().min(1),

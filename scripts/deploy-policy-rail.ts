@@ -15,6 +15,12 @@
  * `perTx`/`perDay` on chain, after `LocalPolicyRail` already checked them off
  * chain. Two independent gates on the same numbers, not one moved.
  *
+ * `--principal <G...>` is the wallet that owns the money in the rail, and the
+ * only one that can take it back out or rotate `owner` (T57, `C-61`). Required
+ * and without a default on purpose: there is no wallet this script could
+ * reasonably invent, and picking the wrong one is exactly the failure `G9`
+ * described — funds no one but AgentPay can move.
+ *
  * Secrets reach the Stellar CLI through the environment, never argv, so they
  * cannot be read out of the process list.
  */
@@ -42,7 +48,32 @@ const CONTRACTS_DIR = resolve(REPO_ROOT, "contracts");
 const DEPLOYMENT_PATH = resolve(REPO_ROOT, "deployments/testnet.json");
 const WASM_PATH = resolve(CONTRACTS_DIR, "target/wasm32v1-none/release/policy_rail.wasm");
 
-const REDEPLOY = process.argv.slice(2).includes("--redeploy");
+const ARGV = process.argv.slice(2);
+const REDEPLOY = ARGV.includes("--redeploy");
+
+/**
+ * Reads `--principal <G...>`. Validated here rather than left to the CLI:
+ * a malformed address only surfaces as a Soroban type error deep inside
+ * `contract deploy`, long after the wasm has been uploaded and paid for.
+ */
+function readPrincipal(): string {
+  const at = ARGV.indexOf("--principal");
+  const value = at === -1 ? "" : (ARGV[at + 1] ?? "").trim();
+  if (value === "") {
+    throw new AgentPassError("ConfigError", "--principal <G...> is required", {
+      details: {
+        why: "the wallet that funds the rail and is the only one that can withdraw from it or rotate its owner key",
+        usage: "pnpm run deploy:policy-rail -- --principal GXXXX…",
+      },
+    });
+  }
+  if (!StrKey.isValidEd25519PublicKey(value)) {
+    throw new AgentPassError("ConfigError", "--principal is not a Stellar public key", {
+      details: { principal: value },
+    });
+  }
+  return value;
+}
 
 /**
  * `swap-risk-quote`, the one product with a real payment path, costs
@@ -153,6 +184,7 @@ async function ensureFunded(contractId: string, funder: Keypair): Promise<void> 
 
 interface LiveRail {
   readonly owner: string;
+  readonly principal: string;
   readonly asset: string;
   readonly perTx: string;
   readonly perDay: string;
@@ -168,8 +200,9 @@ async function probe(contractId: string, secret: string): Promise<LiveRail> {
   const read = async (method: string): Promise<string> =>
     lastLine(await stellar(["contract", "invoke", "--id", contractId, "--", method], secret)).replaceAll('"', "");
 
-  const [owner, asset, perTx, perDay, validUntil] = await Promise.all([
+  const [owner, principal, asset, perTx, perDay, validUntil] = await Promise.all([
     read("owner"),
+    read("principal"),
     read("asset"),
     read("per_tx"),
     read("per_day"),
@@ -183,6 +216,7 @@ async function probe(contractId: string, secret: string): Promise<LiveRail> {
   }
   return {
     owner: StrKey.encodeEd25519PublicKey(Buffer.from(owner, "hex")),
+    principal,
     asset,
     perTx: fromScaledAmount(BigInt(perTx)),
     perDay: fromScaledAmount(BigInt(perDay)),
@@ -191,6 +225,7 @@ async function probe(contractId: string, secret: string): Promise<LiveRail> {
 }
 
 async function main(): Promise<void> {
+  const principal = readPrincipal();
   const env = await readEnvFile(ENV_PATH);
   const admin = Keypair.fromSecret(requireEnv(env, "ADMIN_SECRET_KEY"));
   const agent = Keypair.fromSecret(requireEnv(env, "AGENT_SECRET_KEY"));
@@ -203,7 +238,8 @@ async function main(): Promise<void> {
   process.stdout.write("\nAgentPay deploy:policy-rail · Stellar testnet\n\n");
   process.stdout.write(`  protocol     ${version.protocolVersion}\n`);
   process.stdout.write(`  deployer     ${admin.publicKey()}\n`);
-  process.stdout.write(`  owner        ${agent.publicKey()} (the agent)\n`);
+  process.stdout.write(`  owner        ${agent.publicKey()} (the agent — spends)\n`);
+  process.stdout.write(`  principal    ${principal} (the wallet — withdraws, rotates the owner)\n`);
   process.stdout.write(`  asset        ${BAZAAR_USDC_ISSUER} (USDC)\n\n`);
 
   process.stdout.write("  building     …\n");
@@ -214,16 +250,10 @@ async function main(): Promise<void> {
 
   const previous = recorded.policyRail;
   if (previous !== null && !REDEPLOY) {
-    let live: LiveRail;
-    try {
-      live = await probe(previous.contractId, admin.secret());
-    } catch (error) {
-      throw new AgentPassError(
-        "ConfigError",
-        "a rail is recorded but does not answer; re-run with --redeploy to replace it",
-        { cause: error, details: { contractId: previous.contractId } },
-      );
-    }
+    // The wasm comparison comes before the probe, not after: a rail deployed
+    // from older source may not even have the methods `probe` reads (T57 added
+    // `principal`), and "the source builds different wasm" is the accurate
+    // reason for that, not "the rail does not answer".
     if (previous.wasmHash !== wasmHash) {
       throw new AgentPassError(
         "ConfigError",
@@ -237,6 +267,31 @@ async function main(): Promise<void> {
         },
       );
     }
+
+    let live: LiveRail;
+    try {
+      live = await probe(previous.contractId, admin.secret());
+    } catch (error) {
+      throw new AgentPassError(
+        "ConfigError",
+        "a rail is recorded but does not answer; re-run with --redeploy to replace it",
+        { cause: error, details: { contractId: previous.contractId } },
+      );
+    }
+    if (live.principal !== principal) {
+      throw new AgentPassError(
+        "ConfigError",
+        "the deployed rail answers to a different principal — its balance is not this wallet's to withdraw",
+        {
+          details: {
+            contractId: previous.contractId,
+            deployed: live.principal,
+            asked: principal,
+            fix: "pass the principal this rail was deployed with, or --redeploy to create a new one",
+          },
+        },
+      );
+    }
     if (live.owner !== agent.publicKey()) {
       throw new AgentPassError(
         "ConfigError",
@@ -246,7 +301,8 @@ async function main(): Promise<void> {
     }
 
     process.stdout.write(`  contract     ${previous.contractId}\n`);
-    process.stdout.write(`  verified     perTx ${live.perTx} · perDay ${live.perDay} · until ${live.validUntil}\n\n`);
+    process.stdout.write(`  verified     perTx ${live.perTx} · perDay ${live.perDay} · until ${live.validUntil}\n`);
+    process.stdout.write(`  verified     principal ${live.principal}\n\n`);
     process.stdout.write("  already deployed and matching the built wasm — nothing to redeploy\n\n");
 
     await writeEnvFile(
@@ -278,6 +334,8 @@ async function main(): Promise<void> {
         "--",
         "--owner",
         Buffer.from(StrKey.decodeEd25519PublicKey(agent.publicKey())).toString("hex"),
+        "--principal",
+        principal,
         "--asset",
         BAZAAR_USDC_ISSUER,
         "--per_tx",
@@ -297,9 +355,16 @@ async function main(): Promise<void> {
   }
 
   const live = await probe(contractId, admin.secret());
-  if (live.owner !== agent.publicKey() || live.asset !== BAZAAR_USDC_ISSUER) {
+  if (
+    live.owner !== agent.publicKey() ||
+    live.principal !== principal ||
+    live.asset !== BAZAAR_USDC_ISSUER
+  ) {
     throw new AgentPassError("ConfigError", "the deployed rail does not match what was asked for", {
-      details: { expected: { owner: agent.publicKey(), asset: BAZAAR_USDC_ISSUER }, actual: live },
+      details: {
+        expected: { owner: agent.publicKey(), principal, asset: BAZAAR_USDC_ISSUER },
+        actual: live,
+      },
     });
   }
 
@@ -307,6 +372,7 @@ async function main(): Promise<void> {
     contractId,
     wasmHash,
     owner: agent.publicKey(),
+    principal,
     asset: BAZAAR_USDC_ISSUER,
     perTx: live.perTx,
     perDay: live.perDay,
@@ -325,7 +391,8 @@ async function main(): Promise<void> {
   );
 
   process.stdout.write(`\n  contract     ${contractId}\n`);
-  process.stdout.write(`  verified     perTx ${live.perTx} · perDay ${live.perDay} · until ${live.validUntil}\n\n`);
+  process.stdout.write(`  verified     perTx ${live.perTx} · perDay ${live.perDay} · until ${live.validUntil}\n`);
+  process.stdout.write(`  verified     principal ${live.principal}\n\n`);
   process.stdout.write("  wrote deployments/testnet.json and .env.local\n\n");
 
   await ensureFunded(contractId, agent);

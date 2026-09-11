@@ -7,7 +7,8 @@ use rand::rngs::OsRng;
 use soroban_sdk::{
     auth::{Context, ContractContext},
     symbol_short,
-    testutils::{Address as _, Ledger as _},
+    testutils::{Address as _, Ledger as _, MockAuth, MockAuthInvoke},
+    token::{StellarAssetClient, TokenClient},
     vec, Address, BytesN, Env, IntoVal, InvokeError, Val, Vec,
 };
 
@@ -31,6 +32,10 @@ struct Fixture {
     contract_id: Address,
     owner_key: SigningKey,
     owner: BytesN<32>,
+    /// The wallet with the last word over the rail — `withdraw`/`set_owner`.
+    principal: Address,
+    /// A real Stellar Asset Contract, not a bare `Address`: `withdraw` moves
+    /// actual balances, so the asset has to be something that can hold one.
     asset: Address,
     per_tx: i128,
     per_day: i128,
@@ -47,12 +52,23 @@ impl Fixture {
         env.ledger().set_timestamp(NOW);
         let owner_key = generate_key();
         let owner = public_key_bytes(&env, &owner_key);
-        let asset = Address::generate(&env);
+        let principal = Address::generate(&env);
+        // `soroban-sdk`'s own SEP-41 double, so `withdraw` has a real balance
+        // to move rather than a stand-in address nothing can hold value at.
+        let token_admin = Address::generate(&env);
+        let asset = env.register_stellar_asset_contract_v2(token_admin).address();
         let valid_until = NOW + 30 * DAY;
 
         let contract_id = env.register(
             PolicyRail,
-            (owner.clone(), asset.clone(), per_tx, per_day, valid_until),
+            (
+                owner.clone(),
+                principal.clone(),
+                asset.clone(),
+                per_tx,
+                per_day,
+                valid_until,
+            ),
         );
 
         Fixture {
@@ -60,6 +76,7 @@ impl Fixture {
             contract_id,
             owner_key,
             owner,
+            principal,
             asset,
             per_tx,
             per_day,
@@ -67,8 +84,67 @@ impl Fixture {
         }
     }
 
+    /// Mints `amount` of the rail's asset into the rail itself — what a
+    /// principal funding their own rail leaves behind. The token admin's
+    /// authorisation is mocked and then cleared, so nothing a test does
+    /// afterwards runs with auth mocked on.
+    fn fund(&self, amount: i128) {
+        self.env.mock_all_auths();
+        StellarAssetClient::new(&self.env, &self.asset).mint(&self.contract_id, &amount);
+        self.env.set_auths(&[]);
+    }
+
+    fn balance_of(&self, who: &Address) -> i128 {
+        TokenClient::new(&self.env, &self.asset).balance(who)
+    }
+
+    fn client(&self) -> super::PolicyRailClient<'_> {
+        super::PolicyRailClient::new(&self.env, &self.contract_id)
+    }
+
+    /// `withdraw`, authorised by the principal — the only signer it accepts.
+    fn withdraw_as_principal(
+        &self,
+        to: &Address,
+        amount: i128,
+    ) -> Result<Result<(), soroban_sdk::ConversionError>, Result<Error, InvokeError>> {
+        self.client()
+            .mock_auths(&[MockAuth {
+                address: &self.principal,
+                invoke: &MockAuthInvoke {
+                    contract: &self.contract_id,
+                    fn_name: "withdraw",
+                    args: (to.clone(), amount).into_val(&self.env),
+                    sub_invokes: &[],
+                },
+            }])
+            .try_withdraw(to, &amount)
+    }
+
+    /// `set_owner`, authorised by the principal.
+    fn set_owner_as_principal(
+        &self,
+        new_owner: &BytesN<32>,
+    ) -> Result<Result<(), soroban_sdk::ConversionError>, Result<Error, InvokeError>> {
+        self.client()
+            .mock_auths(&[MockAuth {
+                address: &self.principal,
+                invoke: &MockAuthInvoke {
+                    contract: &self.contract_id,
+                    fn_name: "set_owner",
+                    args: (new_owner.clone(),).into_val(&self.env),
+                    sub_invokes: &[],
+                },
+            }])
+            .try_set_owner(new_owner)
+    }
+
     fn sign(&self, payload: &BytesN<32>) -> BytesN<64> {
-        let signature = self.owner_key.sign(&payload.to_array());
+        self.sign_with(&self.owner_key, payload)
+    }
+
+    fn sign_with(&self, key: &SigningKey, payload: &BytesN<32>) -> BytesN<64> {
+        let signature = key.sign(&payload.to_array());
         BytesN::from_array(&self.env, &signature.to_bytes())
     }
 
@@ -127,8 +203,22 @@ impl Fixture {
     }
 
     fn authorise(&self, to: &Address, amount: i128, seed: u8) -> Result<(), Result<Error, InvokeError>> {
+        self.authorise_with(&self.owner_key, to, amount, seed)
+    }
+
+    /// The same authorisation, signed by an arbitrary key — what `set_owner`
+    /// changes the answer to.
+    fn authorise_with(
+        &self,
+        key: &SigningKey,
+        to: &Address,
+        amount: i128,
+        seed: u8,
+    ) -> Result<(), Result<Error, InvokeError>> {
         let payload = payload_bytes(&self.env, seed);
-        let sig_val = self.signature_val(&payload);
+        let public_key = public_key_bytes(&self.env, key);
+        let signature = self.sign_with(key, &payload);
+        let sig_val = self.signature_val_from(&public_key, &signature);
         self.check_auth(&payload, sig_val, self.transfer_context(to, amount))
     }
 
@@ -148,6 +238,7 @@ fn reports_the_configuration_it_was_deployed_with() {
     assert_eq!(STORAGE_SCHEMA_VERSION, 1);
     assert_eq!(client.schema_version(), STORAGE_SCHEMA_VERSION);
     assert_eq!(client.owner(), f.owner);
+    assert_eq!(client.principal(), f.principal);
     assert_eq!(client.asset(), f.asset);
     assert_eq!(client.per_tx(), f.per_tx);
     assert_eq!(client.per_day(), f.per_day);
@@ -159,10 +250,14 @@ fn a_zero_per_tx_limit_is_refused_at_deploy_time() {
     let env = Env::default();
     env.ledger().set_timestamp(NOW);
     let owner = public_key_bytes(&env, &generate_key());
+    let principal = Address::generate(&env);
     let asset = Address::generate(&env);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(PolicyRail, (owner, asset, 0i128, 100i128, NOW + DAY))
+        env.register(
+            PolicyRail,
+            (owner, principal, asset, 0i128, 100i128, NOW + DAY),
+        )
     }));
 
     assert!(result.is_err(), "a zero per_tx must not deploy");
@@ -173,10 +268,14 @@ fn a_valid_until_that_is_already_in_the_past_is_refused_at_deploy_time() {
     let env = Env::default();
     env.ledger().set_timestamp(NOW);
     let owner = public_key_bytes(&env, &generate_key());
+    let principal = Address::generate(&env);
     let asset = Address::generate(&env);
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(PolicyRail, (owner, asset, 100i128, 100i128, NOW - 1))
+        env.register(
+            PolicyRail,
+            (owner, principal, asset, 100i128, 100i128, NOW - 1),
+        )
     }));
 
     assert!(result.is_err(), "an already-expired valid_until must not deploy");
@@ -455,4 +554,210 @@ fn a_tampered_signature_from_the_real_owner_key_is_refused_by_the_host_itself() 
     let result = f.check_auth(&payload, sig_val, f.transfer_context(&to, 10_0000000));
 
     assert_eq!(result, Err(Err(InvokeError::Abort)));
+}
+
+// --------------------------------------------- withdraw, gated by the principal
+
+#[test]
+fn the_principal_can_withdraw_the_rail_s_balance() {
+    // The whole point of `G9`: money that reached the rail can leave it on
+    // the principal's say-so alone — the `owner` key is not involved, and is
+    // not consulted.
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    f.fund(1_000_0000000);
+
+    let result = f.withdraw_as_principal(&destination, 400_0000000);
+
+    assert_eq!(result, Ok(Ok(())));
+    assert_eq!(f.balance_of(&destination), 400_0000000);
+    assert_eq!(f.balance_of(&f.contract_id), 600_0000000);
+}
+
+#[test]
+fn a_withdrawal_is_not_bound_by_per_tx_or_per_day() {
+    // Those two limits constrain what the *delegated key* may spend. Taking
+    // your own money back is not spending, and a principal whose balance
+    // exceeded a day's allowance could otherwise never fully recover it.
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    let far_over_the_limits = f.per_day * 10;
+    f.fund(far_over_the_limits);
+
+    let result = f.withdraw_as_principal(&destination, far_over_the_limits);
+
+    assert_eq!(result, Ok(Ok(())));
+    assert_eq!(f.balance_of(&destination), far_over_the_limits);
+    assert_eq!(f.spent_today(), 0, "a withdrawal is not a spend against the day's budget");
+}
+
+#[test]
+fn a_withdrawal_still_works_after_valid_until_has_passed() {
+    // Refusing here would recreate `G9` on a timer: an expired rail is
+    // exactly the one whose balance most needs a way out.
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    f.fund(100_0000000);
+    f.env.ledger().set_timestamp(f.valid_until + 1);
+
+    // The delegated key can no longer spend a stroop …
+    assert_eq!(f.authorise(&destination, 1, 1), Err(Ok(Error::Expired)));
+    // … and the principal can still take everything back.
+    assert_eq!(f.withdraw_as_principal(&destination, 100_0000000), Ok(Ok(())));
+    assert_eq!(f.balance_of(&destination), 100_0000000);
+}
+
+#[test]
+fn a_withdrawal_without_the_principal_s_authorisation_is_refused() {
+    // No mocked auth at all: `require_auth()` fails and the host aborts the
+    // whole invocation before anything moves. Not one of `Error`'s own
+    // variants — an auth failure never reaches contract code — so it surfaces
+    // as `InvokeError::Abort`, exactly like the tampered-signature case above.
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    f.fund(100_0000000);
+
+    let result = f.client().try_withdraw(&destination, &10_0000000);
+
+    assert_eq!(result, Err(Err(InvokeError::Abort)));
+    assert_eq!(f.balance_of(&destination), 0);
+    assert_eq!(f.balance_of(&f.contract_id), 100_0000000);
+}
+
+#[test]
+fn a_withdrawal_authorised_by_someone_other_than_the_principal_is_refused() {
+    // A genuine authorisation — from the wrong address. Holding the agent's
+    // delegated key, or any key at all, is not holding the principal's wallet.
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    let stranger = Address::generate(&f.env);
+    f.fund(100_0000000);
+
+    let result = f
+        .client()
+        .mock_auths(&[MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &f.contract_id,
+                fn_name: "withdraw",
+                args: (destination.clone(), 10_0000000i128).into_val(&f.env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_withdraw(&destination, &10_0000000);
+
+    assert_eq!(result, Err(Err(InvokeError::Abort)), "only the principal may withdraw");
+    assert_eq!(f.balance_of(&f.contract_id), 100_0000000);
+}
+
+#[test]
+fn a_withdrawal_of_zero_or_less_is_refused_by_the_contract_itself() {
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    f.fund(100_0000000);
+
+    assert_eq!(
+        f.withdraw_as_principal(&destination, 0),
+        Err(Ok(Error::InvalidWithdrawAmount))
+    );
+    assert_eq!(
+        f.withdraw_as_principal(&destination, -1),
+        Err(Ok(Error::InvalidWithdrawAmount))
+    );
+    assert_eq!(f.balance_of(&f.contract_id), 100_0000000);
+}
+
+// -------------------------------------------- set_owner, gated by the principal
+
+#[test]
+fn the_principal_can_rotate_the_spending_key() {
+    // Not just "the reader reports a different value": the new key actually
+    // authorises a payment and the old one actually stops being able to.
+    let f = Fixture::setup();
+    let destination = Address::generate(&f.env);
+    let replacement_key = generate_key();
+    let replacement = public_key_bytes(&f.env, &replacement_key);
+    assert_eq!(f.authorise(&destination, 10_0000000, 1), Ok(()));
+
+    let result = f.set_owner_as_principal(&replacement);
+
+    assert_eq!(result, Ok(Ok(())));
+    assert_eq!(f.client().owner(), replacement);
+    assert_eq!(
+        f.authorise_with(&replacement_key, &destination, 10_0000000, 2),
+        Ok(()),
+        "the new key must be able to authorise"
+    );
+    assert_eq!(
+        f.authorise(&destination, 10_0000000, 3),
+        Err(Ok(Error::UnknownSigner)),
+        "the old key must no longer be able to authorise"
+    );
+}
+
+#[test]
+fn rotating_the_spending_key_leaves_the_rest_of_the_configuration_alone() {
+    let f = Fixture::setup();
+    let replacement = public_key_bytes(&f.env, &generate_key());
+
+    assert_eq!(f.set_owner_as_principal(&replacement), Ok(Ok(())));
+
+    let client = f.client();
+    assert_eq!(client.principal(), f.principal);
+    assert_eq!(client.asset(), f.asset);
+    assert_eq!(client.per_tx(), f.per_tx);
+    assert_eq!(client.per_day(), f.per_day);
+    assert_eq!(client.valid_until(), f.valid_until);
+}
+
+#[test]
+fn rotating_the_spending_key_works_after_valid_until_has_passed() {
+    let f = Fixture::setup();
+    let replacement = public_key_bytes(&f.env, &generate_key());
+    f.env.ledger().set_timestamp(f.valid_until + 1);
+
+    assert_eq!(f.set_owner_as_principal(&replacement), Ok(Ok(())));
+    assert_eq!(f.client().owner(), replacement);
+}
+
+#[test]
+fn rotating_the_spending_key_without_the_principal_s_authorisation_is_refused() {
+    let f = Fixture::setup();
+    let replacement = public_key_bytes(&f.env, &generate_key());
+
+    let result = f.client().try_set_owner(&replacement);
+
+    assert_eq!(result, Err(Err(InvokeError::Abort)));
+    assert_eq!(f.client().owner(), f.owner, "the owner must be untouched");
+}
+
+#[test]
+fn the_owner_cannot_rotate_itself_by_authorising_as_someone_else() {
+    // The agent's own address, authorising `set_owner` — refused. The two
+    // authorities are separate on purpose: whoever spends day to day must not
+    // be able to lock the principal out by pointing `owner` at a key of their
+    // own choosing.
+    let f = Fixture::setup();
+    let the_agent = Address::generate(&f.env);
+    let replacement = public_key_bytes(&f.env, &generate_key());
+
+    let result = f
+        .client()
+        .mock_auths(&[MockAuth {
+            address: &the_agent,
+            invoke: &MockAuthInvoke {
+                contract: &f.contract_id,
+                fn_name: "set_owner",
+                args: (replacement.clone(),).into_val(&f.env),
+                sub_invokes: &[],
+            },
+        }])
+        .try_set_owner(&replacement);
+
+    assert_eq!(
+        result,
+        Err(Err(InvokeError::Abort)),
+        "only the principal may rotate the spending key"
+    );
+    assert_eq!(f.client().owner(), f.owner);
 }

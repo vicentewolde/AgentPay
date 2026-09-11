@@ -14,18 +14,22 @@
 //! transfer, with no window between checking and recording.
 //!
 //! **What this deliberately still is not.** It is not the Mandate. It knows
-//! nothing about a principal, a venue allowlist, or an expiry window signed
-//! by anyone but whoever deployed it. It enforces two numbers against one
-//! asset, the same two numbers `checkDailyLimit` (T18) and `checkScope`'s
-//! `perTx` (T12) already enforce off-chain — proving the on-chain path is
-//! real, not replacing the Mandate's richer, off-chain-verified consent.
-//! `valid_until` mirrors `M-7`'s "a mandate always has an end date," not the
-//! Mandate's full validity-window semantics.
+//! nothing about a venue allowlist, or an expiry window signed by anyone but
+//! whoever deployed it. It enforces two numbers against one asset, the same
+//! two numbers `checkDailyLimit` (T18) and `checkScope`'s `perTx` (T12)
+//! already enforce off-chain — proving the on-chain path is real, not
+//! replacing the Mandate's richer, off-chain-verified consent. `valid_until`
+//! mirrors `M-7`'s "a mandate always has an end date," not the Mandate's full
+//! validity-window semantics. It does know one thing about a principal, and
+//! only one: which wallet owns the money in it (T57, `C-61`) — enough to hand
+//! the balance back and to rotate the spending key, nothing more.
 use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
     contract, contracterror, contractimpl, contracttype,
     crypto::Hash,
-    symbol_short, Address, Bytes, BytesN, Env, Symbol, TryIntoVal, Vec,
+    symbol_short,
+    token::TokenClient,
+    Address, Bytes, BytesN, Env, Symbol, TryIntoVal, Vec,
 };
 
 /// Bumped whenever the persistent storage layout changes incompatibly.
@@ -80,6 +84,8 @@ pub enum Error {
     PerTxExceeded = 7,
     /// Today's cumulative spend, plus this transfer, would exceed `per_day`.
     PerDayExceeded = 8,
+    /// `withdraw` was asked to move zero or a negative amount.
+    InvalidWithdrawAmount = 9,
 }
 
 /// One signer's authorization over the payload the host asked to be checked.
@@ -107,6 +113,15 @@ pub struct Signature {
 #[derive(Clone)]
 pub struct Config {
     pub owner: BytesN<32>,
+    /// The wallet that funds this rail and has the last word over it. Unlike
+    /// `owner` — a raw Ed25519 key checked by this contract's own
+    /// `__check_auth` — this is an ordinary Stellar `Address`, authorised by
+    /// Soroban's own `require_auth()`. Two separate authorities on purpose:
+    /// the agent's delegated key spends day to day, the principal's wallet
+    /// takes the money back or rotates that key, and neither can do the
+    /// other's job. See `docs/fase-6-agentguard-comercializacion/DECISIONES.md`
+    /// → `C-61`.
+    pub principal: Address,
     pub asset: Address,
     pub per_tx: i128,
     pub per_day: i128,
@@ -132,6 +147,14 @@ impl PolicyRail {
     /// over exactly these 32 bytes; a G-account's `Address` isn't one, and
     /// nothing here needs it to be.
     ///
+    /// `principal` is the other half of that split, and an ordinary Stellar
+    /// `Address` rather than a raw key: the wallet that funds this rail, and
+    /// the only one that can take the balance back out (`withdraw`) or point
+    /// `owner` at a different spending key (`set_owner`). Fixed once here,
+    /// like everything else in `Config` — a rail that could be re-pointed at
+    /// a new principal after deploy would hand whoever could do that the
+    /// funds.
+    ///
     /// `asset` pins this rail to a single SEP-41 token contract — the same
     /// simplification `M-14` already made off-chain (comparing against one
     /// asset, not a list). Supporting more than one asset would need a set
@@ -140,6 +163,7 @@ impl PolicyRail {
     pub fn __constructor(
         env: Env,
         owner: BytesN<32>,
+        principal: Address,
         asset: Address,
         per_tx: i128,
         per_day: i128,
@@ -156,6 +180,7 @@ impl PolicyRail {
             &DataKey::Config,
             &Config {
                 owner,
+                principal,
                 asset,
                 per_tx,
                 per_day,
@@ -183,6 +208,10 @@ impl PolicyRail {
         Ok(Self::config(&env)?.owner)
     }
 
+    pub fn principal(env: Env) -> Result<Address, Error> {
+        Ok(Self::config(&env)?.principal)
+    }
+
     pub fn asset(env: Env) -> Result<Address, Error> {
         Ok(Self::config(&env)?.asset)
     }
@@ -207,6 +236,82 @@ impl PolicyRail {
             .temporary()
             .get(&DataKey::SpentOn(day))
             .unwrap_or(0)
+    }
+
+    /// Moves `amount` of this rail's asset out to `to`, on the principal's
+    /// say-so. The escape hatch `G9` said was missing: before this existed,
+    /// funds that reached this contract could only ever leave through a
+    /// payment the `owner` key signed — so a customer who funded a rail
+    /// AgentPay held the `owner` key for could not get their own money back
+    /// without AgentPay's cooperation.
+    ///
+    /// Gated by `config.principal.require_auth()` — Soroban's own mechanism
+    /// for an ordinary `Address`, the same one every wallet signature in this
+    /// project already goes through. Deliberately *not* `owner`/`__check_auth`:
+    /// the whole point is that the key the agent holds cannot reach this.
+    ///
+    /// The `transfer` below does not re-enter `__check_auth`. `__check_auth`
+    /// runs when something *outside* this contract asks this contract's
+    /// address to authorise a call — the x402 payment path. Here this contract
+    /// is the invoker, and Soroban authorises a `from` equal to
+    /// `env.current_contract_address()` implicitly, as the caller of its own
+    /// sub-invocation. That is also why `per_tx`/`per_day` do not apply: they
+    /// are limits on what the *delegated key* may spend, not on the owner of
+    /// the money taking it back.
+    ///
+    /// `valid_until` does not apply either, and that is the point rather than
+    /// an oversight. A rail whose mandate has expired is exactly the rail
+    /// whose balance most needs a way out; refusing here would recreate `G9`
+    /// on a timer.
+    pub fn withdraw(env: Env, to: Address, amount: i128) -> Result<(), Error> {
+        let config = Self::config(&env)?;
+        config.principal.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidWithdrawAmount);
+        }
+
+        TokenClient::new(&env, &config.asset).transfer(
+            &env.current_contract_address(),
+            &to,
+            &amount,
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+        Ok(())
+    }
+
+    /// Points `owner` — the key `__check_auth` accepts — at a different
+    /// Ed25519 key, on the principal's say-so. The other half of `G9`: a
+    /// delegated spending key that leaks, or an agent operator the principal
+    /// no longer wants spending, can be cut off without moving the funds or
+    /// redeploying the rail.
+    ///
+    /// No shape check on `new_owner` beyond being 32 bytes, for the same
+    /// reason the constructor does none: any 32-byte value is a syntactically
+    /// valid Ed25519 public key, and there is nothing here that could tell a
+    /// typo from a key whose secret lives somewhere this contract cannot see.
+    /// Setting an owner nobody can sign for stops payments, which is a strictly
+    /// safer failure than the alternative — and `withdraw` still works.
+    ///
+    /// Rewrites the whole `Config`: it is one instance entry, so there is no
+    /// cheaper partial write to make.
+    pub fn set_owner(env: Env, new_owner: BytesN<32>) -> Result<(), Error> {
+        let config = Self::config(&env)?;
+        config.principal.require_auth();
+
+        env.storage().instance().set(
+            &DataKey::Config,
+            &Config {
+                owner: new_owner,
+                ..config
+            },
+        );
+        env.storage()
+            .instance()
+            .extend_ttl(INSTANCE_TTL_THRESHOLD, INSTANCE_TTL_EXTEND_TO);
+        Ok(())
     }
 }
 

@@ -533,12 +533,12 @@ de implementarse.
 | G6 | Camino de comercio específico | `BAZAAR_VENUE_CONTRACT_ID` y `BAZAAR_USDC_ISSUER` fijos; `mapAsset` acepta solo `"USDC"`; `PAYABLE_PRODUCT_ID = "swap-risk-quote"` y `ROUTE_PARAMS` fijos en `server.ts` | Un comercio nuevo exige cambiar código | — | Piloto | F7 |
 | G7 | Sesión no durable: cada inicio emite credencial y mandato nuevos | `sessions` es un `Map` en memoria; `startSession` emite y ancla en cada llamada | Viola dos requisitos del objetivo: renovar no debe crear agente, una sesión no debe crear identidad. Además gasta transacciones on-chain de más | G2 | Piloto ya | F2 → F3 |
 | G8 | Historial y revocación exigen sesión viva | `/api/session/vault` y `/api/session/revoke` requieren `getSession(req)` | Vinny no puede ver ni revocar desde otro dispositivo tras un redeploy. Es la mitad del argumento de "revocable desde afuera" | G7 | Piloto ya | F3 |
-| G9 | 🔒 `policy_rail` sin retiro ni rotación de owner | `contracts/policy-rail/src/lib.rs`: solo `__check_auth` sobre `transfer`; no hay `withdraw`, ni `set_owner`, ni `revoke` | Con fondos de un tercero, el principal no puede recuperarlos. Bloqueante duro para mainnet | 4.1 | Producción | F6 / F10 |
+| G9 | ✅ **Resuelto 2026-09-11 (T57).** `policy_rail` sin retiro ni rotación de owner | Ya no: `Config` tiene `principal: Address`, y `withdraw`/`set_owner` lo exigen vía `require_auth()`. `__check_auth` sin tocar. Ver `DECISIONES.md` → `C-61` y `evidencia/T57.md` | Resuelto para todo rail desplegado desde T57. El rail compartido del piloto sigue con el constructor viejo hasta que se decida migrarlo | 4.1 | Producción | F6 (cerrado) / F10 |
 | G10 | 🔒 Alta automática de emisores con la clave admin | `ensureWalletIsRegisteredIssuer` (`C-15`) | Escritura on-chain sin límite, pagada por la cuenta admin, disparable por cualquiera | D3 | Piloto | F5 |
 | G11 | Postgres sin verificación de CA | `ssl: { rejectUnauthorized: false }` (`C-12`) | Cifrado sí, autenticación del servidor no | — | Producción | F8 |
 | G12 | Estado de wallet-connect en memoria | `walletChallenges` y `pendingWalletSessions` son `ExpiringStore` en proceso | Con más de una instancia, conectar la wallet falla de forma intermitente | G4 | Producción | F8 |
 | G13 | Sin PII pero sin contrato que lo garantice | No existe ningún campo `external_ref` todavía | Un partner mandará un email en cuanto pueda, salvo que la API lo rechace | G5 | Piloto | F2 |
-| G14 | Mainnet, fiat, tarjetas, custodia | Sin alcance, por `CLAUDE.md` y `P-6` | — | 4.1, G9 | — | F10, solo evaluación |
+| G14 | Mainnet, fiat, tarjetas, custodia | Sin alcance, por `CLAUDE.md` y `P-6` | — | 4.1, G9 (resuelto) | — | F10, solo evaluación |
 
 ---
 
@@ -962,11 +962,11 @@ Claude Code congele el contrato.
 - **Alcance.** Depende enteramente de 4.1. Si es la opción 3: un
   `policy_rail` por tenant, con su ciclo de vida y su flujo de fondeo.
 - **Fuera de alcance hasta tu aprobación explícita.** 🔴 Cualquier cambio a
-  `contracts/policy-rail` — incluido el retiro por parte del principal (G9),
-  que considero precondición de fondos reales pero **no propongo construir
-  todavía**.
-- **Decisiones previas.** 4.1 resuelta; G9 aprobada o explícitamente
-  diferida.
+  `contracts/policy-rail`. **G9 fue aprobado explícitamente por el usuario y
+  construido el 2026-09-11 (T57)** — `withdraw` y `set_owner` gateados por
+  `principal.require_auth()`, ver `DECISIONES.md` → `C-61`. Cualquier otro
+  cambio al contrato sigue necesitando aprobación aparte.
+- **Decisiones previas.** 4.1 resuelta; G9 ✅ resuelto (T57).
 - **Entregables.** Despliegue por tenant, fondeo, monitoreo de saldo.
 - **Evidencia.** Un pago por tenant, con el rechazo del segundo por
   `per_day` visible en la respuesta del contrato.
@@ -990,11 +990,13 @@ Claude Code congele el contrato.
    una revisión de seguridad en sí misma: auditoría propia del cambio a
    `contracts/policy-rail` antes de desplegar nada, y confirmación explícita
    del usuario sobre `G9` (retiro por parte del principal) antes de fondear
-   con montos que no sean puramente simbólicos.
+   con montos que no sean puramente simbólicos. `G9` recibió esa
+   confirmación y se construyó en T57.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| — | — | — | — | — | Sin tickets de Codex — 🔴 toda la fase se queda en Claude Code, incluido el scaffolding |
+| T57 | Claude | Aprobación explícita del usuario sobre `G9` | 🔴 Alto — cambia un contrato Soroban y decide sobre fondos de un tercero | `contracts/policy-rail/**`, `scripts/deploy-policy-rail.ts`, `scripts/lib/deployment.ts` | ✅ cerrado — `principal` separado de `owner`, `withdraw`/`set_owner` con `require_auth()`, `__check_auth` intacto; 11 tests nuevos (21 → 32), cuatro mutaciones dirigidas que matan tests, y medición en testnet real donde un firmante que no es el principal es rechazado por la red con `require_auth` incluso forzando la transacción hasta el ledger (`C-61`, `evidencia/T57.md`) |
+| resto | Claude | — | — | — | Sin tickets de Codex — 🔴 el resto de la fase se queda en Claude Code, incluido el scaffolding |
 
 ---
 

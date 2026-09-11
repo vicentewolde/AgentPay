@@ -1,7 +1,7 @@
 {
   "generators": {
     "address": 5,
-    "nonce": 0,
+    "nonce": 1,
     "mux_id": 0
   },
   "auth": [
@@ -25,6 +25,8 @@
         }
       ]
     ],
+    [],
+    [],
     [],
     []
   ],
@@ -117,7 +119,7 @@
                               "symbol": "owner"
                             },
                             "val": {
-                              "bytes": "6ff4e6d5dbd9e5962f86e35887f3cbbc85122efa24102437fb42afdf56e0b507"
+                              "bytes": "64bb25809e1da09fa6e789abf8dc89762c564be868a0df945612f31bf8448639"
                             }
                           },
                           {
@@ -163,6 +165,29 @@
           "ext": "v0"
         },
         "live_until": 1555200
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+              "key": "ledger_key_contract_instance",
+              "durability": "persistent",
+              "val": {
+                "contract_instance": {
+                  "executable": {
+                    "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                  },
+                  "storage": null
+                }
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 4095
       },
       {
         "entry": {

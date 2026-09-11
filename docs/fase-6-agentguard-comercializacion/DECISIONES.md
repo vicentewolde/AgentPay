@@ -1699,3 +1699,79 @@ compatibilidad; `bazaar.test.ts` sin cambios, 16/16 en verde. Código nuevo:
 `InvalidVenueRegistry` en `packages/core/src/errors.ts`.
 
 ---
+
+### C-61 · `policy_rail` gana un `principal` distinto del `owner`: la wallet retira y rota, la llave delegada solo gasta · `Vigente`
+**Fecha:** 2026-09-11 (T57)
+
+`G9` decía que `policy_rail` no tenía ninguna forma de sacar fondos ni de
+cambiar quién autoriza pagos. Solo existían lectores de configuración y
+`__check_auth`, que aprueba un pago con la firma de un único `owner` — en
+el piloto, una llave de AgentPay. Si un cliente real fondeaba ese contrato,
+no podía recuperar su plata: la única salida era un pago firmado por una
+llave que no es suya. Bloqueante duro para F6 (cuenta pagadora por tenant)
+y para cualquier conversación de mainnet.
+
+**La decisión: dos autoridades separadas, no una sola con más permisos.**
+`Config` gana un campo, `principal: Address` — la wallet del cliente,
+fijada una sola vez en el constructor, igual que `owner`/`asset`/`per_tx`/
+`per_day`/`valid_until`. Quién autoriza el gasto día a día (la llave
+delegada del agente, `owner`, vía el `__check_auth` custom) queda separado
+de quién tiene la última palabra sobre el contrato (la wallet del cliente,
+`principal`, vía `Address::require_auth()` — el mecanismo nativo de
+Soroban, el mismo que ya usa cada firma de wallet en este proyecto).
+Consecuencia buscada: el agente nunca necesita ni ve la llave de la
+wallet, y el cliente puede retirar su saldo o cortar la llave de gasto en
+cualquier momento sin que AgentPay coopere.
+
+**Dos funciones nuevas, y `__check_auth` no se tocó.** `withdraw(to,
+amount)` exige `principal.require_auth()`, rechaza `amount <= 0` con
+`InvalidWithdrawAmount` (código `9`, nuevo) e invoca `transfer` sobre el
+asset del rail. Ese `transfer` **no** reentra a `__check_auth`: cuando el
+propio contrato inicia la llamada, Soroban autoriza implícitamente un
+`from == env.current_contract_address()`; `__check_auth` solo se dispara
+cuando una transacción *externa* —el pago x402— le pide a este contrato que
+autorice algo desde afuera. `set_owner(new_owner)` exige lo mismo y
+reescribe el `Config` completo (es una sola entrada de storage).
+
+**Ninguna de las dos respeta `valid_until`, a propósito.** Un rail vencido
+es exactamente el que más necesita una salida; bloquear ahí sería recrear
+`G9` con un temporizador en vez de para siempre. Por la misma razón
+`withdraw` tampoco pasa por `per_tx`/`per_day`: esos límites acotan lo que
+la *llave delegada* puede gastar, no lo que el dueño del dinero puede
+recuperar. Verificado en la red real con un retiro de quince veces el
+`per_tx` del rail (`evidencia/T57.md` §4.1).
+
+**Sin chequeo de forma sobre `new_owner`.** Cualquier valor de 32 bytes es
+una clave Ed25519 sintácticamente válida, y no hay nada acá que pueda
+distinguir un error de tipeo de una clave cuyo secreto vive donde el
+contrato no ve. Poner un owner que nadie puede firmar detiene los pagos,
+que es un fallo estrictamente más seguro que el opuesto — y `withdraw`
+sigue funcionando.
+
+**Alternativa descartada:** hacer que `withdraw` y `set_owner` pasaran por
+el mismo `__check_auth`/`owner` que ya existe, en vez de agregar un campo.
+Descartada porque es justamente el problema que `G9` describe: quien
+autoriza el gasto pasa a poder vaciar la cuenta, y el cliente que puso los
+fondos no puede hacer nada sin esa llave. La separación es el punto, no un
+detalle de implementación. **Segunda alternativa descartada:** un
+`principal` mutable (una función `set_principal`). Descartada porque quien
+pudiera llamarla se quedaría con los fondos; fijarlo en el constructor
+significa que un rail mal apuntado se reemplaza desplegando otro, que es
+barato, en vez de dejar abierta una puerta que no lo es.
+
+**El rail compartido del piloto no se redesplegó.** Sigue con el
+constructor viejo —sin `principal`, sin salida de fondos— hasta que se
+decida migrarlo, que es una decisión aparte. Por eso `principal` es
+`nullable` en `policyRailDeploymentSchema` (`scripts/lib/deployment.ts`):
+es el único rail registrado que no tiene uno on-chain, y romper su lectura
+habría roto todos los scripts que tocan `deployments/testnet.json` por un
+rail que este hito no estaba cambiando.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (fila `G9` marcada
+resuelta; F6 gana su primer ticket real), `BITACORA.md`, `evidencia/T57.md`.
+Archivos tocados: `contracts/policy-rail/src/lib.rs`,
+`contracts/policy-rail/src/test.rs` (+11 tests, 21 → 32),
+`scripts/deploy-policy-rail.ts` (`--principal <G...>`, requerido y sin
+default), `scripts/lib/deployment.ts` y su test (+2).
+
+---

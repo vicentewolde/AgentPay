@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T53 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T57 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -35,7 +35,13 @@ comercio x402 nuevo ya no significa escribir un archivo entero shaped
 como el viejo `bazaar.ts` — es una fila en `venues.json` (T53), validada
 y fallando cerrado ante un asset que ese venue no nombra, igual que el
 `mapAsset` hardcodeado de antes pero ahora reutilizable por cualquier
-venue registrado.
+venue registrado. Y se destrabó F6: hasta T57, la plata que
+entraba a un `policy_rail` solo podía salir con la firma de la llave de
+AgentPay, así que un cliente que lo fondeara no podía recuperarla —
+`G9`, el bloqueante duro. Ahora el contrato distingue dos autoridades:
+la llave delegada del agente sigue gastando dentro de sus límites, y la
+wallet del cliente puede retirar todo o cambiar esa llave cuando
+quiera, sin que AgentPay coopere (`C-61`).
 
 ### Progreso
 
@@ -59,6 +65,7 @@ venue registrado.
 | T52 | `consent.html`: la página que un principal realmente ve — muestra el grant completo, conecta wallet, firma el Mandato — sobre los endpoints que T51 dejó estables | ✅ cerrado 2026-09-11 (Codex, PR #13) |
 | T50 | `examples/cloudops-partner-integration.md`: la guía con `curl` exactos para que un partner externo integre `/v1` sin tocar el repo — cierra el "listo cuando" de F5 | ✅ cerrado 2026-09-11 (Codex, PR #15) |
 | T53 | Registro de venues/assets (`registry.ts` + `venues.json`) y adaptador x402 genérico (`x402-catalog.ts`) — reemplaza el `mapAsset` hardcodeado de `bazaar.ts`, que queda como capa de compatibilidad | ✅ cerrado 2026-09-11 |
+| T57 | `withdraw` y `set_owner` en `policy_rail`, gateados por la wallet del principal — resuelve `G9`, el bloqueante duro de F6 | ✅ cerrado 2026-09-11 |
 
 ---
 
@@ -1333,3 +1340,79 @@ listos para delegar — la tarea de esta sesión sigue con la preparación
 de esos tres prompts. Sigue pendiente de antes: el rename real a
 AgentPey (`P-11`), desplegar a Render, G10, y F6 (bloqueada por `G9`,
 sin fecha).
+
+---
+
+## T57 · `withdraw` y `set_owner` en `policy_rail` — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** Hasta hoy, el contrato que
+guarda la plata de un pago tenía una sola llave con poder sobre ella: la
+del agente. Eso alcanza mientras el dinero es nuestro, pero rompe apenas
+un cliente pone el suyo — la única forma de sacar plata del contrato era
+un pago firmado por una llave que no es del cliente, así que si nosotros
+no colaborábamos, no la recuperaba nunca. Ese era `G9`, el problema que
+mantenía bloqueada toda la fase de "cada cliente paga desde su propia
+cuenta".
+
+Ahora el contrato distingue **dos** figuras, y ninguna puede hacer el
+trabajo de la otra:
+
+- **La llave del agente** (lo que antes era la única) sigue autorizando
+  las compras del día a día, dentro de sus límites por transacción y por
+  día. No cambió nada de eso.
+- **La wallet del cliente** —nueva, se fija al desplegar el contrato y no
+  se puede cambiar después— puede hacer dos cosas que el agente no puede:
+  **sacar el saldo** cuando quiera, y **cambiar cuál es la llave que
+  gasta**, por ejemplo si esa llave se filtró o el cliente ya no quiere
+  que ese agente gaste.
+
+Dos detalles pensados a propósito, no olvidados:
+
+1. **Sacar la plata no pasa por los límites de gasto.** Los límites acotan
+   lo que la llave delegada puede gastar; recuperar tu propio dinero no es
+   gastar. Probado en la red real retirando quince veces el límite por
+   transacción del contrato.
+2. **Sacar la plata funciona aunque el mandato haya vencido.** Un contrato
+   vencido es justamente el que más necesita una salida. Bloquearlo ahí
+   sería el mismo problema de `G9`, solo que con fecha en vez de para
+   siempre.
+
+**Lo que este hito no hizo, a propósito.** No redesplegó el contrato
+compartido que el piloto usa hoy — ese sigue con la versión vieja hasta
+que se decida migrarlo, que es una decisión aparte. Y no construyó el
+cableado para desplegar un contrato por cliente: eso es infraestructura
+de `apps/web`, y ahora tiene sobre qué apoyarse con seguridad.
+
+**Evidencia técnica.** El detalle está en
+[`evidencia/T57.md`](evidencia/T57.md); el resumen:
+
+- `Config` gana `principal: Address`, fijado en el constructor.
+  `withdraw(to, amount)` y `set_owner(new_owner)` exigen
+  `principal.require_auth()` — el mecanismo nativo de Soroban, no el
+  esquema custom de `owner`. **`__check_auth` no se tocó**, y los 21 tests
+  que lo cubren siguen en verde sin cambiar una aserción.
+- `withdraw` rechaza `amount <= 0` con `InvalidWithdrawAmount` (`#9`,
+  nuevo). El `transfer` que hace no reentra a `__check_auth`: Soroban
+  autoriza implícitamente un `from` igual al propio contrato cuando el
+  contrato es quien inicia la llamada.
+- 11 tests nuevos, 21 → 32 en `policy_rail`. Cuatro mutaciones dirigidas
+  (quitar cada `require_auth`, invertir el chequeo de monto, omitir la
+  reescritura del `Config`) matan al menos un test cada una.
+- `pnpm typecheck`/`build` limpios, 897 tests en el monorepo (+2:
+  `deployment.test.ts`, que verifica que un rail registrado antes de que
+  existiera `principal` se siga leyendo).
+- **Medición en testnet real** con un rail nuevo fondeado con 0.05 USDC:
+  el retiro y la rotación firmados por el principal funcionan (13 295 y
+  6 696 stroops de fee), y un firmante que no es el principal es
+  rechazado **por la red** —no por el cliente— incluso forzando la
+  transacción hasta el ledger con la entrada de autorización firmada con
+  su propia llave: `require_auth` la hace trampear, con `signer does not
+  belong to account` en los eventos de diagnóstico. El principal recuperó
+  después los 0.05 USDC completos.
+
+**Decisión nueva:** `C-61`. `G9` queda marcado resuelto en
+`PLATAFORMA-PARTNERS.md`, y F6 pasa de "sin tickets" a tener el primero.
+
+**Pendiente que este hito deja abierto.** Migrar (o no) el rail compartido
+del piloto al constructor nuevo, y el cableado de un rail por tenant en
+`apps/web` — el resto de F6.

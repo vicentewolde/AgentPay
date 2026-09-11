@@ -3006,3 +3006,58 @@ usuario en el chat, no como archivo — mismo criterio que T46–T48.
 Pendiente: que el usuario arranque T54–T56 en Codex. F6 sigue bloqueada
 por `G9`. Sigue pendiente de antes: el rename real a AgentPey (`P-11`),
 desplegar a Render, G10 (alta automática de emisores).
+
+---
+
+## 2026-09-11 (6) — cc/t57-policy-rail-withdraw (T57 cerrado, G9 resuelto)
+
+Agente: Claude Code
+
+Qué: **T57 cerrado** — `withdraw` y `set_owner` en
+`contracts/policy-rail`, gateados por una figura nueva, `principal`, que
+es la wallet del cliente. Resuelve `G9`, el bloqueante duro de F6. El
+usuario aprobó explícitamente el diseño en el chat antes de que se
+escribiera una línea; tocar un contrato desplegado es la superficie más
+restringida del proyecto (`P-10`), y por eso esto **no se delega a
+Codex** bajo ninguna forma.
+
+Por qué así: separar quién autoriza el gasto día a día (la llave delegada
+del agente, `owner`, vía el `__check_auth` custom que ya existía) de quién
+tiene la última palabra sobre el contrato (la wallet del cliente,
+`principal`, vía `Address::require_auth()` nativo de Soroban). Con eso el
+agente nunca necesita ni ve la llave de la wallet, y el cliente puede
+retirar su saldo o cortar la llave de gasto sin que AgentPay coopere.
+**`__check_auth` no se tocó** — sus 21 tests siguen en verde sin cambiar
+una aserción. Ni `withdraw` ni `set_owner` respetan `valid_until`, ni
+`per_tx`/`per_day`: bloquear ahí sería recrear `G9` con un temporizador.
+Detalle completo y alternativas descartadas en
+`docs/fase-6-agentguard-comercializacion/DECISIONES.md` → `C-61`.
+
+Verificado: 32 tests en `policy_rail` (11 nuevos, era 21) y 22 en
+`agent-registry`; cuatro mutaciones dirigidas sobre la lógica nueva, cada
+una mata al menos un test; `pnpm typecheck`/`build` limpios; 897 tests en
+el monorepo (+2 en `scripts/lib/deployment.test.ts`). Y medición en
+testnet real con un rail nuevo (contract id nuevo — el rail compartido del
+piloto **no** se tocó) fondeado con 0.05 USDC: retiro y rotación firmados
+por el principal funcionan, y un firmante que no es el principal es
+rechazado **por la red**, no por el CLI, incluso forzando la transacción
+hasta el ledger con la entrada de autorización firmada con su propia
+llave. Hashes, fees y eventos de diagnóstico crudos en
+`docs/fase-6-agentguard-comercializacion/evidencia/T57.md`. El script de
+sonda no se commitea, mismo criterio que la sonda de fee de T22.
+
+Nota para Codex: `AGENTS.md` no necesita cambios por este hito — no
+cambia ninguna regla de trabajo compartida, y `contracts/**` ya está
+fuera de lo delegable.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`DECISIONES.md` → `C-61`, `BITACORA.md` → T57 y "Último hito cerrado",
+`PLATAFORMA-PARTNERS.md` → `G9` marcado resuelto y F6 con su primer
+ticket real, `evidencia/T57.md`).
+
+Pendiente: migrar (o no) el rail compartido del piloto al constructor
+nuevo — sigue con el viejo, sin `principal` y sin salida de fondos — y el
+cableado de un rail por tenant en `apps/web`, que es el resto de F6.
+Sigue pendiente de antes: T54–T56 en Codex (F7), el rename real a
+AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y G10 (alta
+automática de emisores).

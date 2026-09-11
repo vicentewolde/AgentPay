@@ -71,6 +71,57 @@ describe("readDeployment", () => {
     );
   });
 
+  it("reads a rail recorded before T57 added `principal`, as a null principal", async () => {
+    // The shared pilot rail predates the constructor that takes a principal,
+    // and this hito deliberately does not redeploy it. Reading its record has
+    // to keep working, or every script that touches deployments/testnet.json
+    // breaks on a rail none of them were changing.
+    const path = await tempFile(
+      JSON.stringify({
+        ...VALID,
+        policyRail: {
+          contractId: "CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I",
+          wasmHash: "854b19f7bc472cb5ed8ada127ab12afde7857b7810a11e19a0490978cc7d7b88",
+          owner: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K",
+          asset: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+          perTx: "0.0020000",
+          perDay: "0.0100000",
+          validUntil: "2027-09-04T18:20:23.000Z",
+          deployedAt: "2026-09-04T18:20:28.292Z",
+          protocolVersion: 28,
+        },
+      }),
+    );
+
+    const read = await readDeployment(path);
+
+    expect(read.policyRail?.principal).toBeNull();
+  });
+
+  it("rejects a principal that is not a Stellar public key", async () => {
+    const path = await tempFile(
+      JSON.stringify({
+        ...VALID,
+        policyRail: {
+          contractId: "CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I",
+          wasmHash: "854b19f7bc472cb5ed8ada127ab12afde7857b7810a11e19a0490978cc7d7b88",
+          owner: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K",
+          principal: "not-a-wallet",
+          asset: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+          perTx: "0.0020000",
+          perDay: "0.0100000",
+          validUntil: "2027-09-04T18:20:23.000Z",
+          deployedAt: "2026-09-04T18:20:28.292Z",
+          protocolVersion: 28,
+        },
+      }),
+    );
+
+    await expect(readDeployment(path)).rejects.toSatisfy((error: unknown) =>
+      hasErrorCode(error, "ConfigError"),
+    );
+  });
+
   it("rejects unknown fields, so a typo cannot silently survive a round trip", async () => {
     const path = await tempFile(JSON.stringify({ ...VALID, contractID: "typo" }));
 
