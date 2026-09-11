@@ -966,7 +966,7 @@ Claude Code congele el contrato.
 > `per_day` — el "listo cuando" de esta fase, cumplido. El camino clásico
 > sin wallet (`C-34`) sigue pagando del rail compartido, sin cambios — ver
 > `DECISIONES.md` → `C-62` para por qué eso es correcto y no una brecha.
-> Fuera de este hito, a propósito: monitoreo de saldo (**T59**, ticket
+> Fuera de este hito, a propósito: monitoreo de saldo (**T60**, ticket
 > nuevo) y migrar el rail compartido del piloto al constructor de T57.
 
 - **Objetivo llano.** Que el dinero salga de una cuenta del cliente con
@@ -980,7 +980,7 @@ Claude Code congele el contrato.
   cambio al contrato sigue necesitando aprobación aparte.
 - **Decisiones previas.** 4.1 resuelta; G9 ✅ resuelto (T57).
 - **Entregables.** Despliegue por tenant ✅ (T58), fondeo ✅ (T58),
-  monitoreo de saldo (pendiente, T59).
+  monitoreo de saldo (pendiente, T60).
 - **Evidencia.** Un pago por tenant, con el rechazo del segundo por
   `per_day` visible en la respuesta del contrato. ✅ Cumplida — dos rails
   distintos y un rechazo por `per_day` en testnet real (`evidencia/T58.md`).
@@ -1011,7 +1011,7 @@ Claude Code congele el contrato.
 |---|---|---|---|---|---|
 | T57 | Claude | Aprobación explícita del usuario sobre `G9` | 🔴 Alto — cambia un contrato Soroban y decide sobre fondos de un tercero | `contracts/policy-rail/**`, `scripts/deploy-policy-rail.ts`, `scripts/lib/deployment.ts` | ✅ cerrado — `principal` separado de `owner`, `withdraw`/`set_owner` con `require_auth()`, `__check_auth` intacto; 11 tests nuevos (21 → 32), cuatro mutaciones dirigidas que matan tests, y medición en testnet real donde un firmante que no es el principal es rechazado por la red con `require_auth` incluso forzando la transacción hasta el ledger (`C-61`, `evidencia/T57.md`) |
 | T58 | Claude | T57 mergeado | 🔴 Alto — despliega contratos reales y decide sobre fondos de un tercero | `packages/directory/src/*`, `apps/web/src/tenant-rail.ts` (nuevo), `apps/web/src/server.ts`, `render.yaml`, `.env.example` | ✅ cerrado — despliegue perezoso sin CLI vía SDK, fondeo desde la reserva existente, persistencia idempotente ante carrera; verificado en testnet real con dos tenants en rails distintos y un tercero rechazado por `per_day` (`C-62`, `evidencia/T58.md`) |
-| T59 | Claude | T58 mergeado | Medio — lee saldos, no decide sobre ellos | por definir | Pendiente — monitoreo de saldo, el entregable de F6 que T58 no cubrió |
+| T60 | Claude | T58 mergeado | Medio — lee saldos, no decide sobre ellos | por definir | Pendiente — monitoreo de saldo, el entregable de F6 que T58 no cubrió |
 | resto | Claude | — | — | — | Sin tickets de Codex — 🔴 el resto de la fase se queda en Claude Code, incluido el scaffolding |
 
 ---
@@ -1088,6 +1088,15 @@ Claude Code congele el contrato.
 
 ### F8 · Hardening: seguridad, privacidad, observabilidad ⚪
 
+> **Nota de numeración.** Esta tabla usaba `T55`–`T59` en su borrador
+> original (2026-09-10, T37) — números que la numeración real ya asignó a
+> otra cosa (`T55`/`T56` = script de alta de venue y tests del adaptador
+> genérico, F7; `T57` = `withdraw`/`set_owner` en `policy_rail`, F6; `T58`
+> = rail por tenant, F6). Renumerado a `T61`–`T65` acá, sin tocar ninguna
+> entrada histórica de `BITACORA.md`/`AGENT_LOG.md` que use los números
+> viejos para lo que de verdad se cerró con ellos — mismo criterio que
+> F7 aplicó en su momento.
+
 - **Objetivo llano.** Que aguante más de un proceso y que se pueda ver qué
   pasa.
 - **Alcance.** G4 (leer `spentOn` de la base con la transacción, no del
@@ -1119,28 +1128,35 @@ Claude Code congele el contrato.
    estructurado y métricas no sensibles; el harness de la prueba de carga
    en sí (el script que simula dos procesos), dado que Claude especifica
    exactamente qué debe afirmar.
-3. **Qué depende de que Claude termine o mergee primero.** T58 (el
-   harness de carga) necesita que T55 esté mergeado para tener algo que
-   medir; T56 y T57 son independientes de T55.
-4. **Tareas independientes asignables a Codex sin colisión.** T56
-   (CA de Postgres) y T57 (logging/métricas) tocan archivos distintos y
+3. **Qué depende de que Claude termine o mergee primero.** T64 (el
+   harness de carga) necesita que T61 esté mergeado para tener algo que
+   medir; T62 y T63 son independientes de T61.
+4. **Tareas independientes asignables a Codex sin colisión.** T62
+   (CA de Postgres) y T63 (logging/métricas) tocan archivos distintos y
    no dependen una de la otra.
 5. **Revisión de seguridad antes de mergear.** Esta fase es, en sí misma,
    la de más chance de introducir un bug de autorización por descuido —
-   revisión línea por línea de T55 y T56 sin excepción, y corrida personal
-   de T58 antes de cerrar el hito.
+   revisión línea por línea de T61 y T62 sin excepción, y corrida personal
+   de T64 antes de cerrar el hito.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T55 | Claude | Ninguna | 🔴 Alto — enforcement de `perDay` | `packages/vault/src/postgres-vault.ts` | Dos procesos compitiendo por el mismo `perDay`, el segundo rechazado correctamente |
-| T56 | Codex | Ninguna | Medio — seguridad de transporte, revisión cercana | `packages/vault/src/postgres-vault.ts` (solo opción `ssl`), `packages/directory/src/directory.ts` (solo opción `ssl`) | Falla cerrado si la CA no verifica, no degrada en silencio |
-| T57 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | Ningún log serializa un error crudo (`C-32`) — cubierto por test |
-| T58 | Codex | T55 mergeado | Bajo — mide, no decide | `scripts/loadtest-perday.ts` (nuevo) | Reproduce la condición de carrera que T55 corrige |
-| T59 | Claude | T55, T56, T57, T58 mergeados | — | — | Corrida personal de T58; revisión final de todo el hito antes de cerrar |
+| T61 | Claude | Ninguna | 🔴 Alto — enforcement de `perDay` | `packages/vault/src/postgres-vault.ts` | Dos procesos compitiendo por el mismo `perDay`, el segundo rechazado correctamente |
+| T62 | Codex | Ninguna | Medio — seguridad de transporte, revisión cercana | `packages/vault/src/postgres-vault.ts` (solo opción `ssl`), `packages/directory/src/directory.ts` (solo opción `ssl`) | Falla cerrado si la CA no verifica, no degrada en silencio |
+| T63 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | Ningún log serializa un error crudo (`C-32`) — cubierto por test |
+| T64 | Codex | T61 mergeado | Bajo — mide, no decide | `scripts/loadtest-perday.ts` (nuevo) | Reproduce la condición de carrera que T61 corrige |
+| T65 | Claude | T61, T62, T63, T64 mergeados | — | — | Corrida personal de T64; revisión final de todo el hito antes de cerrar |
 
 ---
 
 ### F9 · Piloto externo en testnet 🟡
+
+> **Nota de numeración.** Esta tabla usaba `T60`/`T61` en su borrador
+> original (2026-09-10, T37). El panel de solo lectura (antes `T61`) ya no
+> depende de nada sin cerrar — F5 cerró el 2026-09-11 — así que pasa a ser
+> `T59`, el próximo número real disponible, delegable a Codex ya mismo.
+> Incorporar al partner real (antes `T60`) sigue sin poder arrancar (F8 ni
+> empezó) y queda sin número hasta que le toque.
 
 - **Objetivo llano.** Que alguien que no somos nosotros lo use.
 - **Alcance.** Un partner real, un caso de compra real, soporte, medición.
@@ -1163,8 +1179,8 @@ Claude Code congele el contrato.
    lectura (pagos recientes, rechazos, salud de la cadena del vault) para
    monitorear el piloto mientras corre — siempre que la API de F5 ya
    exista y el panel no tenga ningún camino de escritura.
-3. **Qué depende de que Claude termine o mergee primero.** T61 depende de
-   que F5 esté cerrada.
+3. **Qué depende de que Claude termine o mergee primero.** T59 ya no
+   depende de nada — F5 cerró el 2026-09-11.
 4. **Tareas independientes asignables a Codex sin colisión.** Solo hay una
    tarea delegable en esta fase.
 5. **Revisión de seguridad antes de mergear.** Confirmar que el panel no
@@ -1173,8 +1189,8 @@ Claude Code congele el contrato.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T60 | Claude | F5 a F8 cerradas; partner y métrica de éxito decididos (preguntas 2 y 6) | — | Coordinación, no código | El partner completó el flujo sin intervención manual nuestra |
-| T61 | Codex | F5 cerrada | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | Ningún endpoint del panel puede mutar estado, verificado por test |
+| T59 | Codex | F5 cerrada ✅ — sin bloqueos, delegable ya | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | Ningún endpoint del panel puede mutar estado, verificado por test |
+| sin número | Claude | F5 a F8 cerradas; partner y métrica de éxito decididos (preguntas 2 y 6) | — | Coordinación, no código | El partner completó el flujo sin intervención manual nuestra |
 
 ---
 
