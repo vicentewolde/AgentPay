@@ -2667,3 +2667,15 @@ Qué: se creó una segunda versión del video (`agentpay-autonomia-dentro-de-reg
 Por qué: incorporar la revisión creativa del usuario: permitir seguir el mapa completo en más escenas y dar tiempo legible a los mensajes finales.
 
 Pendiente: revisión creativa final del usuario; no hubo cambios al producto, sus flujos de autorización ni su lógica de pagos.
+
+## 2026-09-11 (3) — codex/agentpay-explainer-mp4
+
+Agente: Codex
+
+Qué: se convirtió la segunda versión del explicador a MP4 H.264 con audio
+AAC (`agentpay-autonomia-dentro-de-reglas-45s-v2.mp4`), conservando el WebM.
+
+Por qué: facilitar el envío y la reproducción en teléfonos y redes sociales.
+
+Pendiente: el MP4 está listo para compartir; no modifica ningún flujo del
+producto.
