@@ -3101,3 +3101,27 @@ cableado de un rail por tenant en `apps/web`, que es el resto de F6.
 Sigue pendiente de antes: T54–T56 en Codex (F7) — T55/T56 cerrados arriba,
 T54 sigue pendiente — el rename real a AgentPey (`P-11`), desplegar
 T40/T49/T51/T52 a Render, y G10 (alta automática de emisores).
+
+---
+
+## 2026-09-11 (7) — main (prompt de delegación T54 actualizado)
+
+Agente: Claude Code
+
+Qué: actualicé `docs/fase-0-fundamentos/prompt-delegar-codex.md`. Ya no
+describe T54–T56 juntos: T55 y T56 cerraron hoy mismo (PR #16, mergeado),
+así que el archivo quedó acotado a T54 (comercio de referencia x402), con
+el contexto al día — commit de referencia `faad595`, nota de que T57
+(policy_rail) cerró en paralelo y no le es relevante a esta tarea, y la
+prohibición explícita de tocar `contracts/**` además de `apps/agent/src/**`.
+
+Por qué: darle a Codex un prompt que arranque limpio, sin resolver tareas
+ya hechas ni asumir un `origin/main` viejo.
+
+Entregado al usuario en el chat, no como archivo aparte — mismo criterio
+que T46–T50, T54–T56.
+
+Pendiente: que el usuario arranque T54 en Codex. F6 sigue con el resto
+del trabajo (rail por tenant en `apps/web`). Sigue pendiente de antes: el
+rename real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y
+G10 (alta automática de emisores).
