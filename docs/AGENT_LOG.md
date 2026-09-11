@@ -3263,3 +3263,39 @@ cubrió), migrar o no el rail compartido del piloto al constructor de T57,
 el rename real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y
 G10 (alta automática de emisores). Sin tarea nueva delegada a Codex desde
 acá — toda esta fase se queda en Claude Code por `P-10`.
+
+---
+
+## 2026-09-11 (10) — main (renumeración F8/F9, T59 pasa a ser el panel de estado)
+
+Agente: Claude Code
+
+Qué: al pushear T58 y buscar algo delegable a Codex (pedido explícito del
+usuario), encontré que la entrada anterior de este log nombra "T59
+(monitoreo de saldo)" — un número que ya no le corresponde: la tabla de
+F8 en `PLATAFORMA-PARTNERS.md` seguía con `T55`–`T59` de su borrador
+original (T37, 2026-09-10), números que la numeración real ya asignó a
+otra cosa (T57/T58 = trabajo de `policy_rail`, T55/T56 = F7). Mismo
+problema, mismo arreglo que F7 ya tuvo: renumerado a `T61`–`T65`, con nota
+en el documento.
+
+Eso liberó `T59`, y F9 ya tenía ahí mismo un ticket real, listo y sin
+bloqueos: un panel interno de solo lectura (pagos recientes, rechazos,
+salud de la cadena del vault) que dependía de que F5 cerrara — y F5 cerró
+el 2026-09-11. Pasa a ser `T59`, delegable a Codex ya mismo. El
+monitoreo de saldo de F6 (lo que el AGENT_LOG anterior llamaba "T59") pasa
+a ser `T60` — sigue en Claude Code, sin cambios de fondo.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (F6, F8, F9 — números y
+notas de numeración). Sin decisión nueva en `DECISIONES.md` — es
+bookkeeping de numeración, no una decisión de producto.
+
+Entregué al usuario en el chat (no como archivo) el prompt de delegación
+para `T59` (panel de estado, `apps/status-dashboard/**`), referenciando
+las funciones de solo lectura que ya existen (`MandateVault.list`/`.verify`,
+`Directory.listMandates`/`.findTenant`) para que Codex no tenga que
+reinventar nada — mismo criterio que T46–T50.
+
+Pendiente: que el usuario arranque T59 en Codex. Sigue todo lo de antes:
+T60 (monitoreo de saldo), migrar o no el rail compartido, el rename a
+AgentPey (`P-11`), desplegar a Render, y G10.
