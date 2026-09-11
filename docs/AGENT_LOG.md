@@ -2810,3 +2810,61 @@ Pendiente: revisión visual del usuario y de Claude Code antes de mergear. El
 wordmark del SVG horizontal usa una pila sans-serif del sistema; para un master
 de marca definitivo conviene fijar la tipografía licenciada y convertirla a
 curvas tras la aprobación final.
+
+---
+
+## 2026-09-11 (3) — main (nombre final AgentPey, kit mergeado, T50 delegado)
+
+Agente: Claude Code
+
+Qué: el usuario confirmó **AgentPey** como nombre de marca definitivo
+(`docs/DECISIONES.md` → `P-11`, supersede a `P-9`/VynGent). Se revisó y
+mergeó el PR [#12](https://github.com/vicentewolde/AgentPay/pull/12) (el
+kit de identidad de Codex) con el mismo protocolo que cualquier PR de
+Codex: diff completo, `pnpm build`/`typecheck`/`test` limpios. Al mergear
+apareció un conflicto real en `docs/AGENT_LOG.md` (ambas ramas
+agregaban al final del archivo) — se resolvió a mano conservando las dos
+entradas en orden. De paso se encontró y corrigió un bug de documentación
+preexistente en `main`: un marcador de conflicto sin resolver
+(`<<<<<<< HEAD` suelto, sin su par) que había quedado del merge de T48
+(`5496d4e`, 2026-09-10) — no afectaba código, solo la legibilidad del
+log, pero se limpió en el mismo commit.
+
+Se cerraron sin mergear los tres kits de nombres descartados —VynGent
+(PR #3), AgenGent (PR #9), AienGent (PR #10)— y se borraron sus ramas
+remotas, para que no quede ambigüedad sobre cuál identidad visual es la
+vigente. **El rename real (repo, paquetes `@agentpass/*`/`@agentpay/*`,
+servicio de Render, landing, README, `challengeMessage`) sigue sin
+ejecutarse a propósito** — mismo motivo que `P-8`/`P-9`: es una
+superficie grande con consecuencias hacia afuera (links con Tellus,
+nombre del servicio desplegado) que merece su propia sesión dedicada.
+
+El usuario también pidió delegar a Codex lo que se pueda ahora. Del
+perímetro de "nunca Codex" (`P-10`) el rename queda con Claude Code por
+el motivo de arriba, no porque esté restringido — pero **T50** (la guía
+de integración de un partner, `PLATAFORMA-PARTNERS.md` § F5) ya está
+completamente desbloqueada (T45, T49 y T51 mergeados) y es exactamente
+el tipo de tarea delegable: documentación y ejemplos, sin tocar
+`apps/`/`packages/`/`contracts/`. Se escribió el prompt de delegación
+completo en
+`docs/fase-0-fundamentos/prompt-delegar-codex.md` (reemplaza el anterior,
+desactualizado desde el 2026-09-09) con el criterio de aceptación exacto,
+los archivos permitidos, y la disciplina de verificación (correr la guía
+de punta a punta contra Postgres real, limpiar los datos de prueba). No
+se arrancó ninguna sesión de Codex desde acá — ese prompt queda listo
+para que el usuario lo pegue en `~/dev/AgentPay-codex`.
+
+Nota, no resuelta: quedan tres worktrees huérfanos en disco
+(`/private/tmp/agentpay-agengent-brand`, `/private/tmp/agentpay-agentpey-brand`,
+`/private/tmp/agentpay-aiengent-brand`) de exploraciones de marca cuyas
+ramas remotas ya se borraron. No se tocaron — son carpetas fuera de esta
+sesión y borrar contenido de disco que no se creó en la sesión actual
+pide confirmación primero.
+
+Documentación tocada: este archivo, `docs/DECISIONES.md` (`P-11`),
+`docs/fase-0-fundamentos/prompt-delegar-codex.md` (reescrito).
+
+Pendiente: que el usuario arranque T50 en Codex con el prompt nuevo. El
+rename completo a AgentPey sigue como su propia sesión, sin fecha
+todavía. Sigue pendiente de antes: desplegar T40/T49/T51/T52 a Render, y
+G10 (alta automática de emisores).

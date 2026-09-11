@@ -478,3 +478,42 @@ descartó porque `AGENTS.md` es lo que Codex lee al arrancar, y una regla que
 solo existe por inferencia en un documento que Codex no necesariamente abre
 (`docs/DECISIONES.md`) no protege nada — la Fase 2 ya probó, con `B-25`, que
 la ambigüedad en este perímetro específico tiene consecuencias reales.
+
+---
+
+### P-11 · El nombre de marca definitivo es AgentPey · `Vigente` — supersede a `P-9`
+**Fecha:** 2026-09-11
+
+El usuario probó varias identidades visuales candidatas vía Codex
+(VynGent, AgenGent, AienGent, AgentPey — cada una en su propia rama,
+`codex/<nombre>-brand-assets`) y decidió: **AgentPey**, pronunciado
+"Agent Pay". Supersede a `P-9` (VynGent) igual que `P-9` superó a `P-8`
+(TirevPay) — se registra la cadena completa para que ninguna sesión
+futura se confunda si aparece alguno de los nombres descartados en
+documentación histórica.
+
+**Qué se hizo en este mismo movimiento.** Se revisó y mergeó el kit de
+identidad visual de AgentPey que Codex ya había preparado (PR #12:
+monograma `AP`, lockup horizontal, variantes claro/oscuro, favicons,
+`apps/web/public/brand/agentpey/`) — mismo protocolo de revisión que
+cualquier PR de Codex (diff completo, build/typecheck/test limpios). Se
+cerraron sin mergear los tres kits de los nombres descartados (PRs #3,
+#9, #10) y se borraron sus ramas remotas, para que no quede ambigüedad
+sobre cuál identidad es la vigente.
+
+**Qué NO se hizo todavía, a propósito — mismo motivo que `P-8`/`P-9`.**
+El rename real (repo de GitHub, paquetes `@agentpass/*`/`@agentpay/*`,
+el nombre del servicio en Render, la landing, el README, y el string que
+la wallet firma en `challengeMessage`) sigue sin ejecutarse. Es una
+superficie grande y con consecuencias hacia afuera —links ya compartidos
+con Tellus, el nombre del servicio desplegado, y potencialmente scopes de
+npm si algún paquete llegó a publicarse— que sigue mereciendo su propia
+sesión dedicada, con el usuario, no algo para Codex ni para hacer de
+pasada. El código y la documentación de trabajo siguen diciendo
+"AgentPay" hasta que esa sesión ocurra.
+
+**Alternativa descartada:** ejecutar el rename completo ahora que hay
+nombre e identidad visual definitivos. Descartada por el mismo motivo que
+`P-8`/`P-9` — el blast radius (repo, paquetes publicados, servicio
+desplegado) amerita una sesión propia con el usuario presente, no
+encadenarla a la revisión de un kit de marca.
