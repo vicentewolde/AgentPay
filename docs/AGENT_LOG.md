@@ -3009,6 +3009,46 @@ desplegar a Render, G10 (alta automática de emisores).
 
 ---
 
+## 2026-09-11 — codex/delegated-task (T55 y T56)
+
+Agente: Codex
+
+Qué: se agregó `scripts/register-venue.ts`, un script manual que inserta una
+fila de venue desde `--slug`, `--contract-id` opcional, `--base-url` opcional
+y uno o más `--asset CODE:ISSUER`. Deriva un contrato StrKey determinista si
+no se entrega uno, valida la fila con `registryVenueSchema` y valida el
+registro completo con `loadVenueRegistry` antes de escribir. También se agregó
+`apps/agent/src/catalog/x402-catalog.test.ts`, con nueve casos sobre un venue
+sintético independiente: catálogo, mapeo de asset, rutas pagadas y fallos de
+transporte.
+
+Por qué: T53 publicó el registro y el adaptador genérico; faltaban el camino
+mecánico para dar de alta una fila sin editar TypeScript y cobertura directa
+del adaptador sobre un segundo venue.
+
+Verificado por Codex: el script agregó una fila a una copia temporal de
+`venues.json`; un slug existente fue rechazado y la copia quedó idéntica
+byte a byte. `pnpm typecheck`, `pnpm build` y `pnpm test` pasaron; la suite
+completa quedó en 904 tests, incluidos los 9 nuevos de T56.
+
+Revisado por Claude Code antes de mergear (PR #16), en un worktree
+aislado: diff completo (362 líneas, tres archivos, ninguno toca
+`contracts/`, `checkMandate` ni `scope.limits`/`perDay`), `pnpm
+typecheck`/`build`/`test` en verde de nuevo de forma independiente
+(443 tests en `apps/agent`, incluidos los 9 nuevos), y el script
+ejecutado a mano contra una copia de `venues.json`: alta exitosa, slug
+duplicado y asset malformado rechazados sin escribir el archivo
+(confirmado por hash), flag desconocido rechazado con
+`InvalidArguments`. Sin hallazgos que bloqueen el merge. Mergeado a
+`main` con merge commit (no fast-forward: T57 se había mergeado en
+paralelo) y la rama remota `codex/delegated-task` se borra al cerrar.
+
+Pendiente: T54 (el comercio de referencia) exige la prueba de pago real en
+Stellar testnet con una wallet pagadora que tenga USDC de prueba; no se creó ni
+se usó una cuenta o llave para ese flujo en esta tarea.
+
+---
+
 ## 2026-09-11 (6) — cc/t57-policy-rail-withdraw (T57 cerrado, G9 resuelto)
 
 Agente: Claude Code
@@ -3058,6 +3098,6 @@ ticket real, `evidencia/T57.md`).
 Pendiente: migrar (o no) el rail compartido del piloto al constructor
 nuevo — sigue con el viejo, sin `principal` y sin salida de fondos — y el
 cableado de un rail por tenant en `apps/web`, que es el resto de F6.
-Sigue pendiente de antes: T54–T56 en Codex (F7), el rename real a
-AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y G10 (alta
-automática de emisores).
+Sigue pendiente de antes: T54–T56 en Codex (F7) — T55/T56 cerrados arriba,
+T54 sigue pendiente — el rename real a AgentPey (`P-11`), desplegar
+T40/T49/T51/T52 a Render, y G10 (alta automática de emisores).
