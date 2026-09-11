@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T52 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T50 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -21,12 +21,16 @@ hasta F6 (`C-39` a `C-42`, T40). `/v1` ya es real: un partner con su
 propia API key (emitida con `pnpm run partner:create`) puede crear un
 tenant, leerlo, listar sus agentes y consultar sus mandatos contra
 Postgres de verdad — con idempotencia y aislamiento entre partners
-verificados, no solo diseñados (`C-49` a `C-54`, T49). Y ahora el círculo
+verificados, no solo diseñados (`C-49` a `C-54`, T49). El círculo
 completo funciona de punta a punta, con página incluida: un partner
 propone un `grant` (con `payTo` si quiere), un principal la abre en
 `/consent/{id}`, revisa cada permiso propuesto, conecta su wallet y
 firma — y el Mandato resultante queda anclado en testnet y consultable
 por el partner (`C-55` a `C-59` de T51, página `consent.html` de T52).
+Y ahora F5 cierra del todo: hay una guía con `curl` exactos
+(`examples/cloudops-partner-integration.md`, T50) que un partner externo
+puede seguir de punta a punta sin tocar el repo — el "listo cuando" de
+la fase, cumplido y verificado, no solo escrito.
 
 ### Progreso
 
@@ -48,6 +52,7 @@ por el partner (`C-55` a `C-59` de T51, página `consent.html` de T52).
 | T49 | `/v1` cableado de verdad contra `@agentpay/directory`: tenants, agentes, mandatos, idempotencia, aislamiento entre partners | ✅ cerrado 2026-09-10 |
 | T51 | `consent_sessions`: un partner propone un grant, un principal lo firma por wallet en un flujo hospedado, el Mandato queda anclado — backend completo, verificado sin la página | ✅ cerrado 2026-09-11 |
 | T52 | `consent.html`: la página que un principal realmente ve — muestra el grant completo, conecta wallet, firma el Mandato — sobre los endpoints que T51 dejó estables | ✅ cerrado 2026-09-11 (Codex, PR #13) |
+| T50 | `examples/cloudops-partner-integration.md`: la guía con `curl` exactos para que un partner externo integre `/v1` sin tocar el repo — cierra el "listo cuando" de F5 | ✅ cerrado 2026-09-11 (Codex, PR #15) |
 
 ---
 
@@ -1209,3 +1214,48 @@ Pendiente: el rename a VynGent (`P-9`), desplegar T40/T49/T51/T52 a
 Render, y G10 (alta automática de emisores). **T50** (la guía de
 integración de un partner) ya no depende de nada nuevo — T45, T49 y T51
 alcanzan.
+
+---
+
+## T50 · guía de integración de partner — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** F5 prometía que CloudOps
+pudiera integrarse leyendo documentación, sin hablar con nosotros. Ahora
+existe esa guía (`examples/cloudops-partner-integration.md`): comandos
+`curl` exactos —no descripciones— para pedir una API key, crear un
+tenant, abrir un consentimiento con `payTo`, entregarle el link al
+principal, y consultar tanto el consentimiento como el Mandato
+resultante. Cubre también qué hacer ante cada error documentado y cómo
+reintentar sin duplicar nada (`Idempotency-Key`).
+
+**Quién lo hizo y qué se revisó.** Codex, en su propio worktree, tarea
+delegada con el nombre ya decidido (AgentPey, `P-11`) y el criterio de
+`PLATAFORMA-PARTNERS.md` § F5 (PR
+[#15](https://github.com/vicentewolde/AgentPay/pull/15)). Diff acotado
+exactamente a lo permitido: `examples/cloudops-partner-integration.md`,
+`docs/fase-6-agentguard-comercializacion/evidencia/T50.md` y su propia
+entrada de `AGENT_LOG.md` — nada bajo `apps/`, `packages/` ni
+`contracts/`. `pnpm build`/`typecheck`/`test` limpios en un worktree
+aislado (882 tests). Esta revisión no se conformó con leer la guía:
+copió sus comandos literalmente contra un servidor real (`pnpm run web`
++ Postgres real) — un tenant creado con la misma forma exacta que la
+guía documenta, la lista de agentes vacía antes de firmar, un
+`consent_session` con `payTo` devolviendo `pending`/`mandate_id: null`
+tal cual se describe, y el conflicto de idempotencia (`409`,
+`IdempotencyKeyConflict`) reproducido byte a byte contra la tabla de
+errores de la guía. Codex ya había verificado, en su propia evidencia,
+el tramo de firma real (mandato anclado en testnet,
+`mdt_01M28BP9HY51F6N1GW1Q0AGA4A`) — no se repitió esa parte, ya probada
+dos veces esta fase (T51, T52) con la misma técnica. Todos los datos de
+prueba (partner, api key, tenants, consent_session) se borraron de
+Postgres al terminar.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta:
+`BITACORA.md`, `PLATAFORMA-PARTNERS.md` (F5, T50 marcado resuelto — el
+"listo cuando" de la fase completa se cumple). Sin decisión nueva en
+`DECISIONES.md` — T50 no tomó ninguna decisión de diseño.
+
+Pendiente: **F5 (API y SDK para partners) queda completa.** Sigue
+pendiente de antes: el rename real a AgentPey (`P-11`, sesión propia),
+desplegar T40/T49/T51/T52 a Render, y G10 (alta automática de
+emisores).

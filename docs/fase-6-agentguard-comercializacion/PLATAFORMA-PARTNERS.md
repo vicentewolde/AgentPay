@@ -879,6 +879,20 @@ despliegue — el despliegue en sí no es parte de este hito.
 > verdad. Falta solo `consent.html` —la página que un humano ve—, **T52**,
 > delegable a Codex porque no decide nada, solo llama a lo que este hito
 > ya deja estable.
+>
+> **T52 cerrado el 2026-09-11.** `consent.html` (Codex, PR #13) ya sirve
+> `/consent/{id}`: muestra el `grant` completo sin resumir —incluido
+> `payTo`—, maneja los tres estados terminales y los errores sin pantalla
+> en blanco, y completa el flujo de firma real contra los mismos endpoints
+> que T51 dejó estables.
+>
+> **T50 cerrado el 2026-09-11.** `examples/cloudops-partner-integration.md`
+> (Codex, PR #15) — la guía con `curl` exactos que el objetivo llano de
+> esta fase pedía. El "listo cuando" de F5 **se cumple de punta a punta**:
+> un partner ficticio (CloudOps) se integra siguiendo solo la guía, sin
+> tocar el repo, y esta revisión reprodujo sus comandos contra un servidor
+> real (tenant, `consent_session` con `payTo`, replay e idempotencia en
+> conflicto) obteniendo exactamente lo que la guía documenta.
 
 - **Objetivo llano.** Que CloudOps integre leyendo documentación, sin
   hablar con nosotros.
@@ -937,7 +951,7 @@ Claude Code congele el contrato.
 | T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | ✅ cerrado — tenants/agentes/mandatos cableados contra `@agentpay/directory`, aislamiento entre partners y revocación verificados con `curl` real contra Postgres (`C-49` a `C-54`) |
 | T51 | Claude | T49 mergeado; `C-49` | 🔴 Alto — toca el flujo de firma de wallet (`C-17`) | `packages/directory/src/*` (tabla nueva), `packages/partner-api/src/*`, `apps/web/src/*` (rutas, sin la página) | ✅ cerrado — backend completo, verificado de punta a punta contra Postgres y testnet reales con un script que firma como Freighter; `payTo` propuesto llegó exacto hasta el Mandato anclado (`C-55` a `C-59`) |
 | T52 | Codex | T51 mergeado | Bajo — HTML/JS que llama a endpoints ya estables, no decide nada | `apps/web/public/consent.html` (nuevo) (prohibido: cualquier `.ts` de `apps/web/src`) | ✅ cerrado — solo `consent.html` tocado (ningún `.ts` de `apps/web/src`), `pnpm build`/`typecheck`/`test` limpios en un worktree aislado, y verificado en un navegador real contra Postgres y testnet: grant completo con `payTo` renderizado, los tres estados terminales (`expired`/`completed`/`cancelled`) ocultan el botón de firmar con un mensaje claro, un id inexistente no deja pantalla en blanco, y el flujo completo de firma (contra los endpoints reales, con un script que firma como Freighter — la extensión no se puede instalar en este navegador) ancla un Mandato real en testnet (PR #13) |
-| T50 | Codex | T45, T49 y T51 mergeados (T52 no es requisito — el `curl` no necesita la página) | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo — su propio "listo cuando" (crear tenant, abrir consentimiento, consultar mandato) ya se puede cumplir con `curl` desde que T51 cerró |
+| T50 | Codex | T45, T49 y T51 mergeados (T52 no es requisito — el `curl` no necesita la página) | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | ✅ cerrado — `examples/cloudops-partner-integration.md`, sin tocar `apps/`/`packages/`/`contracts/`; verificado con `curl` real contra Postgres y testnet (tenant, `consent_session` con `payTo`, replay y conflicto de idempotencia, mandato anclado de verdad) (PR #15) |
 
 ---
 

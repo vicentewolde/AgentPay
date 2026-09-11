@@ -2902,3 +2902,52 @@ configuración copiada y scripts descartables quedan fuera del commit.
 Pendiente: revisión del PR; no se tocó código bajo `apps/`, `packages/` ni
 `contracts/` en el diff versionado. Sigue pendiente de antes el rename real a
 AgentPey, el despliegue a Render y G10.
+
+---
+
+## 2026-09-11 (4) — main (limpieza de worktrees + revisión y merge de T50, PR #15)
+
+Agente: Claude Code
+
+Qué: dos cosas, a pedido del usuario. (1) Se borraron las tres carpetas
+huérfanas en `/private/tmp` (`agentpay-agengent-brand`,
+`agentpay-agentpey-brand`, `agentpay-aiengent-brand`) de exploraciones
+de marca ya resueltas — con `git worktree remove`, no `rm -rf`, para
+que la metadata de git quedara consistente. También se limpió de paso
+`agentpay-vyngent-brand-fix` (ya `prunable`, sin carpeta en disco). Se
+dejaron intactos `agentpay-explainer-mp4` (branch activa,
+`codex/agentpay-explainer-mp4`) y `AgentPay-codex` (el worktree
+designado de Codex, `P-5`) — ninguno de los dos es huérfano.
+
+(2) Revisión completa del PR [#15](https://github.com/vicentewolde/AgentPay/pull/15)
+de Codex (T50, la guía de integración de partner) siguiendo el mismo
+protocolo que T52: diff acotado exactamente a lo permitido
+(`examples/**`, `docs/.../evidencia/**`, cero código), build/typecheck/
+test limpios en un worktree aislado. Esta revisión reprodujo los
+comandos `curl` de la guía literalmente contra un servidor real (`pnpm
+run web` + Postgres real, puerto separado): un tenant con la forma
+exacta documentada, la lista de agentes vacía antes de firmar, un
+`consent_session` con `payTo` devolviendo `pending`/`mandate_id: null`,
+y el conflicto de idempotencia (`409`/`IdempotencyKeyConflict`)
+reproducido byte a byte contra la tabla de errores de la guía. No se
+repitió el tramo de firma con wallet simulada — Codex ya lo había hecho
+en su propia evidencia (mandato anclado de verdad,
+`mdt_01M28BP9HY51F6N1GW1Q0AGA4A`), y es la tercera vez en esta fase
+(T51, T52, T50) que se prueba con la misma técnica. Todos los datos de
+prueba se borraron de Postgres al terminar.
+
+Sin hallazgos que bloqueen el merge. Se mergeó a `main` por
+fast-forward (`11c438f`), se pusheó, y se borró la rama remota
+`codex/t50-partner-guide`.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/BITACORA.md`
+(T50 cerrado, con su propia sección; "Último hito cerrado" actualizado),
+`PLATAFORMA-PARTNERS.md` (F5, T50 marcado resuelto — **la fase F5 queda
+completa**, el "listo cuando" se cumple de punta a punta). Sin decisión
+nueva en `DECISIONES.md`.
+
+Pendiente: F5 completa. Sigue pendiente de antes: el rename real a
+AgentPey (`P-11`, sesión propia sin fecha todavía), desplegar
+T40/T49/T51/T52 a Render, y G10 (alta automática de emisores). Sin
+tarea nueva delegada a Codex desde acá — el usuario no lo pidió esta
+vez.
