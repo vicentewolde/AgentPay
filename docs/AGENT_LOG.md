@@ -2731,3 +2731,56 @@ el estado de error esperado sin errores de consola cuando faltó
 `DATABASE_URL`. No se pudo hacer el recorrido real contra Postgres/testnet
 ni Freighter porque este worktree no contiene `.env.local`; hacerlo antes
 de mergear con esa configuración y una wallet de testnet fondeada.
+
+---
+
+## 2026-09-11 (2) — main (revisión y merge de T52, PR #13)
+
+Agente: Claude Code
+
+Qué: revisión completa del PR [#13](https://github.com/vicentewolde/AgentPay/pull/13)
+de Codex (T52, `consent.html`) siguiendo el protocolo obligatorio de
+`CLAUDE.md` § "Coordinación con Codex" — nunca se mergea a ciegas. Diff
+completo: solo `apps/web/public/consent.html` (nuevo) y la entrada propia
+de Codex en este archivo — ningún `.ts` de `apps/web/src` tocado, la única
+restricción real del hito. Sigue el molde de `index.html` (`TESTNET_PASSPHRASE`,
+`api()`, `signedMessageToBase64`, `runWalletMandateFlow` adaptado a
+`/api/consent/{id}/start` → `wallet-consent` → `wallet-anchor`) en vez de
+inventar algo nuevo. Build/typecheck/test corridos en un worktree aislado
+(`git worktree add`, no esta carpeta): limpios, 882 tests.
+
+Lo que Codex no pudo verificar (worktree sin `.env.local`) sí se verificó
+acá: se copió `.env.local` a ese mismo worktree aislado, se levantó
+`pnpm run web` en un puerto separado, y se creó un partner/tenant/tres
+`consent_sessions` de prueba reales contra Postgres vía `/v1`
+(`pnpm run partner:create` + `curl`). En el navegador real (Claude Browser):
+el grant completo —incluido `payTo`— se renderiza sin resumir nada; el
+estado `expired` (forzado editando `expires_at` en Postgres directo) y el
+estado `completed` (tras firmar de verdad) ocultan el botón de firmar y
+muestran su mensaje correspondiente; un id inexistente muestra "no existe
+esa invitación" en vez de pantalla en blanco, sin errores de consola no
+manejados. El flujo de firma completo se probó contra los endpoints reales
+con un script descartable que firma exactamente como lo haría Freighter
+(SEP-0053 + firma de la transacción de anclaje, misma técnica que T39/T51,
+usando `signStellarMessage` de `@agentpass/core` en vez de reimplementar el
+hash) — terminó en un Mandato anclado de verdad en testnet
+(`mdt_01M289J8PF92KTSTKNSHW55FNT`, tx `419559dcabdec766c1ca04be71e4ad60454a484bc9d80709f6e356df1dc48d87`).
+No se pudo clickear la extensión de Freighter en sí — este navegador no
+puede instalarla — pero todo lo que la página hace alrededor de esa firma
+(cargar, renderizar, manejar los tres estados terminales y los errores) sí
+se probó en un navegador real. Todos los datos de prueba (partner, tenant,
+tres `consent_sessions`, mandato, credencial, principal) se borraron de
+Postgres al terminar.
+
+Sin hallazgos que bloqueen el merge. Se mergeó a `main` por fast-forward
+(`d87de56`), se pusheó a `origin`, y se borró la rama remota
+`codex/t52-consent-html`.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/BITACORA.md`
+(T52 cerrado, con su propia sección detallada), `PLATAFORMA-PARTNERS.md`
+(F5, T52 marcado resuelto). Sin decisión nueva en `DECISIONES.md` — T52 no
+tomó ninguna decisión de diseño.
+
+Pendiente: **T50** (la guía de integración de un partner) ya no depende de
+nada nuevo. Sigue pendiente de antes: el rename a VynGent (`P-9`),
+desplegar T40/T49/T51/T52 a Render, y G10 (alta automática de emisores).

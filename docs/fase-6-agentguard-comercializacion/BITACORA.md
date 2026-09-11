@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T51 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T52 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -22,13 +22,11 @@ propia API key (emitida con `pnpm run partner:create`) puede crear un
 tenant, leerlo, listar sus agentes y consultar sus mandatos contra
 Postgres de verdad — con idempotencia y aislamiento entre partners
 verificados, no solo diseñados (`C-49` a `C-54`, T49). Y ahora el círculo
-completo funciona: un partner propone un `grant` (con `payTo` si quiere),
-un principal lo firma con su wallet en un flujo hospedado, y el Mandato
-resultante queda anclado en testnet y consultable por el partner —
-verificado de punta a punta contra Postgres y testnet reales, sin
-necesitar todavía la página que un humano ve (`C-55` a `C-59`, T51). Esa
-página (`consent.html`) es **T52**, delegable a Codex — el backend que
-consume no tiene nada más que decidir.
+completo funciona de punta a punta, con página incluida: un partner
+propone un `grant` (con `payTo` si quiere), un principal la abre en
+`/consent/{id}`, revisa cada permiso propuesto, conecta su wallet y
+firma — y el Mandato resultante queda anclado en testnet y consultable
+por el partner (`C-55` a `C-59` de T51, página `consent.html` de T52).
 
 ### Progreso
 
@@ -49,6 +47,7 @@ consume no tiene nada más que decidir.
 | T48 | `@agentpay/webhooks`: worker de entrega con reintentos y backoff, firma HMAC | ✅ cerrado 2026-09-10 (Codex, PR #8) |
 | T49 | `/v1` cableado de verdad contra `@agentpay/directory`: tenants, agentes, mandatos, idempotencia, aislamiento entre partners | ✅ cerrado 2026-09-10 |
 | T51 | `consent_sessions`: un partner propone un grant, un principal lo firma por wallet en un flujo hospedado, el Mandato queda anclado — backend completo, verificado sin la página | ✅ cerrado 2026-09-11 |
+| T52 | `consent.html`: la página que un principal realmente ve — muestra el grant completo, conecta wallet, firma el Mandato — sobre los endpoints que T51 dejó estables | ✅ cerrado 2026-09-11 (Codex, PR #13) |
 
 ---
 
@@ -1159,3 +1158,54 @@ estos endpoints — delegable a Codex una vez que el usuario dé el visto
 bueno de este hito). Sigue pendiente de antes: el rename a VynGent
 (`P-9`), desplegar T40/T49/T51 a Render, y G10 (alta automática de
 emisores).
+
+---
+
+## T52 · `consent.html` — la página que un humano ve — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** Vinny ya no depende de un
+`curl` para firmar: abre el link (`/consent/{id}`) que CloudOps le
+manda, ve cada permiso propuesto —acciones, comercios, activos, límites
+por transacción y por día, y a quién se le puede pagar si el partner lo
+propuso— conecta Freighter, y firma. Si el link ya se usó, venció, o se
+canceló, la página lo dice con un mensaje claro en vez de mostrar el
+botón de firmar sobre una invitación muerta.
+
+**Quién lo hizo y qué se revisó.** Codex, en su propio worktree,
+delegado según el protocolo de `CLAUDE.md` § "Coordinación con Codex"
+(PR [#13](https://github.com/vicentewolde/AgentPay/pull/13)). Antes de
+mergear: diff completo (solo `apps/web/public/consent.html`, nuevo, y su
+propia entrada de `docs/AGENT_LOG.md` — ningún `.ts` de `apps/web/src`
+tocado, la única superficie prohibida para este hito), `pnpm build`/
+`pnpm typecheck`/`pnpm test` corridos en un worktree aislado (882 tests,
+todos en verde), y una verificación real contra Postgres y testnet:
+un partner de prueba (`pnpm run partner:create`), un tenant y tres
+`consent_sessions` reales creados vía `/v1`, la página cargada en un
+navegador real mostrando el grant completo con `payTo`, los estados
+`expired` (forzado editando `expires_at` en Postgres) y `completed`
+verificados mostrando su mensaje y ocultando el botón de firmar, un id
+inexistente mostrando "no existe esa invitación" en vez de pantalla en
+blanco, y el flujo de firma de punta a punta contra los endpoints reales
+—un script descartable haciendo de Freighter, misma técnica que T39/
+T51— hasta un Mandato anclado de verdad en testnet. Todos los datos de
+prueba (partner, tenant, consent_sessions, mandato, credencial,
+principal) se borraron de Postgres al terminar.
+
+**Qué no se pudo probar tal cual pedía el hito.** El criterio pedía
+probar "con Freighter" en un navegador real; el navegador de este
+entorno no puede instalar la extensión, así que la firma se verificó
+contra los mismos endpoints con un script que firma exactamente igual
+que Freighter (SEP-0053 + firma de la transacción de anclaje), no
+clickeando la extensión de verdad. El HTML/JS que llama a esos
+endpoints sí se verificó en el navegador real (carga, render del grant,
+los tres estados terminales, y los errores).
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta:
+`BITACORA.md`, `PLATAFORMA-PARTNERS.md` (F5, T52 marcado resuelto). Sin
+decisión nueva en `DECISIONES.md` — T52 no tomó ninguna decisión de
+diseño, solo construyó la página tal como T51 la dejó especificada.
+
+Pendiente: el rename a VynGent (`P-9`), desplegar T40/T49/T51/T52 a
+Render, y G10 (alta automática de emisores). **T50** (la guía de
+integración de un partner) ya no depende de nada nuevo — T45, T49 y T51
+alcanzan.
