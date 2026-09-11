@@ -2419,3 +2419,30 @@ alcance. La rama `cc/t45-partner-api-contract` queda **sin mergear ni
 pushear**, esperando revisión. Sigue pendiente de antes: el rename a
 VynGent (`P-9`), desplegar T40 a Render, y G10 (alta automática de
 emisores) que F5 nombra en su alcance pero que ningún hito todavía tocó.
+
+## 2026-09-10 (10) — main
+
+Agente: Claude Code
+
+Qué: el usuario aprobó T45, se mergeó `cc/t45-partner-api-contract` a
+`main` (fast-forward, `a8642a5`) y se pusheó a `origin`. A continuación, se
+agregó `webhooks.ts` a `@agentpay/partner-api` (rama
+`cc/t45b-webhook-event-contract`, mergeada igual): los siete eventos de
+`PLATAFORMA-PARTNERS.md` §2.7, su sobre, y el esquema de firma HMAC con
+ventana de replay de cinco minutos (`C-48`). 8 tests nuevos (de 823, ahora
+831), todos puros. `pnpm typecheck` limpio.
+
+Por qué: T48 (webhooks, tabla de F5) dependía explícitamente de "la forma
+del evento publicada por Claude" — sin eso no había nada que delegarle a
+Codex todavía. Con esto, T46, T47 y T48 quedan los tres desbloqueados para
+delegar en paralelo.
+
+Cero cambios en `apps/` o `contracts/` en ninguno de los dos movimientos.
+
+Pendiente: el usuario pidió delegar a Codex lo que se pueda — preparados
+los prompts de T46 (OpenAPI), T47 (SDK cliente) y T48 (worker de webhooks)
+para que corra en `~/dev/AgentPay-codex`, entregados en el chat, no como
+archivo. T49 (middleware de auth + conectar las rutas reales de `/v1`,
+brecha de `C-47`) sigue siendo trabajo de Claude Code, sin empezar —
+próximo hito propuesto. Sigue pendiente de antes: rename a VynGent
+(`P-9`), desplegar T40 a Render, G10.

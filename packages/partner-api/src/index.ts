@@ -30,6 +30,19 @@ export {
 export { errorEnvelopeSchema, successEnvelope, toErrorEnvelope, type ErrorEnvelope } from "./envelope.js";
 
 export {
+  signWebhookPayload,
+  verifyWebhookSignature,
+  webhookEventSchema,
+  webhookEventTypeSchema,
+  WEBHOOK_EVENT_TYPES,
+  WEBHOOK_REPLAY_WINDOW_MS,
+  WEBHOOK_SIGNATURE_HEADER,
+  type WebhookEvent,
+  type WebhookEventType,
+  type WebhookVerification,
+} from "./webhooks.js";
+
+export {
   createTenantRequestSchema,
   tenantResourceSchema,
   toTenantResource,

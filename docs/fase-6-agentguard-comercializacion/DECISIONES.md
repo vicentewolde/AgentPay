@@ -1322,3 +1322,37 @@ para el usuario antes de abrir T49 — no resuelto en este hito porque no era
 su alcance.
 
 ---
+
+### C-48 · La forma del evento de webhook se publica antes de tener nada que lo dispare · `Vigente`
+**Fecha:** 2026-09-10 (post-T45)
+
+T48 (webhooks, tabla de F5) dependía explícitamente de "la forma del evento
+de webhook publicada por Claude" — sin eso, no había nada que delegar
+todavía. Se agregó `webhooks.ts` a `@agentpay/partner-api`: los siete
+nombres de evento de `PLATAFORMA-PARTNERS.md` §2.7, el sobre
+(`id`/`type`/`created_at`/`data`), y el esquema de firma
+(`AgentPay-Signature: t=<ms>,v1=<hmac>`, ventana de replay de cinco
+minutos) — con `sign`/`verify` como funciones puras.
+
+**Por qué `data` queda `z.record(unknown)` y no cuatro schemas tipados.**
+Los eventos `mandate.*` sí podrían tipar `data` hoy contra
+`mandateResourceSchema`; los `payment.*` no — F7 (comercio genérico)
+todavía no diseña qué es un "pago" en `/v1`. Tipar cuatro de siete y dejar
+tres sueltos habría sido peor contrato que dejar los siete iguales hasta
+que el código que efectivamente emite cada uno decida su forma. T48 no
+necesita el tipo de `data` para construir un worker de entrega con
+reintentos — solo necesita el sobre y la firma.
+
+**Qué sigue sin decidir, a propósito.** El *cuándo* se dispara cada evento
+— qué código llama a "encolar este webhook" y en qué momento exacto — no
+está acá. Esa decisión vive donde vive la lógica que la motiva (T49 o
+después), nunca en el paquete de contrato ni en el worker de entrega de
+Codex.
+
+**Alternativa descartada:** esperar a T49 para publicar esto también, y
+abrir T46/T47/T48 juntos recién entonces. Se descartó porque T46 y T47 ya
+estaban listos para delegarse sin esto — atarlos a T49 solo por
+conveniencia de agrupar hubiera demorado sin necesidad el trabajo que
+Codex sí puede empezar hoy.
+
+---

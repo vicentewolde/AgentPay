@@ -903,7 +903,7 @@ Claude Code congele el contrato.
 | T45 | Claude | F2, F3, F4 cerradas; D2, D3 | Medio — define el contrato que todo lo demás asume | Esquemas zod nuevos (paquete a definir) | ✅ cerrado — `@agentpay/partner-api`, 42 tests puros, congelado y documentado antes de abrir T46-T49 |
 | T46 | Codex | T45 mergeado | Bajo — generación mecánica | `docs/api/openapi.yaml`, `scripts/generate-openapi.ts` (prohibido: `packages/directory/src/**`) | El spec generado valida contra los esquemas de T45 sin editarlos |
 | T47 | Codex | T45 mergeado | Bajo — envoltorios tipados, sin lógica | `packages/partner-sdk/**` (nuevo) (prohibido: `apps/web/**`, `packages/directory/**`) | Compila contra la API real de un entorno de prueba |
-| T48 | Codex | Forma del evento de webhook publicada por Claude (no requiere T45 completo) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | Reintentos con backoff verificados con un endpoint de prueba que falla intermitentemente |
+| T48 | Codex | ✅ forma del evento publicada (`webhooks.ts` en `@agentpay/partner-api`, `C-48`) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | Reintentos con backoff verificados con un endpoint de prueba que falla intermitentemente |
 | T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | Una API key revocada deja de poder llamar cualquier ruta, verificado por test |
 | T50 | Codex | T45 y T49 mergeados | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo |
 

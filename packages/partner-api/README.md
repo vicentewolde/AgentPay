@@ -39,6 +39,17 @@ than `PLATAFORMA-PARTNERS.md` §2.7's proposed list on purpose — only what a
 route in F5's table (T45-T50) actually needs. Extend it, additively, the day
 a ticket implements the route it would guard.
 
+**Webhooks.** The seven event names from §2.7 (`mandate.activated`,
+`mandate.revoked`, `mandate.expiring`, `payment.authorized`,
+`payment.refused`, `payment.settled`, `agent.retired`), an envelope
+(`id`/`type`/`created_at`/`data`), and a signing scheme —
+`AgentPay-Signature: t=<unix ms>,v1=<hmac>`, five-minute replay window.
+`data` stays `z.record(unknown)` on purpose: `payment.*` describes a
+resource F7 has not designed yet, and typing four of seven events while
+leaving three loose is a worse contract than freezing the envelope alone
+(`C-48`). `signWebhookPayload`/`verifyWebhookSignature` are pure — no
+delivery, no retry, no decision about *when* an event fires.
+
 **Idempotency.** Header `Idempotency-Key`, required on `POST /v1/tenants` and
 `POST /v1/consent_sessions`. `resolveIdempotency` looks up
 `(partner_id, key)`; a fresh key proceeds, a repeat with the same body
