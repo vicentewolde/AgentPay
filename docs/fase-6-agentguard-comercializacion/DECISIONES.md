@@ -1629,3 +1629,73 @@ delegable a Codex la vista de historial de solo lectura de F3
 habría hecho el PR más grande sin agregar riesgo real a revisar.
 
 ---
+
+### C-60 · El registro de venues/assets reemplaza `mapAsset` hardcodeado, con `resolveJsonModule` para que "agregar un comercio" sea datos, no código · `Vigente`
+**Fecha:** 2026-09-11 (T53)
+
+F7 pedía que agregar un comercio nuevo no tocara ningún archivo `.ts`.
+`bazaar.ts` (Fase 2/4) tenía el mapeo de assets hardcodeado directamente en
+código — una función `mapAsset` con un único `if (code !== "USDC")` — así
+que un segundo comercio x402 habría necesitado un archivo entero shaped
+igual que `bazaar.ts`, con su propio `mapAsset` copiado y pegado.
+
+**La solución.** `apps/agent/src/catalog/registry.ts` valida (zod,
+`z.strictObject`) y le indexa un array de filas —una por venue, cada una
+con su `slug`, `contractId`, `baseUrl` opcional y sus `assets` (`code` +
+`issuer`)— fallando cerrado (`InvalidVenueRegistry`, código nuevo en
+`AgentPassErrorCode`) ante un venue duplicado o un asset repetido dentro
+del mismo venue, no solo ante una fila mal formada. `mapAssetCodeForVenue`/
+`mapAssetIssuerForVenue` son los sucesores genéricos de `mapAsset`/
+`mapAssetContract`: mismo fallo cerrado (`InvalidProduct` ante un código o
+issuer que el venue no nombra), ahora sobre cualquier venue registrado, no
+solo el bazaar. `venues.json` es la fila real de datos —el bazaar del
+embajador, hoy el único venue— y agregar uno nuevo es agregar una fila ahí,
+no escribir TypeScript.
+
+**El adaptador HTTP también se generalizó.** `x402-catalog.ts` es
+`bazaar.ts`'s antigua lógica de fetch (`GET /api/discovery/search`, el
+`ServiceCard`, `getServiceRoute`) parametrizada por `{ venueId, registry,
+baseUrl?, fetchImpl? }` en vez de estar atada a un venue. `bazaar.ts` queda
+como una capa delgada de compatibilidad: sus constantes exportadas
+(`BAZAAR_VENUE_ID`, `BAZAAR_USDC`, etc.) y `createBazaarCatalog`/
+`mapAssetContract`/`getBazaarServiceRoute` sin cambiar su firma pública,
+para que `scripts/demo.ts`, `payment/x402.ts` y `apps/web/src/server.ts`
+no necesiten tocar una línea. `baseUrl` se mantiene como override explícito
+opcional (no solo dato del registro) porque los tests y el deploy real
+siguen necesitando apuntar a una URL distinta de la que trae `venues.json`.
+
+**`resolveJsonModule`, nuevo en `apps/agent/tsconfig.json`.** `venues.json`
+se importa con `import ... with { type: "json" }` (sintaxis de atributos de
+importación que `NodeNext` + TS 5.9 exige) en vez de leerlo con
+`node:fs` en tiempo de ejecución — la alternativa que el propio repo ya usa
+en `scripts/demo.ts` para otros JSON. Se descartó esa alternativa porque
+`apps/agent` se consume como paquete compilado (`dist/index.js`) desde
+`scripts/` y `apps/web/src/server.ts`, no solo vía `tsx`: un `fs.readFileSync`
+relativo a `import.meta.url` se rompe en `dist/` a menos que algo copie el
+JSON ahí, y este repo no tiene ningún paso de copia de assets. Con
+`resolveJsonModule`, `tsc -b` sí copia `venues.json` a `dist/catalog/` como
+parte de la compilación normal — verificado importando el `dist/` compilado
+directamente, no solo con `tsx`. Nota de proceso: `tsc -b` en modo de
+referencias de proyecto no descubrió el JSON con el `include` original
+(`"src/**/*"`, TS6307) aunque un `tsc` suelto sobre el mismo `tsconfig.json`
+sí lo hacía — hizo falta agregar `"src/**/*.json"` explícito al `include`.
+
+**Alternativa descartada:** un registro en Postgres (como
+`@agentpay/directory`), para que el script de alta de comercio (T55)
+escribiera contra una base real en vez de un archivo. Descartada porque
+`apps/agent` es el agente CLI original (Fase 2–4), sin conexión a Postgres
+—esa es la superficie de `apps/web`/Fase 6— y montar una dependencia nueva
+a una base de datos solo para esta fase habría sido una superficie mucho
+más grande que lo que F7 pedía resolver.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (F7, T53 cerrado, T54–T56
+renumerados desde el borrador original T51–T54, que colisionaba con los
+números reales de F5), `BITACORA.md`. Archivos nuevos:
+`apps/agent/src/catalog/registry.ts` (+ test, 13 casos),
+`apps/agent/src/catalog/default-registry.ts`,
+`apps/agent/src/catalog/x402-catalog.ts`,
+`apps/agent/src/catalog/venues.json`. `bazaar.ts` reescrito como
+compatibilidad; `bazaar.test.ts` sin cambios, 16/16 en verde. Código nuevo:
+`InvalidVenueRegistry` en `packages/core/src/errors.ts`.
+
+---

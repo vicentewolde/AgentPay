@@ -1,0 +1,13 @@
+[
+  {
+    "slug": "stellar-bazaar",
+    "contractId": "CBDWMXZEE44NJ3RA6RS7K4EK36KDFW5S7KHP276HCMM4I52MIUUHEF5B",
+    "baseUrl": "https://stellar-bazaar-x402.vercel.app",
+    "assets": [
+      {
+        "code": "USDC",
+        "issuer": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA"
+      }
+    ]
+  }
+]

@@ -44,6 +44,8 @@ export type AgentPassErrorCode =
   | "InvalidVenueId"
   /** A string is not a well-formed `<CODE>:<issuer>` asset id. */
   | "InvalidAssetId"
+  /** A venue registry row is malformed, or names a duplicate venue/asset. */
+  | "InvalidVenueRegistry"
   /** A catalogue entry does not match the product schema. */
   | "InvalidProduct"
   /** The catalogue has no product with the requested id. */

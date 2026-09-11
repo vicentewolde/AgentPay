@@ -998,7 +998,20 @@ Claude Code congele el contrato.
 
 ---
 
-### F7 · Comercio x402 genérico ⚪
+### F7 · Comercio x402 genérico 🟡
+
+> **Nota de numeración.** Esta tabla usaba `T51`–`T54` en su borrador
+> original (2026-09-10, T37) — números que la numeración real de hitos ya
+> asignó a otra cosa (`T51` = `consent_sessions`, `T52` = `consent.html`,
+> ambos de F5, cerrados). Renumerado a `T53`–`T56` acá, sin tocar ninguna
+> entrada histórica de `BITACORA.md`/`AGENT_LOG.md` que use los números
+> viejos con su significado viejo.
+>
+> **T53 cerrado el 2026-09-11.** El registro de venues/assets
+> (`apps/agent/src/catalog/registry.ts` + `venues.json`) y el adaptador
+> genérico (`x402-catalog.ts`) que reemplaza la lógica hardcodeada que
+> `bazaar.ts` tenía. Detalle técnico en `BITACORA.md` y la decisión de
+> diseño en `DECISIONES.md` → `C-60`.
 
 - **Objetivo llano.** Que un comercio nuevo se agregue por configuración.
 - **Alcance.** Registro de comercios (venue, assets, descubrimiento) como
@@ -1028,10 +1041,10 @@ Claude Code congele el contrato.
    comercio que inserte una fila siguiendo el esquema ya definido, sin
    interpretar nada; tests del adaptador genérico sobre sus caminos
    guiados por configuración.
-3. **Qué depende de que Claude termine o mergee primero.** T52, T53 y T54
-   dependen de que T51 esté en `main`.
-4. **Tareas independientes asignables a Codex sin colisión.** T52
-   (comercio de referencia) y T53 (script de alta) tocan carpetas
+3. **Qué depende de que Claude termine o mergee primero.** T54, T55 y T56
+   dependen de que T53 esté en `main`.
+4. **Tareas independientes asignables a Codex sin colisión.** T54
+   (comercio de referencia) y T55 (script de alta) tocan carpetas
    distintas y pueden correr en paralelo.
 5. **Revisión de seguridad antes de mergear.** Confirmar que un asset o
    venue no reconocido sigue produciendo `InvalidProduct` y no un valor
@@ -1040,10 +1053,10 @@ Claude Code congele el contrato.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T51 | Claude | F5 cerrada | Medio — decide qué se puede pagar | `apps/agent/src/catalog/*` | Un asset o venue desconocido sigue fallando cerrado, cubierto por test |
-| T52 | Codex | T51 mergeado | Bajo — aislado en `examples/` | `examples/reference-merchant/**` (nuevo) (prohibido: `apps/agent/src/**`) | El comercio de referencia responde `402` real y liquida contra testnet |
-| T53 | Codex | T51 mergeado | Bajo — inserción pura, sin interpretación | `scripts/register-venue.ts` (nuevo) | El script solo escribe filas con el esquema exacto que T51 definió |
-| T54 | Codex | T51 mergeado | Bajo | Archivos `*.test.ts` de `apps/agent/src/catalog/` | Cobertura del camino feliz y del rechazo por asset desconocido |
+| T53 | Claude | F5 cerrada | Medio — decide qué se puede pagar | `apps/agent/src/catalog/*`, `packages/core/src/errors.ts` | ✅ cerrado — un asset o venue desconocido sigue fallando cerrado (`InvalidProduct`), 13 tests nuevos, 895 en total, cero regresión en `bazaar.test.ts` (16/16 sin cambios) |
+| T54 | Codex | T53 mergeado | Bajo — aislado en `examples/` | `examples/reference-merchant/**` (nuevo) (prohibido: `apps/agent/src/**`) | El comercio de referencia responde `402` real y liquida contra testnet |
+| T55 | Codex | T53 mergeado | Bajo — inserción pura, sin interpretación | `scripts/register-venue.ts` (nuevo) | El script solo escribe filas con el esquema exacto que T53 definió |
+| T56 | Codex | T53 mergeado, T54 idealmente mergeado (para tener un segundo venue real contra el que probar) | Bajo | `apps/agent/src/catalog/x402-catalog.test.ts` (nuevo) | Cobertura del camino feliz sobre un segundo venue configurado y del rechazo por asset/venue desconocido |
 
 ---
 

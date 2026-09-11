@@ -2951,3 +2951,58 @@ AgentPey (`P-11`, sesión propia sin fecha todavía), desplegar
 T40/T49/T51/T52 a Render, y G10 (alta automática de emisores). Sin
 tarea nueva delegada a Codex desde acá — el usuario no lo pidió esta
 vez.
+
+---
+
+## 2026-09-11 (5) — main (T53 cerrado, arranca F7)
+
+Agente: Claude Code
+
+Qué: **T53 cerrado**, primer hito de F7 (comercio x402 genérico). El
+usuario pidió explícitamente arrancar F7 y delegar a Codex lo que se
+pueda — F6 quedó descartada como "próximo hito" porque está 100%
+reservada a Claude Code (`P-10`) y bloqueada además por una decisión
+del usuario sobre `G9` todavía sin tomar.
+
+Reemplacé el `mapAsset`/`mapAssetContract` hardcodeados de `bazaar.ts`
+(un solo `if (code !== "USDC")`, escrito para un único venue) por un
+registro validado de venues/assets: `apps/agent/src/catalog/registry.ts`
+(zod, `InvalidVenueRegistry` nuevo en `packages/core/src/errors.ts`,
+falla cerrado ante venue o asset duplicado) + `venues.json` (la fila
+real, hoy solo el bazaar) + `x402-catalog.ts` (el adaptador HTTP
+genérico, extraído sin cambiar su comportamiento). `bazaar.ts` quedó
+como compatibilidad pura — mismas constantes y funciones exportadas,
+cero cambios en `scripts/demo.ts`, `payment/x402.ts` ni
+`apps/web/src/server.ts`.
+
+Un detalle técnico real, no anticipado en el diseño: `apps/agent` se
+consume compilado (`dist/`) desde `scripts/` y `apps/web`, así que leer
+`venues.json` con `node:fs` en tiempo de ejecución se habría roto en
+producción (nada en este repo copia assets sueltos a `dist/`). Se
+activó `resolveJsonModule` en `apps/agent/tsconfig.json` e importé el
+JSON como módulo (`with { type: "json" }`) — así `tsc -b` lo copia solo,
+verificado importando el `dist/` compilado directo. De paso, `tsc -b`
+en modo de referencias de proyecto no lo descubría con el `include`
+original (`TS6307`) aunque un `tsc` suelto sí — hizo falta agregar
+`"src/**/*.json"` explícito.
+
+Verificado: 13 tests nuevos (`registry.test.ts`), `bazaar.test.ts` sin
+tocar una línea y sus 16 tests siguen en verde — cero regresión. 895
+tests en total. `pnpm typecheck` y `pnpm build` limpios en todo el
+monorepo.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md`, T53 cerrado; `PLATAFORMA-PARTNERS.md`, F7 — T53 cerrado
+y **T51–T54 del borrador original renumerados a T54–T56**, porque esos
+números ya los usó F5 de verdad) y `DECISIONES.md` (`C-60`).
+
+Preparé el prompt de delegación para Codex con las tres tareas que F7
+deja listas en paralelo: **T54** (comercio de referencia x402 en
+`examples/reference-merchant/**`), **T55** (`scripts/register-venue.ts`,
+inserción pura contra el esquema que T53 definió) y **T56** (tests del
+adaptador genérico sobre un segundo venue configurado). Entregado al
+usuario en el chat, no como archivo — mismo criterio que T46–T48.
+
+Pendiente: que el usuario arranque T54–T56 en Codex. F6 sigue bloqueada
+por `G9`. Sigue pendiente de antes: el rename real a AgentPey (`P-11`),
+desplegar a Render, G10 (alta automática de emisores).

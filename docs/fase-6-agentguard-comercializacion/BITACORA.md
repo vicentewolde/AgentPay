@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T50 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T53 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -27,10 +27,15 @@ propone un `grant` (con `payTo` si quiere), un principal la abre en
 `/consent/{id}`, revisa cada permiso propuesto, conecta su wallet y
 firma — y el Mandato resultante queda anclado en testnet y consultable
 por el partner (`C-55` a `C-59` de T51, página `consent.html` de T52).
-Y ahora F5 cierra del todo: hay una guía con `curl` exactos
+F5 cierra del todo: hay una guía con `curl` exactos
 (`examples/cloudops-partner-integration.md`, T50) que un partner externo
 puede seguir de punta a punta sin tocar el repo — el "listo cuando" de
-la fase, cumplido y verificado, no solo escrito.
+la fase, cumplido y verificado, no solo escrito. Y arrancó F7: agregar un
+comercio x402 nuevo ya no significa escribir un archivo entero shaped
+como el viejo `bazaar.ts` — es una fila en `venues.json` (T53), validada
+y fallando cerrado ante un asset que ese venue no nombra, igual que el
+`mapAsset` hardcodeado de antes pero ahora reutilizable por cualquier
+venue registrado.
 
 ### Progreso
 
@@ -53,6 +58,7 @@ la fase, cumplido y verificado, no solo escrito.
 | T51 | `consent_sessions`: un partner propone un grant, un principal lo firma por wallet en un flujo hospedado, el Mandato queda anclado — backend completo, verificado sin la página | ✅ cerrado 2026-09-11 |
 | T52 | `consent.html`: la página que un principal realmente ve — muestra el grant completo, conecta wallet, firma el Mandato — sobre los endpoints que T51 dejó estables | ✅ cerrado 2026-09-11 (Codex, PR #13) |
 | T50 | `examples/cloudops-partner-integration.md`: la guía con `curl` exactos para que un partner externo integre `/v1` sin tocar el repo — cierra el "listo cuando" de F5 | ✅ cerrado 2026-09-11 (Codex, PR #15) |
+| T53 | Registro de venues/assets (`registry.ts` + `venues.json`) y adaptador x402 genérico (`x402-catalog.ts`) — reemplaza el `mapAsset` hardcodeado de `bazaar.ts`, que queda como capa de compatibilidad | ✅ cerrado 2026-09-11 |
 
 ---
 
@@ -1259,3 +1265,71 @@ Pendiente: **F5 (API y SDK para partners) queda completa.** Sigue
 pendiente de antes: el rename real a AgentPey (`P-11`, sesión propia),
 desplegar T40/T49/T51/T52 a Render, y G10 (alta automática de
 emisores).
+
+---
+
+## T53 · registro de venues/assets y adaptador x402 genérico — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** F7 pedía que agregar un
+comercio nuevo no tocara ningún archivo de código. Antes, el bazaar del
+embajador tenía su lógica de conexión y su lista de monedas aceptadas
+escritas directamente en un archivo (`bazaar.ts`) — sumar un segundo
+comercio habría significado copiar ese archivo entero y adaptarlo a
+mano. Ahora esa información —qué comercio es, dónde está, qué monedas
+acepta y con qué emisor— vive en una sola tabla de datos
+(`venues.json`), y el código que sabe hablar con cualquier comercio de
+ese tipo (protocolo x402) es uno solo, reutilizable. Agregar el próximo
+comercio es agregar una fila a esa tabla, no escribir un archivo nuevo.
+
+**La regla de seguridad no se aflojó, se generalizó.** Si un comercio
+cotiza en una moneda que su fila no menciona, la compra se rechaza —
+igual que antes, cuando esa regla vivía hardcodeada solo para el bazaar
+del embajador. Ahora protege a cualquier comercio que se agregue,
+automáticamente, sin que quien agregue la fila tenga que acordarse de
+escribir esa protección de nuevo.
+
+**Quién lo hizo.** Claude Code — es la mitad de F7 que decide qué se
+puede pagar, de la misma familia de riesgo que `checkScope`/
+`checkMandate`, así que quedó fuera del perímetro delegable a Codex
+(`P-10`). Archivos nuevos: `apps/agent/src/catalog/registry.ts` (el
+validador e indexador de la tabla, con su propio código de error
+tipado, `InvalidVenueRegistry`, nuevo en `packages/core/src/errors.ts`),
+`venues.json` (la tabla real, hoy con una sola fila: el bazaar del
+embajador), `default-registry.ts` (la carga la tabla real al arrancar),
+y `x402-catalog.ts` (el adaptador HTTP genérico, extraído de la lógica
+que `bazaar.ts` tenía hardcodeada). `bazaar.ts` quedó como una capa
+delgada de compatibilidad — sus constantes y funciones exportadas
+siguen llamándose igual, así que `scripts/demo.ts`, `payment/x402.ts` y
+`apps/web/src/server.ts` no tuvieron que cambiar una línea.
+
+**Un detalle técnico que costó dos vueltas: cómo cargar `venues.json`
+sin romper el paquete compilado.** `apps/agent` se usa como una
+dependencia compilada (`dist/`) desde `scripts/` y desde
+`apps/web/src/server.ts`, no solo con `tsx` en desarrollo. Leer el JSON
+a mano con `node:fs` (la técnica que `scripts/demo.ts` ya usa en otro
+contexto) se habría roto ahí, porque nada en este repo copia archivos
+sueltos a `dist/`. La solución fue activar `resolveJsonModule` en
+`apps/agent/tsconfig.json` e importar `venues.json` como si fuera
+código — así el propio compilador se encarga de llevarlo a `dist/` como
+parte del build normal. Verificado importando el `dist/` compilado
+directo, no solo corriendo los tests con `tsx`.
+
+Verificado: 13 tests nuevos de `registry.ts` (carga válida, fila
+duplicada, moneda duplicada dentro del mismo comercio, fallo cerrado
+ante un comercio o moneda desconocidos). `bazaar.test.ts` sin cambiar
+una línea, sus 16 tests siguen en verde — cero regresión de
+comportamiento. 895 tests en total (882 + 13), `pnpm typecheck` y
+`pnpm build` limpios en todo el monorepo.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md`, `PLATAFORMA-PARTNERS.md` — F7, T53 cerrado, y se
+renumeraron T51–T54 del borrador original a T54–T56 para no chocar con
+los números que F5 ya usó de verdad) y `DECISIONES.md` (`C-60`).
+
+Pendiente: **T54** (comercio de referencia, delegable a Codex), **T55**
+(script de alta de comercio, delegable a Codex) y **T56** (tests del
+adaptador genérico sobre un segundo venue, delegable a Codex) quedan
+listos para delegar — la tarea de esta sesión sigue con la preparación
+de esos tres prompts. Sigue pendiente de antes: el rename real a
+AgentPey (`P-11`), desplegar a Render, G10, y F6 (bloqueada por `G9`,
+sin fecha).
