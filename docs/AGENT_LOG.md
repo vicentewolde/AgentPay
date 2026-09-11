@@ -3157,3 +3157,49 @@ Horizon confirmó `successful: true` en ledger `4626738`.
 
 Pendiente: abrir PR y esperar la revisión de Claude Code; no se tocó
 `apps/agent/src/**` ni `contracts/**`.
+
+---
+
+## 2026-09-11 (8) — main (T54 revisado y mergeado, PR #17; F7 completa)
+
+Agente: Claude Code
+
+Qué: revisé el PR #17 de Codex en un worktree aislado — no solo leí el
+diff, corrí todo yo mismo. `pnpm typecheck`/`build`/`test` en verde
+(906 tests) independiente del reporte del PR. Levanté el servidor de
+referencia localmente y le pegué de verdad: `discovery` devuelve la
+forma exacta que espera el adaptador genérico, la ruta pagada devuelve
+un `402` bien formado (coincide campo por campo con lo que
+`apps/agent/src/payment/x402.ts` ya espera del lado cliente), y los
+caminos de rechazo (cuenta mal formada, `payment-signature` con basura)
+responden como corresponde. El hash de settlement que cita el PR lo
+verifiqué yo mismo contra Horizon en vez de darlo por bueno: la
+transacción existe, es exitosa, ledger `4626738`, y sus efectos muestran
+`0.0025000 USDC` moviéndose del pagador al comercio — el monto exacto
+que el servidor cobra. Confirmé que el paquete vive fuera del workspace
+de pnpm (lockfile propio) y que el diff no toca nada fuera de
+`examples/reference-merchant/**` y `docs/AGENT_LOG.md`.
+
+Sin hallazgos que bloqueen el merge. Mergeado a `main` por fast-forward,
+rama remota `codex/t54-reference-merchant` borrada.
+
+De paso, corregí una omisión de la sesión anterior: T55 y T56 (PR #16,
+ya mergeado) nunca habían quedado marcados como cerrados en
+`PLATAFORMA-PARTNERS.md` ni narrados en `BITACORA.md` — solo tenían su
+entrada en este archivo. Los tres (T54, T55, T56) quedan documentados
+ahora.
+
+**F7 (comercio x402 genérico) queda completa** con T54: hay dos
+comercios reales en el catálogo del agente, y agregar cualquiera de los
+dos — o uno nuevo — es una fila en `venues.json`, nunca código.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`PLATAFORMA-PARTNERS.md` — T54/T55/T56 marcados cerrados, F7 completa;
+`BITACORA.md` — "Último hito cerrado" actualizado, secciones nuevas para
+T55/T56 y T54). Sin decisión nueva en `DECISIONES.md` — T54 no introdujo
+ninguna que no estuviera ya en `C-60`.
+
+Pendiente: el resto de F6 (rail por tenant en `apps/web`, bloqueado ya
+no por `G9` sino por el cableado en sí), el rename real a AgentPey
+(`P-11`), desplegar T40/T49/T51/T52 a Render, y G10 (alta automática de
+emisores). Sin tarea nueva delegada a Codex desde acá.

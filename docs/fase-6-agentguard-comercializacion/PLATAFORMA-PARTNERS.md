@@ -1014,6 +1014,14 @@ Claude Code congele el contrato.
 > genérico (`x402-catalog.ts`) que reemplaza la lógica hardcodeada que
 > `bazaar.ts` tenía. Detalle técnico en `BITACORA.md` y la decisión de
 > diseño en `DECISIONES.md` → `C-60`.
+>
+> **T53, T54, T55 y T56 cerrados, todos el 2026-09-11 — F7 completa.**
+> T55/T56 (Codex, PR #16) y T54 (Codex, PR #17) cerraron el mismo día que
+> T53. El "listo cuando" de la fase se cumple de punta a punta: hay dos
+> comercios en el catálogo — el bazaar del embajador y
+> `examples/reference-merchant/**`, un segundo x402 real e independiente
+> — y ambos se agregan al agente por una fila en `venues.json`
+> (`scripts/register-venue.ts`), sin tocar ningún archivo `.ts`.
 
 - **Objetivo llano.** Que un comercio nuevo se agregue por configuración.
 - **Alcance.** Registro de comercios (venue, assets, descubrimiento) como
@@ -1056,9 +1064,9 @@ Claude Code congele el contrato.
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
 | T53 | Claude | F5 cerrada | Medio — decide qué se puede pagar | `apps/agent/src/catalog/*`, `packages/core/src/errors.ts` | ✅ cerrado — un asset o venue desconocido sigue fallando cerrado (`InvalidProduct`), 13 tests nuevos, 895 en total, cero regresión en `bazaar.test.ts` (16/16 sin cambios) |
-| T54 | Codex | T53 mergeado | Bajo — aislado en `examples/` | `examples/reference-merchant/**` (nuevo) (prohibido: `apps/agent/src/**`) | El comercio de referencia responde `402` real y liquida contra testnet |
-| T55 | Codex | T53 mergeado | Bajo — inserción pura, sin interpretación | `scripts/register-venue.ts` (nuevo) | El script solo escribe filas con el esquema exacto que T53 definió |
-| T56 | Codex | T53 mergeado, T54 idealmente mergeado (para tener un segundo venue real contra el que probar) | Bajo | `apps/agent/src/catalog/x402-catalog.test.ts` (nuevo) | Cobertura del camino feliz sobre un segundo venue configurado y del rechazo por asset/venue desconocido |
+| T54 | Codex | T53 mergeado | Bajo — aislado en `examples/` | `examples/reference-merchant/**` (nuevo) (prohibido: `apps/agent/src/**`) | ✅ cerrado (PR #17) — servidor `node:http` aislado (lockfile propio, fuera del workspace pnpm); revisado por Claude Code corriendo el server localmente (discovery, `402`, rechazos de forma) y verificando el hash de settlement de forma independiente contra Horizon (`c2ec6e74e1b8b1b333d016719b9b72c28e257f90bcb0072efecf97cf6f9c7747`, ledger 4626738, 0.0025000 USDC movidos) |
+| T55 | Codex | T53 mergeado | Bajo — inserción pura, sin interpretación | `scripts/register-venue.ts` (nuevo) | ✅ cerrado (PR #16) — corrido de verdad contra una copia de `venues.json`: alta exitosa, slug duplicado y asset malformado rechazados sin escribir el archivo (confirmado por hash), flag desconocido rechazado |
+| T56 | Codex | T53 mergeado, T54 idealmente mergeado (para tener un segundo venue real contra el que probar) | Bajo | `apps/agent/src/catalog/x402-catalog.test.ts` (nuevo) | ✅ cerrado (PR #16, con un venue sintético — cerró antes que T54) — 9 tests nuevos, cero cambio a `x402-catalog.ts`/`registry.ts`/`bazaar.ts`/`bazaar.test.ts` |
 
 ---
 

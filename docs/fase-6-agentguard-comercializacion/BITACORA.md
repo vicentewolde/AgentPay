@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T57 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T54 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -41,7 +41,11 @@ AgentPay, así que un cliente que lo fondeara no podía recuperarla —
 `G9`, el bloqueante duro. Ahora el contrato distingue dos autoridades:
 la llave delegada del agente sigue gastando dentro de sus límites, y la
 wallet del cliente puede retirar todo o cambiar esa llave cuando
-quiera, sin que AgentPay coopere (`C-61`).
+quiera, sin que AgentPay coopere (`C-61`). Y F7 quedó completa: hay dos comercios en
+el catálogo del agente — el bazaar del embajador y un segundo x402 real
+e independiente (`examples/reference-merchant/**`, T54) — y agregar
+cualquiera de los dos, o uno nuevo, es una fila en `venues.json`, no
+código.
 
 ### Progreso
 
@@ -66,6 +70,8 @@ quiera, sin que AgentPay coopere (`C-61`).
 | T50 | `examples/cloudops-partner-integration.md`: la guía con `curl` exactos para que un partner externo integre `/v1` sin tocar el repo — cierra el "listo cuando" de F5 | ✅ cerrado 2026-09-11 (Codex, PR #15) |
 | T53 | Registro de venues/assets (`registry.ts` + `venues.json`) y adaptador x402 genérico (`x402-catalog.ts`) — reemplaza el `mapAsset` hardcodeado de `bazaar.ts`, que queda como capa de compatibilidad | ✅ cerrado 2026-09-11 |
 | T57 | `withdraw` y `set_owner` en `policy_rail`, gateados por la wallet del principal — resuelve `G9`, el bloqueante duro de F6 | ✅ cerrado 2026-09-11 |
+| T55, T56 | Script de alta de comercio (`scripts/register-venue.ts`) y tests del adaptador genérico sobre un segundo venue sintético | ✅ cerrados 2026-09-11 (Codex, PR #16) |
+| T54 | Comercio de referencia x402 independiente (`examples/reference-merchant/**`) — segundo venue real, cierra F7 | ✅ cerrado 2026-09-11 (Codex, PR #17) |
 
 ---
 
@@ -1416,3 +1422,86 @@ de `apps/web`, y ahora tiene sobre qué apoyarse con seguridad.
 **Pendiente que este hito deja abierto.** Migrar (o no) el rail compartido
 del piloto al constructor nuevo, y el cableado de un rail por tenant en
 `apps/web` — el resto de F6.
+
+---
+
+## T55, T56 · script de alta de comercio y tests del adaptador genérico — cerrados 2026-09-11 (Codex, PR #16)
+
+**Qué quedó funcionando, en palabras llanas.** T53 dejó la tabla de
+comercios (`venues.json`) y el código que la lee, pero agregar una fila
+ahí a mano seguía siendo trabajo manual, sin ninguna garantía de que la
+tabla resultante siguiera siendo válida. Ahora hay un comando,
+`scripts/register-venue.ts`, que agrega un comercio nuevo validando todo
+antes de escribir: si el nombre ya existe, o si algo en la tabla completa
+queda mal formado, el archivo no se toca ni un byte. Y el adaptador
+genérico que lee esa tabla —el que reemplazó el código específico del
+bazaar del embajador— tiene ahora una prueba real de que funciona con
+*cualquier* comercio registrado, no solo con el único que existía hasta
+hoy: nueve casos nuevos contra un segundo comercio inventado para el
+test.
+
+**Verificado por Claude Code antes de mergear** (PR #16), en un worktree
+aislado: diff completo (362 líneas, tres archivos, ninguno toca
+`contracts/`, `checkMandate` ni `scope.limits`/`perDay`), `pnpm
+typecheck`/`build`/`test` en verde de forma independiente (443 tests en
+`apps/agent`), y el script de alta ejecutado a mano contra una copia de
+`venues.json`: alta exitosa, slug duplicado y asset malformado rechazados
+sin escribir el archivo (confirmado por hash), flag desconocido
+rechazado con `InvalidArguments`. Mergeado con merge commit (T57 se
+había mergeado en paralelo), rama remota borrada.
+
+Pendiente: T54, la otra pieza de F7 — un segundo comercio x402
+*independiente*, no solo una fila fabricada en un test.
+
+---
+
+## T54 · comercio de referencia x402 independiente — cerrado 2026-09-11 (Codex, PR #17), F7 completa
+
+**Qué quedó funcionando, en palabras llanas.** Hasta hoy, el único
+comercio x402 real que el agente sabía comprarle era el bazaar del
+embajador. Eso significaba que "el adaptador es genérico" era, en el
+fondo, una afirmación probada contra un solo caso real. Ahora existe un
+segundo comercio, completamente aparte del código del agente
+(`examples/reference-merchant/**`, un servidor propio con sus propias
+dependencias, ni una línea compartida con `apps/agent`), que habla el
+mismo protocolo: publica su catálogo, cobra un `402` de verdad, y solo
+entrega lo pagado después de verificar y liquidar el pago en Stellar
+testnet real. Con esto, F7 queda completa: agregar un comercio al agente
+—este o cualquier otro— es una fila en `venues.json`, nunca código.
+
+**Verificado por Claude Code antes de mergear** (PR #17), sin quedarme
+con lo que dice la descripción del PR:
+
+- Levanté el servidor yo mismo en un worktree aislado y le pegué
+  directamente: `GET /api/discovery/search` devuelve la forma exacta que
+  el adaptador genérico espera, y la ruta pagada devuelve un `402` real
+  con un `PaymentRequirements` bien formado (`scheme: "exact"`, la red de
+  Stellar testnet, un contrato SAC real de USDC, `payTo`) — coincide
+  campo por campo con lo que ya espera `apps/agent/src/payment/x402.ts`
+  del lado cliente.
+- Probé los caminos de rechazo a mano: una cuenta mal formada, un header
+  `payment-signature` con basura — ambos responden con el código y el
+  cuerpo esperados, nada se cae con un error genérico.
+- El PR cita un hash de transacción de testnet como prueba de que la
+  liquidación fue real. **Lo verifiqué yo mismo contra Horizon**, no di
+  por buena la cita: la transacción existe, es exitosa, en el ledger que
+  el PR dice, y sus efectos muestran exactamente `0.0025000 USDC`
+  moviéndose de la cuenta pagadora a la cuenta del comercio — el mismo
+  monto que el servidor cobra.
+- Confirmé que el paquete vive fuera del workspace de pnpm (tiene su
+  propio lockfile, `pnpm install --ignore-workspace`), así que no puede
+  arrastrar una dependencia nueva al resto del repo.
+- `pnpm typecheck`/`build`/`test` del monorepo en verde de forma
+  independiente; ningún archivo fuera de `examples/reference-merchant/**`
+  y `docs/AGENT_LOG.md` tocado, confirmado por el diff.
+
+Mergeado por fast-forward (el commit anterior en `main` era ancestro
+directo), rama remota borrada.
+
+**Decisión nueva:** ninguna — T54 no necesitó ninguna que no estuviera
+ya en `C-60`. **F7 (comercio x402 genérico) queda completa** — ver
+`PLATAFORMA-PARTNERS.md` § F7, tabla de tickets actualizada.
+
+Pendiente: el resto de F6 (rail por tenant en `apps/web`), el rename
+real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y G10
+(alta automática de emisores).
