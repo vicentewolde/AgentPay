@@ -2526,6 +2526,30 @@ terminar. Cubren 5xx seguido de 2xx con backoff creciente, error de red por
 Pendiente: revisión y merge del PR; T49 o un sucesor sigue siendo responsable
 de decidir cuándo se emite cada evento y de conectar los emisores reales.
 
+## 2026-09-10 (12) — codex/aiengent-brand-assets
+
+Agente: Codex
+
+Qué: se creó un paquete inicial de identidad visual para **AienGent** en
+`apps/web/public/brand/aiengent/`: monograma geométrico `AI`, composición
+horizontal, variantes para fondos claros y oscuros, SVG maestros y PNGs de
+32, 192, 512 y 1280 px. También se agregó `aiengent-brand-kit.zip`, compatible
+con Finder, como descarga única. El acento azul eléctrico `#176BFF` aparece
+solamente en el terminal superior de la I.
+
+Por qué: el usuario pidió un pack similar al de VynGent y AgenGent, pero
+adaptado al nombre AienGent, para usarlo y compartirlo mediante el repositorio.
+
+Verificado: los cuatro SVG pasan validación XML; los PNG se renderizaron desde
+los SVG maestros y se revisaron visualmente, incluido el favicon de 32 px. El
+ZIP se validó con `unzip` y se extrajo correctamente usando el extractor nativo
+de macOS. `pnpm build` limpio y 841 tests en verde.
+
+Pendiente: revisión visual del usuario y de Claude Code antes de mergear. El
+wordmark del SVG horizontal usa una pila sans-serif del sistema; para un master
+de marca definitivo conviene fijar la tipografía licenciada y convertirla a
+curvas tras la aprobación final.
+
 ## 2026-09-10 (14) — main (revisión y merge de T46, T47, T48)
 
 Agente: Claude Code
