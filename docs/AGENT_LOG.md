@@ -3387,3 +3387,31 @@ Pendiente: que el usuario arranque T59 en Codex, migrar o no el rail
 compartido, el rename a AgentPey (`P-11`), y desplegar T40/T49/T51/T52 a
 Render — el único pendiente de la lista original que sigue completamente
 sin tocar.
+
+---
+
+## 2026-09-11 — codex/t59-status-dashboard
+
+Agente: Codex
+
+Qué: se creó `apps/status-dashboard`, un servidor interno mínimo con
+`node:http`: página HTML server-rendered y los GET
+`/api/status/mandates?tenantId=…` y `/api/status/vault/:tenantId`. Lee sólo
+`Directory.findTenant`/`listMandates` y `MandateVault.list`/`verify`; el
+panel no recibe ni tiene en su scope métodos para pagar, revocar o escribir.
+Los métodos POST, PUT, PATCH y DELETE de cada ruta conocida responden 405.
+
+Por qué: T59 necesita una vista legible durante el piloto para inspeccionar
+mandatos, rechazos y la integridad de la cadena del vault sin abrir Postgres
+a mano, sin ampliar ningún camino de autorización o de fondos.
+
+Verificado: `pnpm build`, `pnpm typecheck` y `pnpm test` en verde (el nuevo
+paquete aporta 3 tests HTTP de solo lectura). Se agregó una integración que
+siembra un mandato y un registro del vault en Postgres y los lee por HTTP,
+pero no se pudo correr acá: este worktree no tiene `.env.local` ni
+`DATABASE_URL`; el runner falla explícitamente con `ConfigError` sin tocar
+ninguna base.
+
+Pendiente: ejecutar
+`pnpm --filter @agentpay/status-dashboard run test:integration` en un
+worktree con `DATABASE_URL`, abrir PR y esperar la revisión de Claude Code.

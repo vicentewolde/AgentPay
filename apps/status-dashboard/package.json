@@ -1,0 +1,23 @@
+{
+  "name": "@agentpay/status-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "start": "tsx src/server.ts",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@agentpass/core": "workspace:*",
+    "@agentpay/directory": "workspace:*",
+    "@agentpay/vault": "workspace:*",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "^17.0.1",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0"
+  }
+}
