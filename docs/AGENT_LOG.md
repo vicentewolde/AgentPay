@@ -2446,3 +2446,30 @@ archivo. T49 (middleware de auth + conectar las rutas reales de `/v1`,
 brecha de `C-47`) sigue siendo trabajo de Claude Code, sin empezar —
 próximo hito propuesto. Sigue pendiente de antes: rename a VynGent
 (`P-9`), desplegar T40 a Render, G10.
+
+## 2026-09-10 (11) — `codex/t46-openapi`
+
+Agente: Codex
+
+Qué: se agregó `scripts/generate-openapi.ts` y el script raíz
+`generate:openapi`. El generador importa los esquemas congelados de
+`@agentpay/partner-api`, usa `z.toJSONSchema(..., { io: "input" })` y
+escribe `docs/api/openapi.yaml` como OpenAPI 3.1. Cubre las siete rutas de
+`/v1`, sus scopes, bearer auth, `Idempotency-Key` en los dos POST, sobres de
+éxito con `$ref` a cada recurso y el sobre de error. Se agregaron los aliases
+de TypeScript necesarios para que scripts de raíz resuelvan los paquetes
+workspace y `yaml` como devDependency para emitir YAML.
+
+Por qué: T46 de F5 exige que la especificación nazca de los esquemas Zod de
+T45, sin una segunda definición manual de los campos públicos.
+
+Verificado: `pnpm run generate:openapi`, `pnpm typecheck` y `pnpm test`
+(831 tests) pasan. `redocly lint docs/api/openapi.yaml` valida el documento
+sin advertencias. La conversión usa el modo de entrada porque `grant` incluye
+transforms; los refinements arbitrarios de Zod (por ejemplo Stellar
+address/DID y `payTo`) se exportan como `string`, límite conocido de JSON
+Schema nativo. No se modificaron los esquemas congelados para forzar una
+representación que no poseen.
+
+Pendiente: revisión y merge del PR; T49 sigue debiendo conectar los handlers
+reales de `/v1` y decidir la brecha C-47.
