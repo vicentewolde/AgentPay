@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">AgentPey icon</title>
+  <desc id="desc">Interlocked geometric A and P monogram with an electric-blue payment terminal.</desc>
+  <g fill="none" stroke="#171A1F" stroke-width="60" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M72 416 196 96h86v320"/>
+    <path d="M136 282h146"/>
+    <path d="M282 112h96"/>
+    <path d="M432 166v84l-48 48H282"/>
+  </g>
+  <path d="M378 112l54 54" fill="none" stroke="#176BFF" stroke-width="60" stroke-linecap="butt"/>
+</svg>

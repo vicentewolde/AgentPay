@@ -2447,7 +2447,6 @@ brecha de `C-47`) sigue siendo trabajo de Claude Code, sin empezar —
 próximo hito propuesto. Sigue pendiente de antes: rename a VynGent
 (`P-9`), desplegar T40 a Render, G10.
 
-<<<<<<< HEAD
 ## 2026-09-10 (11) — `codex/t46-openapi`
 
 Agente: Codex
@@ -2784,3 +2783,30 @@ tomó ninguna decisión de diseño.
 Pendiente: **T50** (la guía de integración de un partner) ya no depende de
 nada nuevo. Sigue pendiente de antes: el rename a VynGent (`P-9`),
 desplegar T40/T49/T51/T52 a Render, y G10 (alta automática de emisores).
+
+---
+
+## 2026-09-11 — codex/agentpey-brand-assets
+
+Agente: Codex
+
+Qué: se creó un paquete inicial de identidad visual para **AgentPey** en
+`apps/web/public/brand/agentpey/`: monograma geométrico integrado `AP`,
+composición horizontal, variantes para fondos claros y oscuros, SVG maestros y
+PNGs de 32, 192, 512 y 1280 px. También se agregó `agentpey-brand-kit.zip`,
+compatible con Finder, como descarga única. El acento azul eléctrico `#176BFF`
+aparece únicamente en el terminal de salida de la P.
+
+Por qué: el usuario escogió AgentPey, pronunciado “Agent Pay”, y pidió una
+identidad visual propia que conservara la sobriedad de las exploraciones
+anteriores sin usar un símbolo genérico de IA o pagos.
+
+Verificado: los cuatro SVG pasan validación XML; los PNG se renderizaron desde
+los SVG maestros y se revisaron visualmente, incluido el favicon de 32 px. El
+ZIP se validó con `unzip` y se extrajo correctamente usando el extractor nativo
+de macOS. `pnpm build` y `pnpm test` completan limpios en el monorepo.
+
+Pendiente: revisión visual del usuario y de Claude Code antes de mergear. El
+wordmark del SVG horizontal usa una pila sans-serif del sistema; para un master
+de marca definitivo conviene fijar la tipografía licenciada y convertirla a
+curvas tras la aprobación final.
