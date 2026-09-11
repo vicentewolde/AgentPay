@@ -1180,3 +1180,145 @@ explícitamente.
 "desplegar" en este proyecto (T31, T33, T35): un cambio de identidad que
 toca el camino de "Iniciar sesión" de todo visitante merece confirmarse
 localmente antes de tocar el sitio real, no en el mismo movimiento.
+
+---
+
+### C-43 · Paquete nuevo `@agentpay/partner-api` para el contrato congelado de `/v1` (T45) · `Vigente`
+**Fecha:** 2026-09-10 (T45)
+
+`PLATAFORMA-PARTNERS.md` § F5 pedía "esquemas zod nuevos (paquete a
+definir)" antes de abrir T46-T50. Se decidió un paquete propio —no sumar
+esto a `@agentpay/directory`— porque son responsabilidades distintas:
+`directory` persiste, este paquete decide la forma de lo que cruza la red y
+quién puede llamarlo. Ninguna de las dos cosas necesita saber de la otra
+salvo por los tipos que ya expone (`Tenant`, `AgentInstance`, `MandateRecord`,
+`ApiKey`).
+
+**Qué contiene, exactamente lo que T45 pedía y nada más:** los DTOs
+snake_case de `/v1` (tenants, agentes, mandatos de solo lectura,
+`consent_sessions`) con sus funciones de mapeo desde los tipos internos de
+`@agentpay/directory`; el contrato de autenticación (`Authorization: Bearer
+ap_test_...`, reutilizando `Directory.authenticate()` que T38 ya construyó);
+el enum de permisos de API key; la semántica exacta de idempotencia; y el
+envelope de error/éxito. Cero rutas HTTP, cero cambios a `apps/web`.
+
+**Verificado:** `git diff --stat d493d63..HEAD -- apps contracts` no
+devuelve nada — ningún punto de autorización tocado. 42 tests nuevos (de
+823), todos puros, sin red ni base de datos. `pnpm typecheck`/`pnpm build`
+limpios.
+
+**Alternativa descartada:** escribir los esquemas directamente dentro de
+`apps/web` o de `@agentpay/directory`. Se descartó porque F5's tickets de
+Codex (T46 OpenAPI, T47 SDK, T48 webhooks) necesitan importar estas formas
+sin arrastrar ni un servidor HTTP ni una conexión a Postgres.
+
+---
+
+### C-44 · El permiso de API key se llama `ApiScope`, no `Scope` · `Vigente`
+**Fecha:** 2026-09-10 (T45)
+
+**Hallazgo al construir, no al planificar.** `@agentpass/core` ya exporta
+`Scope`/`scopeSchema` para el scope de gasto de una credencial o mandato
+(`actions`/`venues`/`assets`/`limits`) — un concepto central del proyecto
+desde la Fase 2. El borrador inicial de este hito nombró igual al permiso de
+una API key ("puede este key llamar esta ruta"), lo cual habría dejado dos
+`Scope` completamente distintos, importables desde dos paquetes distintos,
+en el mismo proyecto.
+
+**La corrección.** Renombrado a `ApiScope`/`apiScopeSchema`/`API_SCOPES` en
+`@agentpay/partner-api`, con un comentario en el propio archivo explicando
+por qué. Ninguna colisión de imports es posible ahora — un lector que ve
+`Scope` sabe que es gasto; uno que ve `ApiScope` sabe que es acceso a la API.
+
+**Alternativa descartada:** mantener `Scope` en el paquete nuevo y confiar en
+que el import con alias (`import { Scope as ApiScope }`) evite la confusión
+en la práctica. Se descartó porque depende de que cada archivo que lo
+importe recuerde hacerlo — el nombre correcto en el origen no depende de la
+disciplina de cada consumidor.
+
+---
+
+### C-45 · La lista de permisos de `/v1` es más chica que la propuesta en `PLATAFORMA-PARTNERS.md` §2.7 · `Vigente`
+**Fecha:** 2026-09-10 (T45)
+
+§2.7 proponía `tenants:write`, `agents:write`, `consent:create`,
+`mandates:read`, `mandates:revoke`, `payments:authorize`, `vault:read` —una
+lista "mínima, separada por daño" pensada para toda la superficie eventual
+de la plataforma, no solo para T45. Congelar esa lista completa ahora habría
+dejado permisos que ninguna ruta existente o planeada en la tabla de F5
+(T45-T50) revisa todavía.
+
+**Lo que se congeló en su lugar:** `tenants:read`, `tenants:write`,
+`agents:read`, `consent_sessions:read`, `consent_sessions:write`,
+`mandates:read` — exactamente los que T45's alcance nombra (tenants,
+agentes, `consent_sessions`, mandatos de solo lectura). Se renombró
+`consent:create` a `consent_sessions:write`/`consent_sessions:read` por
+consistencia interna (`recurso:acción` en todos los casos, no una excepción
+para consentimiento).
+
+**Motivo.** Un permiso que una API key puede pedir pero que ninguna ruta
+real revisa es peor que no tenerlo: aparenta estar cableado y no lo está. Se
+prefiere extender la lista, aditivamente, el día que un ticket construya la
+ruta que ese permiso protegería (`mandates:revoke` con la ruta de
+revocación, `payments:authorize` con lo que F7 defina, `vault:read` con el
+panel de partner que F5 explícitamente deja fuera de alcance).
+
+**Alternativa descartada:** congelar la lista completa de §2.7 ahora, como
+"reservada para más adelante". Se descartó por la razón de arriba.
+
+---
+
+### C-46 · La idempotencia se congela como decisión pura, no como tabla · `Vigente`
+**Fecha:** 2026-09-10 (T45)
+
+T45 pedía "la semántica exacta de idempotencia", no su almacenamiento.
+`resolveIdempotency` es una función pura que recibe un `lookup` inyectado
+—de dónde sale `(partner_id, key) → respuesta` no lo decide este paquete— y
+devuelve `"proceed"` o `"replay"`, o lanza `IdempotencyKeyConflict`/
+`IdempotencyKeyRequired`. El mismo patrón que `checkMandate`/`checkScope`
+del proyecto: la decisión se prueba sola, sin una base de datos real detrás.
+
+**Detalle que sí quedó fijado, porque es observable desde afuera:** TTL de
+24 horas (`PLATAFORMA-PARTNERS.md` §2.7), el hash del cuerpo se calcula
+sobre una forma canónica (claves ordenadas recursivamente, arrays intactos)
+para que `{a:1,b:2}` y `{b:2,a:1}` no se traten como cuerpos distintos, y un
+registro vencido se trata exactamente como si no existiera —incluso si el
+cuerpo de la repetición es distinto— en vez de devolver un conflicto contra
+algo que ya expiró.
+
+**Pendiente, a propósito:** dónde vive la tabla `(partner_id, key) →
+respuesta` es una decisión de la ruta que la usa (T49 o un ticket sucesor),
+no de este paquete.
+
+---
+
+### C-47 · `consent_sessions` es solo esquema en T45 — sin persistencia, con un prefijo de id provisional · `Vigente`
+**Fecha:** 2026-09-10 (T45)
+
+`@agentpay/directory` no tiene tabla de `consent_sessions` — T38 no la
+construyó porque F3 resolvió el consentimiento con el flujo de wallet
+conectada que ya existe, no con el flujo hospedado que F5 describe para
+partners. T45 solo define la forma de la petición (`tenant_id`, un `grant`
+que reutiliza `mandateGrantSchema` de `@agentpay/mandate` sin
+redescribirlo) y de la respuesta (`id`, `status`, `consent_url`,
+`mandate_id`, con los dos últimos nulos hasta que la sesión se completa).
+
+**El prefijo `cns_`** se fijó en `consent-sessions.ts` replicando el
+formato ULID-detrás-de-prefijo de `ids.ts` (mismo largo, mismo alfabeto
+Crockford) sin que `@agentpay/directory` sepa nada de `consent_sessions`
+todavía — es una convención documentada para que quien construya la
+persistencia no tenga que decidir el formato del id además de todo lo
+demás, no una tabla real.
+
+**Hallazgo, no pedido explícitamente — brecha en la tabla de F5.** Ninguno
+de los tickets T45-T50 nombra explícitamente "implementar los handlers de
+`/v1`" (crear un tenant de verdad, completar un `consent_session` cuando la
+wallet firma, etc.) — T49 solo describe el middleware de autenticación
+("una api key revocada deja de poder llamar cualquier ruta"), y T50 asume
+que para entonces "la API responde de verdad". Falta un ticket, o una
+ampliación explícita del alcance de T49, que conecte este contrato con
+`@agentpay/directory` y con el flujo hospedado de wallet-connect. Anotado
+para el usuario antes de abrir T49 — no resuelto en este hito porque no era
+su alcance.
+
+---

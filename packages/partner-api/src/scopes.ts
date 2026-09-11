@@ -1,0 +1,50 @@
+/**
+ * The frozen `/v1` API-key permission list, and the pure decision of whether
+ * a key's granted permissions cover a route.
+ *
+ * Named `ApiScope`, not `Scope`: `@agentpass/core` already exports `Scope` for
+ * an entirely different thing — a credential or mandate's spending scope
+ * (`actions`/`venues`/`assets`/`limits`). Reusing that name here for "what
+ * this API key may call" would make every import of either one ambiguous at
+ * a glance, in a codebase that already has enough load-bearing "scope"s.
+ *
+ * `PLATAFORMA-PARTNERS.md` §2.7 proposed a minimal, damage-separated set
+ * (`tenants:write`, `agents:write`, `consent:create`, `mandates:read`,
+ * `mandates:revoke`, `payments:authorize`, `vault:read`). T45's alcance is
+ * narrower — tenants, agents, consent sessions, and mandates, read-only
+ * except for the two creates — so this freezes only the permissions a
+ * T45-shaped route actually checks. `mandates:revoke`, `payments:authorize`
+ * and `vault:read` are not included: they belong to routes no ticket in F5's
+ * table (T45-T50) implements yet, and a permission nobody can be granted for
+ * is worse than none at all — it looks wired when it is not. Extend this
+ * list, additively, the day a ticket implements the route it would guard.
+ */
+import { z } from "zod";
+
+export const API_SCOPES = [
+  "tenants:read",
+  "tenants:write",
+  "agents:read",
+  "consent_sessions:read",
+  "consent_sessions:write",
+  "mandates:read",
+] as const;
+
+export const apiScopeSchema = z.enum(API_SCOPES);
+
+export type ApiScope = z.infer<typeof apiScopeSchema>;
+
+/** True when every element of `scopes` is a permission this frozen list knows. */
+export function areValidApiScopes(scopes: readonly string[]): scopes is readonly ApiScope[] {
+  return scopes.every((scope) => (API_SCOPES as readonly string[]).includes(scope));
+}
+
+/**
+ * Whether a key holding `granted` may call a route that requires `required`.
+ * Pure and framework-agnostic on purpose — `authorizeRequest` (`auth.ts`)
+ * calls this after authenticating the key; whatever wires `/v1` to Node's
+ * `http` (T49) calls that in turn, without reimplementing this check.
+ */
+export function apiScopeCovers(granted: readonly string[], required: ApiScope): boolean {
+  return granted.includes(required);
+}

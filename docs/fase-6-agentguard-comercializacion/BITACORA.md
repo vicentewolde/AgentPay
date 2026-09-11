@@ -12,19 +12,19 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T40 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T45 · **Fase 6: en curso**
 
-Un visitante ya puede conectar una wallet Stellar real (Freighter) y esa
-misma wallet, ahora, firma de verdad su propio Mandato — la aprobación de
-gasto ya no la firma la plataforma en su nombre, la firma la wallet, y esa
-firma queda anclada on-chain en `agent_registry`, exactamente igual que un
-Mandato clásico. Revocarlo también lo firma la wallet. Lo único que
-todavía falta, anotado a propósito y no construido: que cada tenant tenga
-su propia cuenta Stellar fondeada para gastar, en vez de compartir
-`AGENT_SECRET_KEY` — el usuario ya asumió que quien conecta su wallet tiene
-USDC de testnet de antes, lo que saca el bloqueante externo de en medio,
-pero cablear la identidad propia por tenant queda para un hito aparte
-(`C-16`).
+Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
+de verdad su propio Mandato, y cada tenant deriva y ancla su propia
+identidad Stellar — el pago real todavía sale de una cuenta compartida
+hasta F6 (`C-39` a `C-42`, T40). Ahora existe, además, el contrato
+congelado de la API para partners (`/v1`): las formas exactas de tenants,
+agentes, mandatos de solo lectura y `consent_sessions`, cómo se autentica
+una API key, qué puede pedir cada permiso, y la semántica exacta de
+idempotencia — todo como funciones puras y esquemas zod en
+`@agentpay/partner-api`, sin una sola ruta HTTP todavía (`C-43` a `C-47`,
+T45). Nadie puede integrar contra `/v1` hoy: eso es lo que T49 (o un
+ticket sucesor, ver `C-47`) construye sobre este contrato.
 
 ### Progreso
 
@@ -39,6 +39,7 @@ pero cablear la identidad propia por tenant queda para un hito aparte
 | T38 | `@agentpay/directory`: el registro durable de partners, tenants, principals, agentes, credenciales y mandatos | ✅ cerrado 2026-09-10 |
 | T39 | Persistencia de sesión: una wallet que vuelve encuentra su credencial y su Mandato ya firmados, en vez de que se emitan de nuevo | ✅ cerrado 2026-09-10 |
 | T40 | Identidad técnica por tenant: cada uno deriva y ancla su propia credencial y Mandato — el pago sigue compartido hasta F6 | ✅ cerrado 2026-09-10 |
+| T45 | `@agentpay/partner-api`: el contrato congelado de `/v1` — esquemas, autenticación, permisos, idempotencia — sin rutas todavía | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -873,3 +874,70 @@ partners), la fase con más superficie delegable del plan. Su tabla en
 `PLATAFORMA-PARTNERS.md` § 6.1 ya está lista. Sigue pendiente: el rename a
 VynGent (`P-9`), y desplegar este hito a Render (deliberadamente fuera de
 alcance — `C-42`).
+
+---
+
+## T45 · Contrato congelado de `/v1` — `@agentpay/partner-api` — cerrado 2026-09-10
+
+**Qué quedó funcionando, en palabras llanas.** Antes de escribirse una sola
+ruta de la API para partners, quedó decidido y probado el acuerdo completo
+que esa API va a respetar: qué manda y recibe un partner por cada recurso
+(tenants, agentes, mandatos de solo lectura, y `consent_sessions` — el
+flujo hospedado donde un partner pide abrir un consentimiento y redirige a
+su usuario), cómo se identifica una API key, qué puede y no puede pedir
+cada permiso, y qué pasa exactamente si un partner repite la misma llamada
+dos veces (no se cobra ni se crea nada dos veces). Es la diferencia entre
+"la API va a funcionar así" dicho en un documento de diseño y lo mismo
+dicho en código que ya falla si alguien lo rompe.
+
+**Por qué esto primero, antes de abrir tickets para Codex.** La tabla de
+delegación de F5 (`PLATAFORMA-PARTNERS.md` § 6.1) es explícita: ningún
+ticket de Codex (T46 OpenAPI, T47 SDK, T48 webhooks, T50 documentación)
+puede empezar contra un contrato que todavía se puede mover. Congelarlo
+significa que ninguno de esos cuatro va a tener que rehacerse porque un
+campo cambió de nombre a mitad de camino.
+
+**Un hallazgo real, encontrado escribiendo el código, no planificando.**
+`@agentpass/core` ya tenía un `Scope` — el scope de gasto de una credencial
+o mandato — desde la Fase 2. El primer borrador de este hito iba a llamar
+igual al permiso de una API key ("¿puede este key llamar esta ruta?"), lo
+que habría dejado dos conceptos completamente distintos con el mismo
+nombre, importables desde dos paquetes distintos del mismo proyecto.
+Corregido antes de que ningún otro archivo dependiera del nombre viejo:
+`ApiScope`, con la razón escrita en el propio código (`C-44`).
+
+**Lo que T45 deliberadamente no construye.** Ninguna ruta HTTP. Ninguna
+tabla nueva en Postgres — ni siquiera para `consent_sessions`, que hoy no
+existe en ningún lado de `@agentpay/directory`. Y se encontró, escribiendo
+esto, que **ningún ticket de la tabla de F5 nombra explícitamente
+"conectar este contrato con rutas reales"** — T49 describe el middleware de
+autenticación, T50 asume que la API "responde de verdad" para entonces, y
+en el medio falta el ticket que arma los handlers. Anotado para el usuario
+antes de abrir T49 (`C-47`), no resuelto acá porque no era el alcance de
+este hito.
+
+**Verificado:** `git diff --stat d493d63..HEAD -- apps contracts` no
+devuelve nada — cero cambios en cualquier punto de autorización existente.
+823 tests offline en verde (42 nuevos, de 781), todos puros —sin red, sin
+base de datos—, más los que ya existían. `pnpm typecheck` y `pnpm build`
+limpios en todo el monorepo.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta: `BITACORA.md`,
+`DECISIONES.md` (`C-43` a `C-47`). Paquete nuevo:
+`packages/partner-api/` (`README.md`, esquemas, funciones puras, tests).
+Cambios aditivos en paquetes existentes: `packages/core/src/errors.ts`
+(siete códigos de error nuevos: `MissingApiKey`, `InvalidApiKey`,
+`ScopeNotGranted`, `IdempotencyKeyRequired`, `IdempotencyKeyConflict`,
+`MandateNotFound`, `ConsentSessionNotFound`), `packages/directory/src/index.ts`
+(exporta los esquemas de id que ya existían en `entities.ts`, para que
+`partner-api` no duplique el formato). **Cero archivos de `apps/` o
+`contracts/` tocados.**
+
+Pendiente: el siguiente hito, sujeto a revisión del usuario, es abrir T46
+(OpenAPI), T47 (SDK) y T48 (webhooks) para Codex en paralelo —los tres
+dependen solo de que T45 esté en `main`, no entre sí— y T49 (el middleware
+de autenticación) en Claude Code, con la brecha de `C-47` resuelta primero
+o nombrada explícitamente como parte de T49. Sigue pendiente de antes: el
+rename a VynGent (`P-9`), desplegar T40 a Render, y resolver G10 (alta
+automática de emisores) que F5's alcance nombra pero que ningún hito
+todavía tocó.

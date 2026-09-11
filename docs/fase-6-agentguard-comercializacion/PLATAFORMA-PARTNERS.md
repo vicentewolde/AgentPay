@@ -838,6 +838,18 @@ despliegue — el despliegue en sí no es parte de este hito.
 
 ### F5 · API y SDK para partners ⚪🟡
 
+> **T45 cerrado el 2026-09-10.** El contrato quedó congelado en el paquete
+> `@agentpay/partner-api` (`C-43` a `C-47`): esquemas zod de los cuatro
+> recursos, autenticación por API key, permisos (`ApiScope` — renombrado
+> desde `Scope` para no chocar con el de `@agentpass/core`, `C-44`),
+> idempotencia. Cero rutas HTTP, cero tabla de `consent_sessions` en
+> `@agentpay/directory` todavía. **Brecha encontrada al construir, no al
+> planificar (`C-47`):** ningún ticket de esta tabla nombra explícitamente
+> "conectar el contrato con rutas reales" — T49 describe solo el
+> middleware de autenticación, y T50 asume que la API ya responde de
+> verdad. Antes de abrir T49 hace falta decidir si esa implementación es
+> parte de su alcance o merece un ticket propio.
+
 - **Objetivo llano.** Que CloudOps integre leyendo documentación, sin
   hablar con nosotros.
 - **Alcance.** `/v1` con API keys, scopes, idempotencia, rate limiting,
@@ -888,7 +900,7 @@ Claude Code congele el contrato.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T45 | Claude | F2, F3, F4 cerradas; D2, D3 | Medio — define el contrato que todo lo demás asume | Esquemas zod nuevos (paquete a definir) | Congelado y documentado antes de abrir T46-T49 |
+| T45 | Claude | F2, F3, F4 cerradas; D2, D3 | Medio — define el contrato que todo lo demás asume | Esquemas zod nuevos (paquete a definir) | ✅ cerrado — `@agentpay/partner-api`, 42 tests puros, congelado y documentado antes de abrir T46-T49 |
 | T46 | Codex | T45 mergeado | Bajo — generación mecánica | `docs/api/openapi.yaml`, `scripts/generate-openapi.ts` (prohibido: `packages/directory/src/**`) | El spec generado valida contra los esquemas de T45 sin editarlos |
 | T47 | Codex | T45 mergeado | Bajo — envoltorios tipados, sin lógica | `packages/partner-sdk/**` (nuevo) (prohibido: `apps/web/**`, `packages/directory/**`) | Compila contra la API real de un entorno de prueba |
 | T48 | Codex | Forma del evento de webhook publicada por Claude (no requiere T45 completo) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | Reintentos con backoff verificados con un endpoint de prueba que falla intermitentemente |

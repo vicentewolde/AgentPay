@@ -2359,3 +2359,63 @@ está lista en `PLATAFORMA-PARTNERS.md` § 6.1. Trabajo commiteado directo a
 `main` en esta sesión (T38→T39→T40 se apilaron sin mergear hasta el
 cierre de T39; T40 siguió sobre `main` ya actualizado). Sigue pendiente:
 el rename a VynGent (`P-9`), y desplegar T40 a Render.
+
+## 2026-09-10 (9) — cc/t45-partner-api-contract (T45 cerrado)
+
+Agente: Claude Code
+
+Qué: **T45 cerrado** — el contrato congelado de `/v1` que F5 necesitaba
+antes de abrir cualquier ticket de Codex. Paquete nuevo
+`@agentpay/partner-api`: esquemas zod snake_case de los cuatro recursos
+del alcance (tenants, agentes, mandatos de solo lectura, `consent_sessions`
+— schema únicamente, sin persistencia), el contrato de autenticación por
+API key (`Authorization: Bearer ap_test_...`, reutilizando
+`Directory.authenticate()` que T38 ya construyó), el permiso de acceso a
+la API (`ApiScope`) y la semántica exacta de idempotencia — las tres
+últimas como funciones puras, framework-agnósticas, mismo estilo que
+`checkMandate`/`checkScope`. Cero rutas HTTP, cero cambios a `apps/web`.
+
+Por qué: `PLATAFORMA-PARTNERS.md` § 6.1 exige que Claude Code congele el
+contrato antes de que Codex reciba T46 (OpenAPI), T47 (SDK) o T48
+(webhooks) — el usuario lo pidió explícitamente al arrancar esta sesión.
+
+**Hallazgo real, encontrado escribiendo el código, no planificando:**
+`@agentpass/core` ya exporta `Scope`/`scopeSchema` para el scope de gasto
+de una credencial/mandato desde la Fase 2. Nombrar igual el permiso de una
+API key habría dejado dos conceptos completamente distintos con el mismo
+nombre en el proyecto. Corregido antes de que otro archivo dependiera del
+nombre viejo: `ApiScope` (`C-44`, en `DECISIONES.md` de la Fase 6).
+
+**Brecha encontrada en la propia tabla de F5, no resuelta en este hito
+porque no era su alcance:** ningún ticket de T45-T50 nombra explícitamente
+"implementar los handlers de `/v1`" — T49 describe solo el middleware de
+autenticación, y T50 asume que la API "responde de verdad" para entonces.
+Anotado (`C-47`) para decidir antes de abrir T49.
+
+**Cero cambios en puntos de autorización**, verificado:
+`git diff --stat d493d63..HEAD -- apps contracts` no devuelve nada.
+`checkMandate`, `checkScope`, `checkDailyLimit`, `policy_rail`,
+`agent_registry` intactos — este hito solo define un contrato que nada
+todavía cablea.
+
+Verificado offline: 823 tests en verde (42 nuevos, de 781, todos puros —
+sin red, sin base de datos). `pnpm typecheck` y `pnpm build` limpios en
+todo el monorepo.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en
+`docs/fase-6-agentguard-comercializacion/`: `BITACORA.md` (T45 cerrado),
+`DECISIONES.md` (`C-43` a `C-47`), `PLATAFORMA-PARTNERS.md` (F5, tabla de
+T45 marcada resuelta, brecha de `C-47` anotada). Paquete nuevo:
+`packages/partner-api/`. Cambios aditivos: `packages/core/src/errors.ts`
+(siete códigos de error nuevos), `packages/directory/src/index.ts`
+(exporta esquemas de id que ya existían, sin tocar su lógica),
+`tsconfig.json` raíz (referencia al paquete nuevo).
+
+Pendiente: con el visto bueno del usuario, abrir T46 (OpenAPI), T47 (SDK)
+y T48 (webhooks) para Codex en paralelo — no dependen entre sí, solo de
+que esta rama esté en `main` — y T49 (middleware de auth, Claude Code) con
+la brecha de `C-47` resuelta o nombrada explícitamente dentro de su
+alcance. La rama `cc/t45-partner-api-contract` queda **sin mergear ni
+pushear**, esperando revisión. Sigue pendiente de antes: el rename a
+VynGent (`P-9`), desplegar T40 a Render, y G10 (alta automática de
+emisores) que F5 nombra en su alcance pero que ningún hito todavía tocó.

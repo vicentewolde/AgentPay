@@ -125,7 +125,26 @@ export type AgentPassErrorCode =
   /** This partner already has a tenant for that external reference. */
   | "TenantAlreadyExists"
   /** No agent instance in the directory has that id. */
-  | "AgentNotFound";
+  | "AgentNotFound"
+  /** A `/v1` request carried no `Authorization` header at all. */
+  | "MissingApiKey"
+  /**
+   * The `Authorization` header's secret is malformed, unknown, or belongs to
+   * a revoked key. Deliberately one code for all three: telling a caller
+   * "that key was revoked" instead of "that key is invalid" would confirm a
+   * guessed secret once existed, which is a leak in itself.
+   */
+  | "InvalidApiKey"
+  /** The API key authenticated, but its `scopes` do not cover this route. */
+  | "ScopeNotGranted"
+  /** A `/v1` route that creates state was called without `Idempotency-Key`. */
+  | "IdempotencyKeyRequired"
+  /** The same `Idempotency-Key` was replayed with a different request body. */
+  | "IdempotencyKeyConflict"
+  /** No mandate visible to this partner has that id. */
+  | "MandateNotFound"
+  /** No consent session visible to this partner has that id. */
+  | "ConsentSessionNotFound";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

@@ -8,6 +8,7 @@
     { "path": "./packages/vault" },
     { "path": "./packages/tenancy" },
     { "path": "./packages/directory" },
+    { "path": "./packages/partner-api" },
     { "path": "./apps/agent" },
     { "path": "./apps/web" }
   ]
