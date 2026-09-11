@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentPay — revisar consentimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #fbfaf8;
+    --paper-2: #f2f0ea;
+    --ink: #0f1211;
+    --ink-2: #434946;
+    --ink-3: #707875;
+    --rule: #e3e0d9;
+    --accent: #0a7a56;
+    --accent-wash: #e9f3ee;
+    --danger: #b3261e;
+    --danger-wash: #fbeceb;
+    --serif: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 0 24px 72px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; padding: 28px 0 0; gap: 16px; }
+  .mark { color: var(--ink); text-decoration: none; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+  .network { color: var(--ink-3); font-size: 13px; }
+
+  .hero { padding: clamp(30px, 6vw, 54px) 0 32px; }
+  .eyebrow { margin: 0; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+  h1 { margin: 12px 0 0; font-family: var(--serif); font-size: clamp(2.25rem, 7vw, 3.25rem); font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; }
+  .intro { max-width: 60ch; margin: 16px 0 0; color: var(--ink-2); }
+  .session-id { margin: 16px 0 0; color: var(--ink-3); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+  .panel { border-top: 1px solid var(--rule); padding: 28px 0; }
+  .panel:last-child { border-bottom: 1px solid var(--rule); }
+  .panel-kicker { color: var(--ink-3); font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; }
+  h2 { margin: 6px 0 8px; font-family: var(--serif); font-size: 1.75rem; font-weight: 400; letter-spacing: -0.015em; line-height: 1.15; }
+  .lead { margin: 0 0 18px; color: var(--ink-2); font-size: 14.5px; }
+
+  .grant { margin: 0; }
+  .grant-row { display: grid; grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr); gap: 16px; padding: 15px 0; border-top: 1px dashed var(--rule); }
+  .grant-row:first-child { border-top: 0; }
+  .grant dt { color: var(--ink-3); font-size: 14px; }
+  .grant dd { margin: 0; min-width: 0; }
+  .values { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+  .values li { border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); color: var(--ink-2); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; padding: 4px 7px; }
+  .limits { display: grid; gap: 7px; }
+  .limit { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; color: var(--ink-2); font-size: 14px; }
+  .limit:last-child { border-bottom: 0; padding-bottom: 0; }
+  .limit b { color: var(--ink); font-family: var(--mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; text-align: right; }
+  .time-note { margin: 18px 0 0; color: var(--ink-3); font-size: 13px; }
+  .time-note strong { color: var(--ink-2); font-weight: 500; }
+
+  .btn { appearance: none; border: 1px solid var(--ink); border-radius: 7px; background: var(--ink); color: var(--paper); cursor: pointer; font-family: var(--sans); font-size: 14px; font-weight: 500; padding: 11px 18px; transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease; }
+  .btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+  .btn:disabled { background: var(--rule); border-color: var(--rule); color: var(--ink-3); cursor: not-allowed; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .btn.secondary { background: transparent; border-color: var(--rule); color: var(--ink); }
+  .btn.secondary:hover:not(:disabled) { background: var(--paper-2); border-color: var(--ink-3); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .status { min-height: 1.5em; margin: 14px 0 0; color: var(--ink-2); font-size: 14px; }
+  .status.ok { color: var(--accent); }
+  .status.err { color: var(--danger); }
+  .notice { border-left: 3px solid var(--accent); background: var(--accent-wash); color: var(--ink-2); margin: 0; padding: 13px 15px; font-size: 14px; }
+  .notice.err { border-color: var(--danger); background: var(--danger-wash); color: var(--danger); }
+  .wallet-address { margin: 14px 0 0; color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+  .result { margin: 0; }
+  .result-row { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; border-top: 1px dashed var(--rule); padding: 10px 0; font-size: 13px; }
+  .result-row:first-child { border-top: 0; }
+  .result dt { color: var(--ink-3); }
+  .result dd { margin: 0; color: var(--ink); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+  @media (max-width: 520px) {
+    .wrap { padding: 0 20px 56px; }
+    .top { align-items: flex-start; flex-direction: column; gap: 3px; }
+    .grant-row, .result-row { grid-template-columns: 1fr; gap: 5px; }
+  }
+</style>
+<script src="https://unpkg.com/@stellar/freighter-api@6.0.1/build/index.min.js"></script>
+</head>
+<body>
+<main class="wrap">
+  <div class="top">
+    <a class="mark" href="/landing">AgentPay</a>
+    <span class="network">Stellar Testnet</span>
+  </div>
+
+  <header class="hero">
+    <p class="eyebrow">Solicitud de consentimiento</p>
+    <h1>Revisá antes de firmar.</h1>
+    <p class="intro">Esta invitación propone los permisos que tendrá un agente. Revisá cada dato antes de conectar tu wallet y firmar el Mandato.</p>
+    <p id="session-id" class="session-id" hidden></p>
+  </header>
+
+  <p id="page-status" class="notice" role="status">Cargando la invitación…</p>
+
+  <section id="grant-panel" class="panel" hidden>
+    <p class="panel-kicker">01 — Permisos propuestos</p>
+    <h2>Lo que autorizás</h2>
+    <p class="lead">Estos son los límites y destinos que el partner propuso. Al firmar, formarán parte del Mandato anclado en Stellar.</p>
+    <dl class="grant">
+      <div class="grant-row"><dt>Acciones</dt><dd><ul id="grant-actions" class="values"></ul></dd></div>
+      <div class="grant-row"><dt>Comercios</dt><dd><ul id="grant-venues" class="values"></ul></dd></div>
+      <div class="grant-row"><dt>Activos</dt><dd><ul id="grant-assets" class="values"></ul></dd></div>
+      <div class="grant-row"><dt>Límites</dt><dd id="grant-limits" class="limits"></dd></div>
+      <div id="pay-to-row" class="grant-row" hidden><dt>Se puede pagar a</dt><dd><ul id="grant-pay-to" class="values"></ul></dd></div>
+    </dl>
+    <p class="time-note"><strong>Vigencia del Mandato:</strong> <span id="valid-until"></span><br /><strong>Esta invitación vence:</strong> <span id="expires-at"></span></p>
+  </section>
+
+  <section id="wallet-panel" class="panel" hidden>
+    <p class="panel-kicker">02 — Verificá tu wallet</p>
+    <h2>Conectá la wallet principal</h2>
+    <p class="lead">Freighter te pedirá una firma de verificación. Esta firma no ejecuta una transacción ni otorga todavía el Mandato.</p>
+    <div class="actions"><button id="wallet-btn" class="btn secondary" type="button">Conectar wallet</button></div>
+    <p id="wallet-status" class="status" role="status"></p>
+    <p id="wallet-address" class="wallet-address" hidden></p>
+  </section>
+
+  <section id="sign-panel" class="panel" hidden>
+    <p class="panel-kicker">03 — Firmá el Mandato</p>
+    <h2>Confirmá el consentimiento</h2>
+    <p class="lead">Freighter te pedirá dos aprobaciones: una firma del Mandato y otra para anclarlo en Stellar Testnet.</p>
+    <div class="actions"><button id="sign-btn" class="btn" type="button" disabled>Firmar Mandato</button></div>
+    <p id="sign-status" class="status" role="status"></p>
+  </section>
+
+  <section id="success-panel" class="panel" hidden>
+    <p class="panel-kicker">Completado</p>
+    <h2>Mandato anclado</h2>
+    <p class="notice">Tu consentimiento fue firmado y anclado correctamente en Stellar Testnet.</p>
+    <dl id="success-facts" class="result"></dl>
+  </section>
+</main>
+
+<script>
+var TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
+var consentId = "";
+var consentPath = "";
+var walletAddress = "";
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  return { status: res.status, body: await res.json() };
+}
+
+/** Freighter's `signMessage` can return the signature as a base64 string or
+    as byte-array-like data. Normalise either shape to the base64 string the
+    server's SEP-0053 check expects. */
+function signedMessageToBase64(signedMessage) {
+  if (typeof signedMessage === "string") return signedMessage;
+  var bytes = new Uint8Array(Object.values(signedMessage));
+  var binary = "";
+  for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function messageFor(error, fallback) {
+  return error && error.body && error.body.message ? error.body.message : error && error.message ? error.message : fallback;
+}
+
+function setStatus(el, ok, message) {
+  el.textContent = message;
+  el.className = "status " + (ok ? "ok" : "err");
+}
+
+function setPageNotice(kind, message) {
+  var el = document.getElementById("page-status");
+  el.textContent = message;
+  el.className = "notice" + (kind === "error" ? " err" : "");
+}
+
+function appendValues(el, values) {
+  el.innerHTML = "";
+  for (const value of values) {
+    const item = document.createElement("li");
+    item.textContent = value;
+    el.append(item);
+  }
+}
+
+function formatTime(value) {
+  var date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
+}
+
+function renderLimits(limits) {
+  var el = document.getElementById("grant-limits");
+  el.innerHTML = "";
+  var entries = [
+    ["Máximo por transacción", limits.perTx + " " + limits.currency],
+    ["Máximo por día", limits.perDay + " " + limits.currency],
+    ["Moneda", limits.currency],
+  ];
+  for (const [label, value] of entries) {
+    const row = document.createElement("div");
+    row.className = "limit";
+    const name = document.createElement("span");
+    const amount = document.createElement("b");
+    name.textContent = label;
+    amount.textContent = value;
+    row.append(name, amount);
+    el.append(row);
+  }
+}
+
+function renderGrant(session) {
+  document.getElementById("session-id").textContent = "Invitación " + session.id;
+  document.getElementById("session-id").hidden = false;
+  appendValues(document.getElementById("grant-actions"), session.grant.actions);
+  appendValues(document.getElementById("grant-venues"), session.grant.venues);
+  appendValues(document.getElementById("grant-assets"), session.grant.assets);
+  renderLimits(session.grant.limits);
+  if (session.grant.payTo !== undefined) {
+    appendValues(document.getElementById("grant-pay-to"), session.grant.payTo);
+    document.getElementById("pay-to-row").hidden = false;
+  }
+  document.getElementById("valid-until").textContent = formatTime(session.validUntil);
+  document.getElementById("expires-at").textContent = formatTime(session.expiresAt);
+}
+
+function showTerminalStatus(status) {
+  var messages = {
+    completed: "Esta invitación ya se firmó.",
+    expired: "Esta invitación venció.",
+    cancelled: "Esta invitación se canceló.",
+  };
+  setPageNotice("error", messages[status] || "Esta invitación ya no está disponible.");
+}
+
+function renderSuccess(anchored) {
+  var facts = [
+    ["Mandate ID", anchored.mandateId],
+    ["Mandate hash", anchored.mandateHash],
+    ["Transaction hash", anchored.transactionHash],
+  ];
+  var el = document.getElementById("success-facts");
+  el.innerHTML = "";
+  for (const [label, value] of facts) {
+    const row = document.createElement("div");
+    row.className = "result-row";
+    const name = document.createElement("dt");
+    const detail = document.createElement("dd");
+    name.textContent = label;
+    detail.textContent = value;
+    row.append(name, detail);
+    el.append(row);
+  }
+  document.getElementById("wallet-panel").hidden = true;
+  document.getElementById("sign-panel").hidden = true;
+  document.getElementById("success-panel").hidden = false;
+}
+
+async function connectWallet() {
+  var button = document.getElementById("wallet-btn");
+  var status = document.getElementById("wallet-status");
+  if (typeof freighterApi === "undefined") {
+    setStatus(status, false, "No se encontró Freighter. Instalalo desde freighter.app y recargá esta página.");
+    return;
+  }
+  button.disabled = true;
+  try {
+    const presence = await freighterApi.isConnected();
+    if (!presence.isConnected) throw new Error("No se encontró Freighter. Instalalo desde freighter.app y recargá esta página.");
+
+    setStatus(status, true, "Esperando que Freighter conecte tu wallet…");
+    const access = await freighterApi.requestAccess();
+    if (access.error) throw new Error(access.error);
+    const address = access.address;
+
+    const { body: challenge } = await api("/api/wallet/challenge", { method: "POST" });
+    if (!challenge.ok) throw { body: challenge };
+
+    setStatus(status, true, "Firmá el mensaje de verificación en Freighter…");
+    const signed = await freighterApi.signMessage(challenge.message, {
+      address: address,
+      networkPassphrase: TESTNET_PASSPHRASE,
+    });
+    if (signed.error) throw new Error(signed.error);
+
+    setStatus(status, true, "Verificando la firma…");
+    const { body: verified } = await api(consentPath + "/wallet-verify", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        address: address,
+        nonce: challenge.nonce,
+        signature: signedMessageToBase64(signed.signedMessage),
+      }),
+    });
+    if (!verified.ok) throw { body: verified };
+
+    walletAddress = verified.address;
+    document.getElementById("wallet-address").textContent = "Wallet conectada: " + walletAddress;
+    document.getElementById("wallet-address").hidden = false;
+    document.getElementById("sign-btn").disabled = false;
+    setStatus(status, true, "Wallet verificada. Ya podés revisar y firmar el Mandato.");
+  } catch (error) {
+    setStatus(status, false, messageFor(error, "No se pudo conectar la wallet."));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function runWalletMandateFlow(pending, status) {
+  if (typeof freighterApi === "undefined") throw new Error("No se encontró Freighter. Instalalo desde freighter.app y recargá esta página.");
+  const access = await freighterApi.requestAccess();
+  if (access.error) throw new Error(access.error);
+  const address = access.address;
+
+  setStatus(status, true, "Firmá el Mandato en Freighter…");
+  const signed = await freighterApi.signMessage(pending.challengeMessage, {
+    address: address,
+    networkPassphrase: TESTNET_PASSPHRASE,
+  });
+  if (signed.error) throw new Error(signed.error);
+
+  const { body: consent } = await api(consentPath + "/wallet-consent", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ signature: signedMessageToBase64(signed.signedMessage) }),
+  });
+  if (!consent.ok) throw { body: consent };
+
+  setStatus(status, true, "Firmá la transacción de anclaje en Freighter…");
+  const signedTx = await freighterApi.signTransaction(consent.xdr, {
+    address: address,
+    networkPassphrase: TESTNET_PASSPHRASE,
+  });
+  if (signedTx.error) throw new Error(signedTx.error);
+
+  setStatus(status, true, "Anclando el Mandato en Stellar Testnet…");
+  const { body: anchored } = await api(consentPath + "/wallet-anchor", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ requestId: consent.requestId, signedXdr: signedTx.signedTxXdr }),
+  });
+  if (!anchored.ok) throw { body: anchored };
+  return anchored;
+}
+
+async function signMandate() {
+  var button = document.getElementById("sign-btn");
+  var status = document.getElementById("sign-status");
+  if (!walletAddress) {
+    setStatus(status, false, "Conectá y verificá tu wallet antes de firmar.");
+    return;
+  }
+  button.disabled = true;
+  try {
+    setStatus(status, true, "Preparando el Mandato…");
+    const { body: pending } = await api(consentPath + "/start", { method: "POST" });
+    if (!pending.ok) throw { body: pending };
+    if (pending.pending !== "wallet-consent") throw new Error("El servidor no devolvió una firma de wallet pendiente.");
+    const anchored = await runWalletMandateFlow(pending, status);
+    renderSuccess(anchored);
+  } catch (error) {
+    setStatus(status, false, messageFor(error, "No se pudo firmar el Mandato."));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function loadConsentSession() {
+  try {
+    var pathPart = location.pathname.split("/").filter(Boolean).pop();
+    if (!pathPart) throw new Error("Falta el identificador de la invitación.");
+    consentId = decodeURIComponent(pathPart);
+    consentPath = "/api/consent/" + encodeURIComponent(consentId);
+    const { body: session } = await api(consentPath);
+    if (!session.ok) throw { body: session };
+
+    renderGrant(session);
+    document.getElementById("grant-panel").hidden = false;
+    if (session.status !== "pending") {
+      showTerminalStatus(session.status);
+      return;
+    }
+    setPageNotice("success", "Revisá todos los permisos antes de continuar.");
+    document.getElementById("wallet-panel").hidden = false;
+    document.getElementById("sign-panel").hidden = false;
+  } catch (error) {
+    setPageNotice("error", messageFor(error, "No se pudo cargar esta invitación."));
+  }
+}
+
+document.getElementById("wallet-btn").addEventListener("click", connectWallet);
+document.getElementById("sign-btn").addEventListener("click", signMandate);
+loadConsentSession();
+</script>
+</body>
+</html>

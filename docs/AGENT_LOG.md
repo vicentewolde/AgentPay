@@ -2711,3 +2711,23 @@ pushear**, esperando revisión del usuario. Siguiente hito propuesto:
 **T52** (la página `consent.html`), delegable a Codex una vez aprobado
 este hito. Sigue pendiente de antes: rename a VynGent (`P-9`), desplegar
 T40/T49/T51 a Render, G10 (alta automática de emisores).
+
+## 2026-09-11 — codex/t52-consent-html
+Agente: Codex
+
+Qué: se agregó `apps/web/public/consent.html`, la página hospedada de una
+invitación de consentimiento. Lee el id de `/consent/{id}`, muestra sin
+resumir acciones, comercios, activos, límites y `payTo`, y reutiliza el
+flujo de Freighter ya establecido: verificar wallet → firmar Mandato →
+firmar y enviar el anclaje. Muestra los identificadores finales del Mandato
+y errores legibles en cada etapa.
+
+Por qué: completar T52 sin tocar rutas ni puntos de autorización; la página
+solo consume los endpoints públicos y ya verificados de T51.
+
+Pendiente: `pnpm build`, `pnpm typecheck` y `pnpm test` (882 pruebas)
+pasaron. La ruta local `/consent/{id}` respondió 200 y el navegador mostró
+el estado de error esperado sin errores de consola cuando faltó
+`DATABASE_URL`. No se pudo hacer el recorrido real contra Postgres/testnet
+ni Freighter porque este worktree no contiene `.env.local`; hacerlo antes
+de mergear con esa configuración y una wallet de testnet fondeada.
