@@ -3415,3 +3415,50 @@ ninguna base.
 Pendiente: ejecutar
 `pnpm --filter @agentpay/status-dashboard run test:integration` en un
 worktree con `DATABASE_URL`, abrir PR y esperar la revisión de Claude Code.
+
+---
+
+## 2026-09-11 (13) — main (T59 revisado y mergeado, PR #18)
+
+Agente: Claude Code
+
+Qué: revisé el PR #18 de Codex en un worktree aislado (`/tmp/agentpay-pr18-review`,
+descartado al terminar) — diff completo línea por línea, no solo el
+resumen del PR. El diff se queda exactamente donde el prompt de
+delegación lo permitía: `apps/status-dashboard/**` (nuevo paquete),
+`docs/AGENT_LOG.md`, `pnpm-lock.yaml` — nada en `apps/web/**`,
+`apps/agent/**`, `packages/directory/src/**`, `packages/vault/src/**` ni
+`contracts/**`.
+
+Confirmé que es de solo lectura por diseño, no solo por convención:
+`StatusDirectory`/`VaultReader` (`status.ts`) declaran únicamente
+`findTenant`/`listMandates` y `list`/`verify` — los métodos de escritura
+de `Directory`/`MandateVault` ni figuran en esos tipos, así que ningún
+handler puede llamarlos aunque quisiera. Las tres rutas conocidas
+rechazan `POST`/`PUT`/`PATCH`/`DELETE` con `405`, cubierto por un test
+que las prueba las doce combinaciones. HTML escapado en todo lo que
+refleja `tenantId`.
+
+Corrí todo yo mismo, independiente de lo que reporta el PR: `pnpm
+build`/`typecheck` limpios, `pnpm test` con 914 tests (911 previos + 3
+nuevos), y la integración contra Postgres real que Codex no pudo correr
+en su worktree (`pnpm --filter @agentpay/status-dashboard run
+test:integration`) — pasó. De paso, levanté el servidor real
+(`pnpm --filter @agentpay/status-dashboard run dev`) y le pegué con un
+`tenantId` real de la verificación de T58 en producción: devolvió el
+mandato real anclado ese mismo día. `POST /` confirmado rechazado con
+`405` en vivo, no solo en el test.
+
+Sin hallazgos que bloqueen el merge. Mergeado a `main` por fast-forward
+(PR #18). La rama remota `codex/t59-status-dashboard` queda sin borrar a
+propósito — sigue checked out en el worktree de Codex
+(`~/dev/AgentPay-codex`); borrarla ahora no rompe nada pero no hace
+falta apurarlo mientras esa sesión pueda seguir activa.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/PLATAFORMA-PARTNERS.md`
+(T59 marcado cerrado). Sin decisión nueva en `DECISIONES.md` — T59 no
+introdujo ninguna que no estuviera ya en el prompt de delegación.
+
+Pendiente: migrar o no el rail compartido, el rename a AgentPey
+(`P-11`, sesión aparte ya en curso), y desplegar T40/T49/T51/T52 a
+Render.

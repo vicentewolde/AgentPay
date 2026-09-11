@@ -1196,7 +1196,7 @@ Claude Code congele el contrato.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T59 | Codex | F5 cerrada ✅ — sin bloqueos, delegable ya | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | Ningún endpoint del panel puede mutar estado, verificado por test |
+| T59 | Codex | F5 cerrada ✅ — sin bloqueos, delegable ya | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | ✅ cerrado (PR #18) — las tres rutas conocidas responden 405 a `POST`/`PUT`/`PATCH`/`DELETE`, cubierto por test; interfaces `StatusDirectory`/`VaultReader` estructuralmente sin métodos de escritura; revisado por Claude Code en worktree aislado, `pnpm build`/`typecheck`/`test` (914 tests) y la integración contra Postgres real, más una corrida manual contra un tenant real de T58 |
 | sin número | Claude | F5 a F8 cerradas; partner y métrica de éxito decididos (preguntas 2 y 6) | — | Coordinación, no código | El partner completó el flujo sin intervención manual nuestra |
 
 ---
