@@ -361,6 +361,14 @@ export interface Directory {
   /** Unique by address — the lookup that makes bootstrapping a shared agent idempotent (T39, `C-33`). */
   findAgentByAddress(address: string): Promise<AgentInstance | undefined>;
   listAgents(tenantId: string): Promise<readonly AgentInstance[]>;
+  /**
+   * Every agent that has deployed its own `policy_rail` (F6/T58), across
+   * every tenant and partner — the read a balance-monitoring script needs
+   * and no per-tenant listing gives (`listAgents` is scoped to one tenant
+   * on purpose; this is the one deliberate exception, and it reads nothing
+   * a partner could not already see about its own tenants through `/v1`).
+   */
+  listAgentsWithPolicyRail(): Promise<readonly AgentInstance[]>;
   setAgentStatus(id: string, status: AgentStatus): Promise<AgentInstance>;
   setAgentOnchainState(id: string, state: OnchainState): Promise<AgentInstance>;
   /**
@@ -669,6 +677,13 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
       const { rows } = await pool.query<Record<string, unknown>>(
         "select * from directory_agents where tenant_id = $1 order by key_index asc",
         [tenantId],
+      );
+      return rows.map(toAgent);
+    },
+
+    async listAgentsWithPolicyRail() {
+      const { rows } = await pool.query<Record<string, unknown>>(
+        "select * from directory_agents where policy_rail_contract_id is not null order by updated_at desc",
       );
       return rows.map(toAgent);
     },

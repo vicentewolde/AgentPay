@@ -968,6 +968,13 @@ Claude Code congele el contrato.
 > `DECISIONES.md` → `C-62` para por qué eso es correcto y no una brecha.
 > Fuera de este hito, a propósito: monitoreo de saldo (**T60**, ticket
 > nuevo) y migrar el rail compartido del piloto al constructor de T57.
+>
+> **T60 cerrado el 2026-09-11.** `scripts/check-rail-balances.ts`
+> (`pnpm run check:rail-balances`) lista el saldo USDC de cada rail de
+> tenant que existe, y avisa si está por debajo de 0.005 USDC. Con esto,
+> **F6 completa sus tres entregables** — despliegue, fondeo y monitoreo —
+> aunque la fase sigue abierta en el sentido de que el rail compartido del
+> piloto no se migró al constructor de T57 (decisión aparte, sin apuro).
 
 - **Objetivo llano.** Que el dinero salga de una cuenta del cliente con
   límites que aplica la red, no de una cuenta nuestra.
@@ -980,7 +987,7 @@ Claude Code congele el contrato.
   cambio al contrato sigue necesitando aprobación aparte.
 - **Decisiones previas.** 4.1 resuelta; G9 ✅ resuelto (T57).
 - **Entregables.** Despliegue por tenant ✅ (T58), fondeo ✅ (T58),
-  monitoreo de saldo (pendiente, T60).
+  monitoreo de saldo ✅ (T60).
 - **Evidencia.** Un pago por tenant, con el rechazo del segundo por
   `per_day` visible en la respuesta del contrato. ✅ Cumplida — dos rails
   distintos y un rechazo por `per_day` en testnet real (`evidencia/T58.md`).
@@ -1011,7 +1018,7 @@ Claude Code congele el contrato.
 |---|---|---|---|---|---|
 | T57 | Claude | Aprobación explícita del usuario sobre `G9` | 🔴 Alto — cambia un contrato Soroban y decide sobre fondos de un tercero | `contracts/policy-rail/**`, `scripts/deploy-policy-rail.ts`, `scripts/lib/deployment.ts` | ✅ cerrado — `principal` separado de `owner`, `withdraw`/`set_owner` con `require_auth()`, `__check_auth` intacto; 11 tests nuevos (21 → 32), cuatro mutaciones dirigidas que matan tests, y medición en testnet real donde un firmante que no es el principal es rechazado por la red con `require_auth` incluso forzando la transacción hasta el ledger (`C-61`, `evidencia/T57.md`) |
 | T58 | Claude | T57 mergeado | 🔴 Alto — despliega contratos reales y decide sobre fondos de un tercero | `packages/directory/src/*`, `apps/web/src/tenant-rail.ts` (nuevo), `apps/web/src/server.ts`, `render.yaml`, `.env.example` | ✅ cerrado — despliegue perezoso sin CLI vía SDK, fondeo desde la reserva existente, persistencia idempotente ante carrera; verificado en testnet real con dos tenants en rails distintos y un tercero rechazado por `per_day` (`C-62`, `evidencia/T58.md`) |
-| T60 | Claude | T58 mergeado | Medio — lee saldos, no decide sobre ellos | por definir | Pendiente — monitoreo de saldo, el entregable de F6 que T58 no cubrió |
+| T60 | Claude | T58 mergeado | Medio — lee saldos, no decide sobre ellos | `packages/directory/src/directory.ts` (`listAgentsWithPolicyRail`), `scripts/check-rail-balances.ts` (nuevo) | ✅ cerrado — corrida real contra los tres rails de T58, saldo USDC exacto de cada uno, sin tocar `Directory` en escritura |
 | resto | Claude | — | — | — | Sin tickets de Codex — 🔴 el resto de la fase se queda en Claude Code, incluido el scaffolding |
 
 ---

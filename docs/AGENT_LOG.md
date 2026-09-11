@@ -3299,3 +3299,50 @@ reinventar nada — mismo criterio que T46–T50.
 Pendiente: que el usuario arranque T59 en Codex. Sigue todo lo de antes:
 T60 (monitoreo de saldo), migrar o no el rail compartido, el rename a
 AgentPey (`P-11`), desplegar a Render, y G10.
+
+---
+
+## 2026-09-11 (11) — main (T60 cerrado, F6 completa sus tres entregables)
+
+Agente: Claude Code
+
+Qué: **T60 cerrado** — `pnpm run check:rail-balances`
+(`scripts/check-rail-balances.ts`), un script de operador que lista el
+saldo USDC real de cada rail de tenant que T58 dejó desplegado, y avisa
+si alguno está por debajo de 0.005 USDC. Nuevo método de solo lectura en
+`@agentpay/directory`: `listAgentsWithPolicyRail()` — la primera consulta
+del paquete que cruza tenants y partners a propósito.
+
+Un detalle real que casi se cuela: la primera versión también leía el
+saldo "XLM" del rail vía el SAC del asset nativo — siempre daba cero,
+porque nada en el flujo de T58 transfiere XLM al contrato por ese camino
+(solo se fondea la cuenta clásica del *owner*, para pagar el fee de
+desplegar). Reportar ese cero habría sido una alarma falsa permanente, se
+sacó antes de cerrar. El riesgo que ese número quería cubrir (que la
+entrada del contrato se quede sin espacio en la red / rent) es un
+concepto distinto que sigue sin monitorearse — anotado en el docstring
+del script para quien lo retome.
+
+Verificado: 34 tests de integración de `directory` contra Postgres real
+(+1). `pnpm typecheck`/`build` limpios, 907 tests unitarios sin cambios.
+Corrida real contra los tres rails de T58: los tres saldos leídos
+coinciden exacto con lo esperado (el que tocó su `per_day` en T58 muestra
+`0.0400000` = `0.05 − 10 × 0.001`). Detalle en `evidencia/T60.md`.
+
+Con esto, **F6 completa sus tres entregables** (despliegue, fondeo,
+monitoreo) — sigue "en curso" solo porque migrar el rail compartido del
+piloto al constructor de T57 es una decisión aparte, sin apuro, no una
+tarea pendiente de este hito.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md` — T60, y corregida una referencia vieja a "T59" para
+monitoreo de saldo que quedó mal después de la renumeración de la
+entrada anterior de este log; `PLATAFORMA-PARTNERS.md` — F6, entregables
+y tabla; `evidencia/T60.md`). Sin decisión nueva en `DECISIONES.md` —
+implementa un entregable ya decidido, no abre uno nuevo.
+
+Pendiente: que el usuario arranque T59 en Codex (panel de estado, sigue
+esperando). Migrar o no el rail compartido, el rename a AgentPey
+(`P-11`), desplegar a Render, y G10 (sigue pendiente de que el usuario
+confirme si vale la pena revisitar `C-15` ahora o dejarlo para más
+adelante — es una decisión deliberada del piloto, no un bug).

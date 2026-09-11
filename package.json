@@ -12,6 +12,7 @@
     "fund:usdc": "tsx --tsconfig tsconfig.scripts.json scripts/fund-usdc-trustline.ts",
     "deploy:registry": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-registry.ts",
     "deploy:policy-rail": "tsx --tsconfig tsconfig.scripts.json scripts/deploy-policy-rail.ts",
+    "check:rail-balances": "tsx --tsconfig tsconfig.scripts.json scripts/check-rail-balances.ts",
     "demo": "tsx --tsconfig tsconfig.scripts.json scripts/demo.ts",
     "demo:pay-real": "tsx --tsconfig tsconfig.scripts.json scripts/demo-real-payment.ts",
     "generate:openapi": "tsx --tsconfig tsconfig.scripts.json scripts/generate-openapi.ts",

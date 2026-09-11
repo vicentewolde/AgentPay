@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T58 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T60 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -51,7 +51,10 @@ fondeado la primera vez que compra, no antes — en vez de compartir el de
 siempre. Verificado en testnet real con dos tenants pagando cada uno desde
 un contrato distinto, y un tercero rechazado por la red, no por el
 software, al superar su `per_day` (T58). El camino clásico sin wallet
-sigue exactamente igual que antes, pagando del rail compartido.
+sigue exactamente igual que antes, pagando del rail compartido. Y F6
+completa sus tres entregables: `pnpm run check:rail-balances` (T60) lee
+el saldo USDC real de cada rail de tenant, para detectar uno quedándose
+sin fondos antes de que una compra falle contra él.
 
 ### Progreso
 
@@ -79,6 +82,7 @@ sigue exactamente igual que antes, pagando del rail compartido.
 | T55, T56 | Script de alta de comercio (`scripts/register-venue.ts`) y tests del adaptador genérico sobre un segundo venue sintético | ✅ cerrados 2026-09-11 (Codex, PR #16) |
 | T54 | Comercio de referencia x402 independiente (`examples/reference-merchant/**`) — segundo venue real, cierra F7 | ✅ cerrado 2026-09-11 (Codex, PR #17) |
 | T58 | Rail `policy_rail` por tenant: desplegado y fondeado sin CLI, la primera vez que un tenant con wallet real paga; verificado en testnet con dos tenants en rails distintos y un tercero rechazado por `per_day` | ✅ cerrado 2026-09-11 |
+| T60 | `scripts/check-rail-balances.ts`: lee el saldo USDC real de cada rail de tenant, avisa si está bajo — completa los tres entregables de F6 | ✅ cerrado 2026-09-11 |
 
 ---
 
@@ -1585,13 +1589,62 @@ una transacción para firmar, porque la red la rechazó antes.
 **Lo que este hito no hizo, a propósito.** No migró el rail compartido
 del piloto al constructor nuevo de T57 — sigue con el viejo, y ahora solo
 lo usa el camino clásico. No agregó monitoreo de saldo (ticket propio,
-T59). No hizo configurables `per_tx`/`per_day` por tenant o partner —
-usa los mismos valores que el rail compartido siempre tuvo.
+**T60** — el número original en este párrafo era `T59`, reasignado ese
+mismo día a otra cosa; ver la nota de numeración en
+`PLATAFORMA-PARTNERS.md` § F9). No hizo configurables `per_tx`/`per_day`
+por tenant o partner — usa los mismos valores que el rail compartido
+siempre tuvo.
 
 **Decisión nueva:** ninguna en `DECISIONES.md` — el diseño (quién es
 `owner`, quién es `principal`, cuándo se despliega) ya estaba resuelto
 por `C-20`, `C-21` y `C-61`; este hito lo cablea, no lo redecide.
 
-Pendiente: monitoreo de saldo (T59), migrar o no el rail compartido al
+Pendiente: monitoreo de saldo (T60), migrar o no el rail compartido al
 constructor nuevo, el rename real a AgentPey (`P-11`), desplegar
 T40/T49/T51/T52 a Render, y G10 (alta automática de emisores).
+
+---
+
+## T60 · monitoreo de saldo de rails por tenant — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** T58 le dio a cada tenant
+su propia caja fuerte, pero nadie podía ver de afuera cuánta plata tenía
+cada una sin entrar a mano a la blockchain. Ahora hay un comando
+(`pnpm run check:rail-balances`) que lista, de una sola corrida, el saldo
+real de cada rail que existe — y avisa si alguno está por quedarse sin
+fondos, antes de que eso rompa una compra real. Con esto, F6 completa sus
+tres entregables: desplegar, fondear y poder vigilar.
+
+**Un cuidado real, no un detalle menor.** El primer borrador también
+mostraba el saldo "XLM" de cada rail — siempre daba cero, porque nada en
+este sistema le transfiere XLM al contrato por ese camino (`ensureTenantPolicyRail`
+fondea la cuenta del **owner** para pagar el fee de desplegar, no el
+contrato en sí). Mostrar ese cero habría sido una alarma falsa
+permanente, así que se sacó antes de cerrar el hito — el número que
+importa de verdad (si la entrada del contrato se queda sin espacio en la
+red) es otra cosa completamente distinta, y sigue sin monitorearse.
+Queda anotado en el propio script para quien lo retome.
+
+**Evidencia técnica.** Detalle completo en
+[`evidencia/T60.md`](evidencia/T60.md); el resumen:
+
+- `Directory.listAgentsWithPolicyRail()` (nuevo): la primera lectura de
+  `@agentpay/directory` que cruza tenants y partners a propósito — todo
+  lo demás de este paquete está scoped a uno solo. 34 tests de
+  integración contra Postgres real (+1).
+- `scripts/check-rail-balances.ts` (nuevo, `pnpm run check:rail-balances`):
+  script de operador, mismo criterio que `create-partner.ts` — nunca
+  escribe nada, cada llamada a Stellar es un `balance()` simulado.
+  Corrida real contra los tres rails que T58 dejó en testnet: el saldo de
+  cada uno coincide exacto con lo esperado (`0.05 − 10 × 0.001 =
+  0.0400000` para el que tocó su `per_day`).
+- `pnpm typecheck`/`build` limpios; 907 tests unitarios sin cambios (el
+  método nuevo es una query de una línea, cubierta por integración real).
+
+**Decisión nueva:** ninguna — este hito implementa un entregable ya
+decidido en `PLATAFORMA-PARTNERS.md` § F6, no abre una decisión nueva.
+
+Pendiente: migrar o no el rail compartido al constructor de T57, el
+rename real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y
+G10 (alta automática de emisores). Sin tarea nueva delegada a Codex desde
+acá — reservado a Claude Code por `P-10` (lee cuentas pagadoras).

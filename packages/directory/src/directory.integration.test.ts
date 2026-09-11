@@ -269,6 +269,32 @@ describe("createDirectory", () => {
     expect(lost.policyRailContractId).toBe(first);
   });
 
+  it("lists every agent with a policy_rail across tenants and partners, and none without one (T60)", async () => {
+    const partnerA = await freshPartner();
+    const partnerB = await freshPartner();
+    const tenantA = await directory.createTenant({ partnerId: partnerA.id, externalRef: "usr_with_rail_a" });
+    const tenantB = await directory.createTenant({ partnerId: partnerB.id, externalRef: "usr_with_rail_b" });
+    const tenantC = await directory.createTenant({ partnerId: partnerA.id, externalRef: "usr_without_rail" });
+
+    const agentA = await directory.createAgent({ tenantId: tenantA.id, derive: deriveFromMaster });
+    const agentB = await directory.createAgent({ tenantId: tenantB.id, derive: deriveFromMaster });
+    const agentC = await directory.createAgent({ tenantId: tenantC.id, derive: deriveFromMaster });
+
+    const railA = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";
+    const railB = "CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ";
+    await directory.setAgentPolicyRail(agentA.id, railA);
+    await directory.setAgentPolicyRail(agentB.id, railB);
+    // agentC never deploys one — the common case.
+
+    const withRail = await directory.listAgentsWithPolicyRail();
+    const ids = withRail.map((agent) => agent.id);
+    expect(ids).toContain(agentA.id);
+    expect(ids).toContain(agentB.id);
+    expect(ids).not.toContain(agentC.id);
+    expect(withRail.find((agent) => agent.id === agentA.id)?.policyRailContractId).toBe(railA);
+    expect(withRail.find((agent) => agent.id === agentB.id)?.policyRailContractId).toBe(railB);
+  });
+
   it("refuses to set a policy_rail on an agent that does not exist", async () => {
     await expect(
       directory.setAgentPolicyRail(newId("agent"), "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526"),
