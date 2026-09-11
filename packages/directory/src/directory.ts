@@ -26,6 +26,7 @@ import {
   agentInstanceSchema,
   apiKeySchema,
   credentialRecordSchema,
+  idempotencyRecordSchema,
   mandateRecordSchema,
   partnerSchema,
   principalBindingSchema,
@@ -35,6 +36,7 @@ import {
   type AgentStatus,
   type ApiKey,
   type CredentialRecord,
+  type IdempotencyRecord,
   type MandateRecord,
   type MandateSignatureKind,
   type OnchainState,
@@ -173,6 +175,14 @@ export interface IssuedApiKey {
   readonly secret: string;
 }
 
+export interface RecordIdempotentResponseInput {
+  readonly partnerId: string;
+  readonly key: string;
+  readonly requestHash: string;
+  readonly responseStatus: number;
+  readonly responseBody: unknown;
+}
+
 // ---- Row mapping ----------------------------------------------------------
 
 function toPartner(row: Record<string, unknown>): Partner {
@@ -283,6 +293,17 @@ function toMandate(row: Record<string, unknown>): MandateRecord {
   });
 }
 
+function toIdempotencyRecord(row: Record<string, unknown>): IdempotencyRecord {
+  return idempotencyRecordSchema.parse({
+    partnerId: row.partner_id,
+    key: row.key,
+    requestHash: row.request_hash,
+    responseStatus: toSafeInteger(row.response_status, "response_status"),
+    responseBody: row.response_body,
+    createdAt: row.created_at,
+  });
+}
+
 // ---- The port -------------------------------------------------------------
 
 export interface Directory {
@@ -325,8 +346,12 @@ export interface Directory {
 
   recordMandate(input: RecordMandateInput): Promise<MandateRecord>;
   findMandateByHash(mandateHash: string): Promise<MandateRecord | undefined>;
+  /** Looked up by the id `/v1/mandates/{id}` names, not the hash the registry knows it by. */
+  findMandateById(id: string): Promise<MandateRecord | undefined>;
   /** Every mandate of this tenant that is neither revoked nor outside its window at `at`. */
   listActiveMandates(tenantId: string, at?: Date): Promise<readonly MandateRecord[]>;
+  /** Every mandate of this tenant regardless of status — a partner's history view, unlike {@link listActiveMandates}. */
+  listMandates(tenantId: string): Promise<readonly MandateRecord[]>;
   /**
    * Most recently created mandate for this tenant, active or not. Used to
    * chain `supersedesId` on renewal — a renewal must find what it renews
@@ -334,6 +359,10 @@ export interface Directory {
    */
   findLatestMandate(tenantId: string): Promise<MandateRecord | undefined>;
   revokeMandate(mandateHash: string, revokeTx: string, at?: Date): Promise<void>;
+
+  /** `/v1`'s idempotency store — `resolveIdempotency` (`@agentpay/partner-api`) reads through this. */
+  findIdempotentResponse(partnerId: string, key: string): Promise<IdempotencyRecord | undefined>;
+  recordIdempotentResponse(input: RecordIdempotentResponseInput): Promise<IdempotencyRecord>;
 
   close(): Promise<void>;
 }
@@ -710,12 +739,24 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
       return one("select * from directory_mandates where mandate_hash = $1", [mandateHash], toMandate);
     },
 
+    findMandateById(id) {
+      return one("select * from directory_mandates where id = $1", [id], toMandate);
+    },
+
     async listActiveMandates(tenantId, at) {
       const { rows } = await pool.query<Record<string, unknown>>(
         `select * from directory_mandates
          where tenant_id = $1 and revoked_at is null and valid_from <= $2 and valid_until >= $2
          order by id asc`,
         [tenantId, at ?? new Date()],
+      );
+      return rows.map(toMandate);
+    },
+
+    async listMandates(tenantId) {
+      const { rows } = await pool.query<Record<string, unknown>>(
+        "select * from directory_mandates where tenant_id = $1 order by id asc",
+        [tenantId],
       );
       return rows.map(toMandate);
     },
@@ -733,6 +774,36 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
         "update directory_mandates set revoked_at = $2, revoke_tx = $3 where mandate_hash = $1 and revoked_at is null",
         [mandateHash, at ?? new Date(), revokeTx],
       );
+    },
+
+    // ---- idempotency ------------------------------------------------------
+    findIdempotentResponse(partnerId, key) {
+      return one(
+        "select * from directory_idempotency where partner_id = $1 and key = $2",
+        [partnerId, key],
+        toIdempotencyRecord,
+      );
+    },
+
+    async recordIdempotentResponse(input) {
+      // `on conflict do update` rather than a plain insert: two concurrent
+      // retries of the same key racing here should not surface as a raw
+      // unique-violation to whichever loses — the second write is the same
+      // logical fact (this key's response, recorded), so it is safe to let
+      // it win rather than fail closed as if it were something new.
+      const row = await one(
+        `insert into directory_idempotency (partner_id, key, request_hash, response_status, response_body)
+         values ($1, $2, $3, $4, $5)
+         on conflict (partner_id, key) do update set
+           request_hash = excluded.request_hash,
+           response_status = excluded.response_status,
+           response_body = excluded.response_body
+         returning *`,
+        [input.partnerId, input.key, input.requestHash, input.responseStatus, JSON.stringify(input.responseBody)],
+        toIdempotencyRecord,
+      );
+      if (row === undefined) throw wrap("recording an idempotent response returned no row", undefined, { partnerId: input.partnerId });
+      return row;
     },
 
     async close() {

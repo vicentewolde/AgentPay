@@ -849,6 +849,19 @@ despliegue — el despliegue en sí no es parte de este hito.
 > middleware de autenticación, y T50 asume que la API ya responde de
 > verdad. Antes de abrir T49 hace falta decidir si esa implementación es
 > parte de su alcance o merece un ticket propio.
+>
+> **T49 cerrado el 2026-09-10, con el alcance dividido (`C-49`).** Se
+> resolvió la mitad de `/v1` que no toca el flujo de firma de wallet:
+> tenants, agentes y mandatos, cableados de verdad contra
+> `@agentpay/directory`, más el script `scripts/create-partner.ts` para
+> emitir la primera API key de un partner (no existía nada para esto,
+> `C-52`). Verificado con `curl` real contra Postgres: idempotencia,
+> aislamiento entre partners (`404`, nunca `403` — `C-53`), y revocación
+> inmediata. `consent_sessions` (tabla, rutas, página hospedada) quedó
+> fuera a propósito — es la pieza más grande y toca el flujo de wallet
+> existente — y pasa a ser **T51**, un hito nuevo. El "listo cuando" de
+> esta fase (el `curl` que abre un consentimiento) sigue sin cumplirse
+> hasta que T51 cierre.
 
 - **Objetivo llano.** Que CloudOps integre leyendo documentación, sin
   hablar con nosotros.
@@ -904,8 +917,9 @@ Claude Code congele el contrato.
 | T46 | Codex | T45 mergeado | Bajo — generación mecánica | `docs/api/openapi.yaml`, `scripts/generate-openapi.ts` (prohibido: `packages/directory/src/**`) | ✅ cerrado — `z.toJSONSchema` nativo, cero librerías nuevas de conversión, `redocly lint` sin advertencias, revisado y mergeado (PR #6) |
 | T47 | Codex | T45 mergeado | Bajo — envoltorios tipados, sin lógica | `packages/partner-sdk/**` (nuevo) (prohibido: `apps/web/**`, `packages/directory/**`) | ✅ cerrado — `/v1` real no existe todavía, así que se verificó contra un `node:http` de prueba en vez del criterio original; revisado y mergeado (PR #7) |
 | T48 | Codex | ✅ forma del evento publicada (`webhooks.ts` en `@agentpay/partner-api`, `C-48`) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | ✅ cerrado — reintentos con backoff verificados contra un servidor de prueba que falla intermitentemente; revisado y mergeado (PR #8) |
-| T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | Una API key revocada deja de poder llamar cualquier ruta, verificado por test |
-| T50 | Codex | T45 y T49 mergeados | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo |
+| T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | ✅ cerrado — tenants/agentes/mandatos cableados contra `@agentpay/directory`, aislamiento entre partners y revocación verificados con `curl` real contra Postgres (`C-49` a `C-54`) |
+| T51 | Claude | T49 mergeado; `C-49` | 🔴 Alto — toca el flujo de firma de wallet (`C-17`) | `packages/directory/src/*` (tabla nueva), `apps/web/src/*` (rutas + página hospedada) | Un `curl` que abre un `consent_session`, un principal lo firma en la página hospedada reutilizando `/api/session/wallet-consent`/`wallet-anchor`, y el `consent_session` pasa a `completed` con su `mandate_id` |
+| T50 | Codex | T45, T49 y T51 mergeados | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo — su propio "listo cuando" (crear tenant, abrir consentimiento, consultar mandato) necesita T51, no solo T49 |
 
 ---
 

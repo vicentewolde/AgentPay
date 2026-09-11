@@ -12,19 +12,19 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T45 · **Fase 6: en curso**
+**Fecha:** 2026-09-10 · **Último hito cerrado:** T49 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
 identidad Stellar — el pago real todavía sale de una cuenta compartida
-hasta F6 (`C-39` a `C-42`, T40). Ahora existe, además, el contrato
-congelado de la API para partners (`/v1`): las formas exactas de tenants,
-agentes, mandatos de solo lectura y `consent_sessions`, cómo se autentica
-una API key, qué puede pedir cada permiso, y la semántica exacta de
-idempotencia — todo como funciones puras y esquemas zod en
-`@agentpay/partner-api`, sin una sola ruta HTTP todavía (`C-43` a `C-47`,
-T45). Nadie puede integrar contra `/v1` hoy: eso es lo que T49 (o un
-ticket sucesor, ver `C-47`) construye sobre este contrato.
+hasta F6 (`C-39` a `C-42`, T40). `/v1` ya es real: un partner con su
+propia API key (emitida con `pnpm run partner:create`) puede crear un
+tenant, leerlo, listar sus agentes y consultar sus mandatos contra
+Postgres de verdad — con idempotencia y aislamiento entre partners
+verificados, no solo diseñados (`C-49` a `C-54`, T49). Lo que falta para
+que un partner integre de punta a punta: `consent_sessions` (crear un
+consentimiento, que un principal lo firme, consultarlo) — el hito nuevo
+que sigue, `T51`.
 
 ### Progreso
 
@@ -40,6 +40,10 @@ ticket sucesor, ver `C-47`) construye sobre este contrato.
 | T39 | Persistencia de sesión: una wallet que vuelve encuentra su credencial y su Mandato ya firmados, en vez de que se emitan de nuevo | ✅ cerrado 2026-09-10 |
 | T40 | Identidad técnica por tenant: cada uno deriva y ancla su propia credencial y Mandato — el pago sigue compartido hasta F6 | ✅ cerrado 2026-09-10 |
 | T45 | `@agentpay/partner-api`: el contrato congelado de `/v1` — esquemas, autenticación, permisos, idempotencia — sin rutas todavía | ✅ cerrado 2026-09-10 |
+| T46 | OpenAPI 3.1 de `/v1` generado desde los esquemas zod de T45, sin librerías nuevas | ✅ cerrado 2026-09-10 (Codex, PR #6) |
+| T47 | `@agentpay/partner-sdk`: cliente tipado sobre `fetch` nativo para las siete rutas de `/v1` | ✅ cerrado 2026-09-10 (Codex, PR #7) |
+| T48 | `@agentpay/webhooks`: worker de entrega con reintentos y backoff, firma HMAC | ✅ cerrado 2026-09-10 (Codex, PR #8) |
+| T49 | `/v1` cableado de verdad contra `@agentpay/directory`: tenants, agentes, mandatos, idempotencia, aislamiento entre partners | ✅ cerrado 2026-09-10 |
 
 ---
 
@@ -941,3 +945,118 @@ o nombrada explícitamente como parte de T49. Sigue pendiente de antes: el
 rename a VynGent (`P-9`), desplegar T40 a Render, y resolver G10 (alta
 automática de emisores) que F5's alcance nombra pero que ningún hito
 todavía tocó.
+
+---
+
+## T46, T47, T48 · OpenAPI, SDK y webhooks — cerrados 2026-09-10 (Codex)
+
+Los tres tickets que la tabla de F5 tenía listos para Codex una vez
+congelado T45. Diseñados, revisados (diff completo + build/typecheck/test
+en worktrees aislados) y mergeados por Claude Code — ninguno tocó un
+archivo prohibido por su propio ticket ni ningún punto de autorización.
+
+**T46** ([PR #6](https://github.com/vicentewolde/AgentPay/pull/6)):
+`scripts/generate-openapi.ts` genera `docs/api/openapi.yaml` (OpenAPI 3.1)
+usando `z.toJSONSchema` nativo de zod v4 — cero librerías nuevas de
+conversión. Regenerar el archivo en un worktree limpio produjo el mismo
+YAML, byte a byte, que el commiteado.
+
+**T47** ([PR #7](https://github.com/vicentewolde/AgentPay/pull/7)):
+`@agentpay/partner-sdk`, cliente delgado sobre `fetch` nativo, valida
+toda respuesta con los esquemas de `@agentpay/partner-api`, mapea errores
+a `AgentPassError` tipado. Sin `/v1` real todavía, se verificó contra un
+servidor `node:http` de prueba en vez del criterio original de la tabla.
+
+**T48** ([PR #8](https://github.com/vicentewolde/AgentPay/pull/8)):
+`@agentpay/webhooks`, worker de entrega con backoff exponencial (base 1s,
+tope 30s, jitter 0-250ms), corta en 4xx, reintenta en 5xx/red/timeout. La
+cola de fallos no guarda el secreto del endpoint (verificado por test,
+detalle que Codex agregó sin que se lo pidieran).
+
+Verificado en conjunto: 841 tests offline en verde (10 nuevos entre T47 y
+T48, sobre los 831 que ya existían tras T45), `pnpm typecheck`/`pnpm
+build` limpios, `git diff --stat` contra `apps` y `contracts` en cero en
+las tres fusiones.
+
+Documentación tocada: `docs/AGENT_LOG.md`, `PLATAFORMA-PARTNERS.md` (tabla
+de F5, T46-T48 marcados resueltos). Paquetes nuevos:
+`packages/partner-sdk/`, `packages/webhooks/`. Archivo nuevo:
+`docs/api/openapi.yaml`, `scripts/generate-openapi.ts`.
+
+Pendiente: T49, el trabajo que no se delega — cablear `/v1` de verdad.
+
+---
+
+## T49 · `/v1` cableado de verdad contra `@agentpay/directory` — cerrado 2026-09-10
+
+**Qué quedó funcionando, en palabras llanas.** Hasta este hito, `/v1`
+existía solo en el papel: esquemas, un spec, un SDK — pero ninguna llamada
+real tocaba una base de datos. Ahora un partner con su propia API key
+(`pnpm run partner:create` se la emite) puede de verdad crear un tenant,
+leerlo, listar sus agentes y consultar sus mandatos, contra Postgres —y
+si dos partners distintos existen, ninguno puede leer los datos del otro,
+ni siquiera adivinando el id (responde como si no existiera, no "no es
+tuyo"). Repetir la misma creación con la misma `Idempotency-Key` no crea
+un segundo tenant; repetirla con el mismo `external_ref` pero una key
+distinta tampoco — encuentra el que ya existía.
+
+**Alcance, decidido antes de escribir código (`C-49`).** Investigando
+`apps/web` para diseñar esto aparecieron dos brechas sin ticket: no había
+ninguna forma de crear un `Partner`/`ApiKey` (resuelto con
+`scripts/create-partner.ts`, un script de operador, no una ruta —
+`C-52`), y `consent_sessions` (tabla, rutas, página hospedada) es
+demasiado grande para el mismo hito que el middleware de auth. Se partió:
+este hito resuelve tenants/agentes/mandatos; `consent_sessions` queda
+para **T51**, un hito nuevo. `T50` (la guía de Codex) pasa a depender de
+ambos.
+
+**Lo nuevo en `@agentpay/directory`, todo aditivo:** tabla
+`directory_idempotency` (`C-50`, resuelve lo que `C-46` había dejado
+pendiente en T45) y los métodos `findMandateById`/`listMandates` (`C-51`).
+Cero cambios a una tabla o método existente.
+
+**La pieza nueva en `apps/web`:** `partner-routes.ts` — un router puro
+(nunca toca `req`/`res`) que hace, en orden, para cada ruta: autentica y
+chequea el permiso (`authorizeRequest`, de T45), resuelve idempotencia
+solo en el POST que la necesita, ejecuta contra `@agentpay/directory` con
+aislamiento de tenant explícito, y mapea cualquier error a su código HTTP.
+`server.ts` le delega todo `pathname` bajo `/v1/`.
+
+**Una decisión de diseño encontrada construyendo, no planificada
+(`C-53`):** un tenant o mandato que existe pero es de otro partner
+responde `404`, nunca `403` — mismo criterio que ya separa "key inválida"
+de "key revocada" (`C-44`), para no confirmarle a nadie que un id ajeno
+existe.
+
+**Verificado contra Postgres y un servidor real, no solo en tests:**
+`pnpm run partner:create` dos veces (dos partners), servidor local
+levantado, y con `curl` real: crear un tenant, leerlo, listar agentes
+(vacío) y mandatos (vacío), repetir la creación con la misma
+`Idempotency-Key` (misma respuesta, sin crear dos veces), con la misma
+key pero body distinto (`409`), con `external_ref` repetido y key nueva
+(`200` con el existente), un segundo partner leyendo el tenant del
+primero (`404`), y la key del primero revocada perdiendo acceso de
+inmediato (`401`). Los datos de prueba se limpiaron de la base real al
+terminar.
+
+Verificado offline: 28 tests nuevos (6 de integración de
+`@agentpay/directory` contra Postgres real, 22 de `partner-routes.ts` con
+un directorio falso, más los que ya existían). `pnpm typecheck`, `pnpm
+build` y `pnpm test` limpios en todo el monorepo. `git diff --stat`
+contra `apps/agent` y `contracts` en cero — cero cambios a
+`checkMandate`, `policy_rail`, `agent_registry` o el flujo de pago.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta:
+`BITACORA.md`, `DECISIONES.md` (`C-49` a `C-54`),
+`PLATAFORMA-PARTNERS.md` (F5, T49 marcado resuelto, T51 agregado).
+Archivos nuevos: `apps/web/src/partner-routes.ts` (+test),
+`scripts/create-partner.ts`. Archivos tocados (aditivo):
+`packages/directory/src/{directory,entities,schema-sql,index}.ts` (+test
+de integración), `apps/web/src/server.ts`, `apps/web/package.json`,
+`apps/web/tsconfig.json`, `package.json` (root), `tsconfig.scripts.json`.
+
+Pendiente: **T51** (`consent_sessions` — tabla, rutas, página hospedada
+reutilizando el flujo de firma de wallet), sin empezar, esperando
+revisión de este hito primero. Sigue pendiente de antes: el rename a
+VynGent (`P-9`), desplegar T40/T49 a Render, y G10 (alta automática de
+emisores).

@@ -89,6 +89,7 @@ describe("createDirectory", () => {
       );
       await pool.query("delete from directory_tenants where partner_id = $1", [partnerId]);
       await pool.query("delete from directory_api_keys where partner_id = $1", [partnerId]);
+      await pool.query("delete from directory_idempotency where partner_id = $1", [partnerId]);
       await pool.query("delete from directory_partners where id = $1", [partnerId]);
     }
     while (principalAddresses.length > 0) {
@@ -511,6 +512,121 @@ describe("createDirectory", () => {
       supersedesId: first.id,
     });
     expect((await directory.findLatestMandate(tenant.id))?.id).toBe(renewal.id);
+  });
+
+  it("finds a mandate by its id, the way /v1/mandates/{id} names it — not by its hash", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_mandate_by_id" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+    const vinny = await freshPrincipal(10);
+
+    const mandate = await directory.recordMandate({
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: vinny.id,
+      signatureKind: "wallet-sep53",
+      document: { grant: "one" },
+      anchorTx: "tx-1",
+      mandateHash: "5".repeat(64),
+      validFrom: new Date("2026-09-10T00:00:00.000Z"),
+      validUntil: new Date("2026-09-11T00:00:00.000Z"),
+    });
+
+    expect((await directory.findMandateById(mandate.id))?.mandateHash).toBe("5".repeat(64));
+    expect(await directory.findMandateById("mdt_doesnotexist")).toBeUndefined();
+  });
+
+  it("lists every mandate of a tenant regardless of status — a partner's full history, unlike listActiveMandates", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_mandate_history" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+    const vinny = await freshPrincipal(11);
+
+    const base = {
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: vinny.id,
+      signatureKind: "wallet-sep53" as const,
+      document: { grant: "one" },
+      anchorTx: "tx-1",
+    };
+    const active = await directory.recordMandate({
+      ...base,
+      mandateHash: "6".repeat(64),
+      validFrom: new Date("2026-09-01T00:00:00.000Z"),
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+    });
+    const revoked = await directory.recordMandate({
+      ...base,
+      mandateHash: "7".repeat(64),
+      validFrom: new Date("2026-01-01T00:00:00.000Z"),
+      validUntil: new Date("2026-01-02T00:00:00.000Z"),
+    });
+    await directory.revokeMandate("7".repeat(64), "tx-revoke");
+
+    expect(await directory.listActiveMandates(tenant.id, new Date("2026-09-10T00:00:00.000Z"))).toHaveLength(1);
+    const all = await directory.listMandates(tenant.id);
+    expect(all.map((m) => m.id).sort()).toEqual([active.id, revoked.id].sort());
+  });
+
+  // ---- idempotency (T49) --------------------------------------------------
+
+  it("finds nothing for a key that was never recorded", async () => {
+    const partner = await freshPartner();
+    expect(await directory.findIdempotentResponse(partner.id, "req-never-seen")).toBeUndefined();
+  });
+
+  it("records and replays a response by (partnerId, key)", async () => {
+    const partner = await freshPartner();
+
+    const recorded = await directory.recordIdempotentResponse({
+      partnerId: partner.id,
+      key: "req-1",
+      requestHash: "a".repeat(64),
+      responseStatus: 201,
+      responseBody: { ok: true, data: { id: "tnt_1" } },
+    });
+    expect(recorded.responseStatus).toBe(201);
+
+    const found = await directory.findIdempotentResponse(partner.id, "req-1");
+    expect(found).toEqual(recorded);
+  });
+
+  it("overwrites the same (partnerId, key) on a second write, rather than erroring — a concurrent retry racing to record is not a conflict", async () => {
+    const partner = await freshPartner();
+
+    await directory.recordIdempotentResponse({
+      partnerId: partner.id,
+      key: "req-2",
+      requestHash: "b".repeat(64),
+      responseStatus: 201,
+      responseBody: { ok: true, data: { id: "tnt_2" } },
+    });
+    const second = await directory.recordIdempotentResponse({
+      partnerId: partner.id,
+      key: "req-2",
+      requestHash: "b".repeat(64),
+      responseStatus: 201,
+      responseBody: { ok: true, data: { id: "tnt_2" } },
+    });
+
+    const found = await directory.findIdempotentResponse(partner.id, "req-2");
+    expect(found).toEqual(second);
+  });
+
+  it("keeps the same key separate across two partners", async () => {
+    const partnerA = await freshPartner();
+    const partnerB = await freshPartner();
+
+    await directory.recordIdempotentResponse({
+      partnerId: partnerA.id,
+      key: "shared-key-name",
+      requestHash: "c".repeat(64),
+      responseStatus: 201,
+      responseBody: { ok: true, data: { id: "tnt_a" } },
+    });
+
+    expect(await directory.findIdempotentResponse(partnerB.id, "shared-key-name")).toBeUndefined();
   });
 
   // ---- survives a restart ------------------------------------------------

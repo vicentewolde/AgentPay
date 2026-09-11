@@ -2571,3 +2571,73 @@ reales de `/v1`, el middleware de autenticación, y resolver la brecha de
 depende de T49). T49 se queda en Claude Code por tocar un punto de
 autorización nuevo — sin empezar. Sigue pendiente de antes: rename a
 VynGent (`P-9`), desplegar T40 a Render, G10 (alta automática de emisores).
+
+## 2026-09-10 (15) — cc/t49-partner-api-routes (T49 cerrado)
+
+Agente: Claude Code
+
+Qué: **T49 cerrado**, usando `EnterPlanMode`/`ExitPlanMode` para alinear
+el diseño con el usuario antes de escribir código, dado el riesgo (🔴,
+primer punto real de autorización de acceso a `/v1`). `/v1` ya cablea de
+verdad contra `@agentpay/directory`: `POST/GET /v1/tenants`,
+`GET /v1/agents`, `GET /v1/mandates/{id}` y `GET /v1/mandates` —
+autenticación, permisos e idempotencia reales (los tres ya congelados en
+T45), aislamiento de datos entre partners, y un script nuevo
+(`scripts/create-partner.ts`) porque no existía ninguna forma de crear un
+`Partner` ni emitir su primera `ApiKey`.
+
+Investigando `apps/web` antes de diseñar (tres agentes Explore en
+paralelo: rutas/sesión de `server.ts`, si existía bootstrap de partner —
+no existía —, y el flujo exacto de firma de Mandato por wallet) apareció
+una decisión de alcance: `consent_sessions` (tabla, rutas, página
+hospedada reutilizando `/api/session/wallet-consent`/`wallet-anchor`) es
+demasiado grande para el mismo hito que el middleware de auth. Se partió
+T49 en dos — esto, y un hito nuevo **T51** — con el visto bueno del
+usuario sobre el plan completo antes de tocar código (`C-49`).
+
+Cambios aditivos en `@agentpay/directory`: tabla `directory_idempotency`
+(cierra lo que `C-46`, T45, había dejado pendiente — dónde vive
+`(partner_id, key) → respuesta`) y los métodos `findMandateById`/
+`listMandates` (`C-50`, `C-51`). Cero cambios a tablas o métodos
+existentes. Pieza nueva en `apps/web`: `partner-routes.ts`, un router
+puro (nunca toca `req`/`res`, mismo patrón que `session-documents.ts`)
+que autentica, resuelve idempotencia, ejecuta contra la `Directory` y
+mapea errores a status HTTP — con aislamiento de tenant explícito: un
+recurso de otro partner responde `404`, nunca `403` (`C-53`, mismo
+criterio que `InvalidApiKey` ya aplica entre key desconocida y
+revocada).
+
+**Cero cambios en puntos de autorización de compra**, verificado:
+`git diff --stat 5496d4e..HEAD -- apps/agent contracts` no devuelve nada.
+`checkMandate`, `checkScope`, `checkDailyLimit`, `policy_rail`,
+`agent_registry` intactos — este hito abre un punto de autorización
+*nuevo* (acceso a `/v1`), no toca ninguno existente.
+
+**Verificado contra Postgres y un servidor local reales, no solo en
+tests:** `pnpm run partner:create` dos veces (dos partners de prueba), el
+servidor levantado con `preview_start`, y con `curl`: crear tenant, leer,
+listar agentes/mandatos (vacíos), replay de `Idempotency-Key` (misma
+respuesta, sin crear dos veces), conflicto con la misma key y body
+distinto (`409`), `external_ref` repetido con key nueva (`200` con el
+existente, idempotencia de negocio), un segundo partner leyendo el
+tenant del primero (`404`), y la key del primero revocada perdiendo
+acceso de inmediato (`401`). Los datos de prueba se borraron de la base
+real al terminar.
+
+Verificado offline: 28 tests nuevos (6 de integración de
+`@agentpay/directory` contra Postgres real, 22 de `partner-routes.ts`
+con un directorio falso), 869 en total. `pnpm typecheck`, `pnpm build` y
+`pnpm test` limpios en todo el monorepo.
+
+Documentación tocada: este archivo, y en
+`docs/fase-6-agentguard-comercializacion/`: `BITACORA.md` (T46-T49
+cerrados — T46-T48 no habían quedado registrados en la tabla de progreso
+todavía), `DECISIONES.md` (`C-49` a `C-54`), `PLATAFORMA-PARTNERS.md`
+(F5: T49 resuelto, T51 agregado a la tabla de delegación, T50
+re-vinculado a T51 además de T49).
+
+Pendiente: la rama `cc/t49-partner-api-routes` queda **sin mergear ni
+pushear**, esperando revisión del usuario — mismo patrón que T45. Siguiente
+hito propuesto: **T51** (`consent_sessions`), 🔴 alto riesgo por tocar el
+flujo de firma de wallet, sin empezar. Sigue pendiente de antes: rename a
+VynGent (`P-9`), desplegar T40/T49 a Render, G10.

@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 2;
+export const DIRECTORY_SCHEMA_VERSION = 3;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -150,4 +150,19 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
    )`,
 
   `create index if not exists directory_mandates_tenant_idx on directory_mandates (tenant_id)`,
+
+  // Schema version 3 (T49): `/v1`'s idempotency store. `response_body` is
+  // `json`, not `jsonb` — no hash is computed over it, so there is no `C-5`
+  // trap here, but `jsonb` normalising key order would still be a pointless
+  // rewrite of a value that is only ever replayed verbatim, never queried by
+  // field. The primary key is exactly `resolveIdempotency`'s own lookup key.
+  `create table if not exists directory_idempotency (
+     partner_id      text        not null references directory_partners(id),
+     key             text        not null,
+     request_hash    text        not null,
+     response_status integer     not null,
+     response_body   json        not null,
+     created_at      timestamptz not null default now(),
+     primary key (partner_id, key)
+   )`,
 ];

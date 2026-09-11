@@ -1356,3 +1356,159 @@ conveniencia de agrupar hubiera demorado sin necesidad el trabajo que
 Codex sí puede empezar hoy.
 
 ---
+
+### C-49 · T49 se parte en dos: tenants/agentes/mandatos ahora, `consent_sessions` en un hito nuevo (T51) · `Vigente`
+**Fecha:** 2026-09-10 (T49)
+
+T49, tal como quedó descripto en la tabla de F5, solo hablaba del
+middleware de autenticación — la brecha `C-47` ya había anotado que
+faltaba un ticket para "implementar los handlers de verdad". Investigando
+`apps/web` antes de escribir código aparecieron dos piezas más sin
+ticket: no existe ninguna forma de crear un `Partner`/`ApiKey` hoy, y
+`consent_sessions` no tiene tabla, ruta ni página hospedada — necesita
+reutilizar el flujo de firma de wallet que ya existe
+(`/api/session/wallet-consent`, `/api/session/wallet-anchor`), pero es
+una pieza grande por sí sola.
+
+**Decisión:** este hito (T49) resuelve la mitad de lectura/creación
+simple —tenants, agentes, mandatos, más el script de bootstrap de
+partner/API key—. `consent_sessions` (tabla, rutas, página hospedada)
+queda para un hito nuevo, **T51**. `T50` (la guía/ejemplo de Codex) pasa a
+depender de ambos, no solo de T49 — su criterio de "listo" en
+`PLATAFORMA-PARTNERS.md` § F5 ("crea un tenant, abre un consentimiento y
+consulta un mandato") no puede cumplirse sin `consent_sessions`.
+
+**Motivo.** Cerrar todo junto habría sido un PR enorme y difícil de
+revisar de una sola vez — exactamente lo que la regla de "un hito, una
+revisión" de este proyecto busca evitar. Partiendo el trabajo, la mitad
+más chica y menos riesgosa (lecturas, sin tabla nueva salvo idempotencia)
+cierra y se revisa antes de abrir la mitad que sí toca el flujo de firma
+de wallet.
+
+**Alternativa descartada:** ampliar el alcance de T49 para incluir
+`consent_sessions` completo. Descartada por el tamaño del PR resultante.
+
+---
+
+### C-50 · Tabla `directory_idempotency`, resolviendo lo que `C-46` dejó pendiente · `Vigente`
+**Fecha:** 2026-09-10 (T49)
+
+`C-46` (T45) congeló la semántica exacta de idempotencia como una función
+pura (`resolveIdempotency`, en `@agentpay/partner-api`) sin decidir dónde
+vive `(partner_id, key) → respuesta`. T49 lo resuelve: tabla nueva
+`directory_idempotency` en `@agentpay/directory` (clave primaria
+`(partner_id, key)`, `response_body` en `json` — mismo criterio que
+`directory_mandates.document`, no hay hash calculado sobre el valor pero
+tampoco hay motivo para que Postgres reordene claves de algo que solo se
+reproduce tal cual), con dos métodos nuevos en el puerto
+(`findIdempotentResponse`, `recordIdempotentResponse`). `apps/web`'s
+`partner-routes.ts` pasa `directory.findIdempotentResponse` directo como
+el `lookup` que `resolveIdempotency` pide — sin conversión, porque el
+esquema de `IdempotencyRecord` en `@agentpay/directory` replica el de
+`@agentpay/partner-api` campo por campo a propósito (`directory` no puede
+depender de `partner-api` — la dependencia va al revés).
+
+**`recordIdempotentResponse` es un upsert (`on conflict do update`), no un
+insert puro.** Dos reintentos concurrentes de la misma key corriendo la
+misma operación de negocio dos veces en paralelo no son un conflicto real
+— son el mismo hecho lógico escrito dos veces. Fallar cerrado ahí (una
+violación de unicidad cruda) habría sido peor experiencia que dejar
+ganar a cualquiera de las dos escrituras, porque ambas escriben la misma
+respuesta.
+
+**Alternativa descartada:** guardar la idempotencia en el propio proceso
+de `apps/web` (un `Map`, como el resto de las sesiones hoy). Descartada
+por la misma razón que motivó `@agentpay/directory` entero (`G7`): un
+restart pierde el registro, y una API key reintentando después de un
+deploy volvería a crear el tenant.
+
+---
+
+### C-51 · `findMandateById` y `listMandates`, nuevos en `@agentpay/directory` · `Vigente`
+**Fecha:** 2026-09-10 (T49)
+
+`/v1/mandates/{id}` identifica un mandato por su `id` (`mdt_...`), no por
+su `mandateHash` — el único lookup que existía (`findMandateByHash`) es
+el que usa el registro on-chain, un concepto distinto. Y un partner
+consultando el historial de un tenant quiere ver también los mandatos
+revocados o expirados, no solo los activos que `listActiveMandates` ya
+filtraba (ese método sigue exactamente igual, para lo que ya lo usa
+`apps/web`). Ambos métodos son lecturas puras, aditivas, sin tocar el
+esquema de la tabla ni ningún método existente.
+
+---
+
+### C-52 · `scripts/create-partner.ts`: crear un partner es un script de operador, no una ruta HTTP · `Vigente`
+**Fecha:** 2026-09-10 (T49)
+
+No existía ninguna forma de crear un `Partner` ni de emitir su primera
+`ApiKey` — se confirmó buscando en todo el repo antes de diseñar T49.
+`PLATAFORMA-PARTNERS.md` § F5 deja "panel de partner" explícitamente
+fuera de alcance, así que exponer esto como una ruta HTTP habría sido
+construir la mitad de una superficie de administración que nadie pidió
+todavía, y que necesitaría su propia autenticación (distinta de la de
+`/v1`, pensada para partners, no para el operador del proyecto). El
+script sigue el mismo patrón que `scripts/bootstrap.ts` ya usa para
+llaves Stellar: se corre a mano, una vez por partner, imprime el secreto
+una sola vez y no lo guarda en ningún lado más que su hash en Postgres.
+`--scopes` por defecto otorga la lista completa de `API_SCOPES` — no hay
+manera de que un partner pida menos todavía, y limitarlo por defecto solo
+generaría una vuelta manual de "che, dame más permisos" sin ganar nada en
+seguridad real durante el piloto.
+
+**Alternativa descartada:** una ruta `/admin/partners` gateada por
+`ADMIN_SECRET_KEY` (el mismo patrón que ya protege el registro de
+emisores on-chain). Descartada por ahora — es más superficie de la que
+esta fase necesita, y puede agregarse después sin romper nada si alguna
+vez hace falta crear partners sin acceso a la base de datos directamente.
+
+---
+
+### C-53 · Un tenant o mandato de otro partner responde `404`, nunca `403` · `Vigente`
+**Fecha:** 2026-09-10 (T49)
+
+`GET /v1/tenants/{id}`, `GET /v1/mandates/{id}` y las dos rutas
+`?tenant_id=` resuelven primero el recurso y comparan su `partnerId`
+contra el de la API key autenticada. Si no coincide, la respuesta es
+`TenantNotFound`/`MandateNotFound` (`404`) — igual que un id que
+directamente no existe — nunca `ScopeNotGranted` ni ningún código que
+confirme "esto existe, pero no es tuyo". Mismo criterio que `InvalidApiKey`
+ya aplica entre una key desconocida y una revocada (`C-44`, T45): decirle
+a un partner "ese id es de otro" es información que no necesita para
+integrar bien, y sí le sirve a alguien enumerando ids ajenos.
+
+Verificado contra Postgres real, no solo en el test unitario: un segundo
+partner de prueba, con su propia API key, recibió `404` al pedir el
+tenant del primero.
+
+---
+
+### C-54 · La idempotencia cachea cualquier resultado de un intento ya autenticado, éxito o error · `Vigente`
+**Fecha:** 2026-09-10 (T49)
+
+`resolveIdempotency` (T45) no distingue "cachear solo éxitos" de "cachear
+todo" — decide replay/conflicto por el hash del cuerpo, sin mirar qué
+pasó la primera vez. T49 sigue esa misma línea: `respondOrCache` (en
+`partner-routes.ts`) guarda el resultado de `POST /v1/tenants`
+—cualquiera sea: un `201` nuevo, un `200` de `TenantAlreadyExists`
+resuelto a nivel de negocio, o un error de validación— bajo la misma
+`Idempotency-Key`. Lo único que queda
+deliberadamente **fuera** de ese cacheo es el fallo de autenticación en
+sí (`MissingApiKey`/`InvalidApiKey`/`ScopeNotGranted`): esos ocurren antes
+de saber siquiera de qué partner se trata, así que no hay bajo qué
+`partnerId` guardarlos.
+
+**Por qué no seguir el criterio de "no cachear 4xx" que usan algunas APIs
+públicas.** Habría exigido inventar una regla nueva —qué códigos "cuentan"
+como que no pasó nada— que el contrato congelado en T45 no pedía y que
+un partner integrando desde la documentación no puede adivinar sin leer
+el código. La regla simple ("la misma llamada, exactamente, siempre
+responde igual mientras la key no expire") es la que ya está escrita y
+probada.
+
+**Alternativa descartada:** cachear solo `2xx`. Descartada por lo de
+arriba — y porque habría dejado sin resolver qué hacer con el `200` que
+`POST /v1/tenants` devuelve cuando el `external_ref` ya existía (ese caso
+sí se cachea, es un resultado válido de un intento completo).
+
+---

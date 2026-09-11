@@ -15,6 +15,7 @@
     "demo": "tsx --tsconfig tsconfig.scripts.json scripts/demo.ts",
     "demo:pay-real": "tsx --tsconfig tsconfig.scripts.json scripts/demo-real-payment.ts",
     "generate:openapi": "tsx --tsconfig tsconfig.scripts.json scripts/generate-openapi.ts",
+    "partner:create": "tsx --tsconfig tsconfig.scripts.json scripts/create-partner.ts",
     "web": "pnpm --filter @agentpay/web run dev",
     "build": "tsc -b",
     "test": "pnpm -r --stream test && vitest run",

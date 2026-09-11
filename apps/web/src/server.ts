@@ -57,6 +57,7 @@ import {
   type AgentPayMandate,
 } from "@agentpay/mandate";
 import { createPostgresMandateVault, type MandateVault } from "@agentpay/vault";
+import { AUTHORIZATION_HEADER, IDEMPOTENCY_KEY_HEADER } from "@agentpay/partner-api";
 
 import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, MandateSource, VenueId } from "@agentpay/agent";
 import {
@@ -75,6 +76,7 @@ import {
 } from "@agentpay/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
+import { routePartnerRequest } from "./partner-routes.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
 import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
@@ -903,8 +905,26 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const { pathname } = url;
 
-  if (req.method === "GET" && !pathname.startsWith("/api/")) {
+  if (req.method === "GET" && !pathname.startsWith("/api/") && !pathname.startsWith("/v1/")) {
     await serveStatic(pathname, res);
+    return;
+  }
+
+  if (pathname.startsWith("/v1/")) {
+    const env = await readEnv();
+    const directory = await getDirectory(env);
+    const authorizationHeader = req.headers[AUTHORIZATION_HEADER];
+    const idempotencyKeyHeader = req.headers[IDEMPOTENCY_KEY_HEADER];
+    const result = await routePartnerRequest({
+      method: req.method ?? "GET",
+      pathname,
+      searchParams: url.searchParams,
+      authorizationHeader: typeof authorizationHeader === "string" ? authorizationHeader : undefined,
+      idempotencyKeyHeader: typeof idempotencyKeyHeader === "string" ? idempotencyKeyHeader : undefined,
+      body: await readJsonBody(req),
+      directory,
+    });
+    sendJson(res, result.status, result.body);
     return;
   }
 

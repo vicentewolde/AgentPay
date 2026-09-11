@@ -5,6 +5,7 @@ export type {
   CreateTenantInput,
   IssuedApiKey,
   RecordCredentialInput,
+  RecordIdempotentResponseInput,
   RecordMandateInput,
 } from "./directory.js";
 
@@ -23,6 +24,7 @@ export {
   bindingIdSchema,
   credentialIdSchema,
   credentialRecordSchema,
+  idempotencyRecordSchema,
   mandateIdSchema,
   mandateRecordSchema,
   mandateSignatureKindSchema,
@@ -40,6 +42,7 @@ export {
   type AgentStatus,
   type ApiKey,
   type CredentialRecord,
+  type IdempotencyRecord,
   type MandateRecord,
   type MandateSignatureKind,
   type OnchainState,

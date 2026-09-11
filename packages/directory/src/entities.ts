@@ -177,6 +177,23 @@ export const mandateRecordSchema = z.strictObject({
   createdAt: z.date(),
 });
 
+/**
+ * A cached `/v1` response, keyed by `(partnerId, key)` — the storage side of
+ * `@agentpay/partner-api`'s `resolveIdempotency`. Field names match that
+ * package's own `IdempotencyRecord` exactly (not imported — the dependency
+ * runs the other way, `partner-api` depends on `directory`), so
+ * `findIdempotentResponse` can be passed straight in as `resolveIdempotency`'s
+ * `lookup` without any conversion at the call site.
+ */
+export const idempotencyRecordSchema = z.strictObject({
+  partnerId: partnerIdSchema,
+  key: z.string().min(1).max(255),
+  requestHash: z.string().regex(/^[0-9a-f]{64}$/),
+  responseStatus: z.number().int().min(200).max(599),
+  responseBody: z.unknown(),
+  createdAt: z.date(),
+});
+
 export type Partner = z.infer<typeof partnerSchema>;
 export type ApiKey = z.infer<typeof apiKeySchema>;
 export type Tenant = z.infer<typeof tenantSchema>;
@@ -190,3 +207,4 @@ export type TenantStatus = z.infer<typeof tenantStatusSchema>;
 export type AgentStatus = z.infer<typeof agentStatusSchema>;
 export type OnchainState = z.infer<typeof onchainStateSchema>;
 export type MandateSignatureKind = z.infer<typeof mandateSignatureKindSchema>;
+export type IdempotencyRecord = z.infer<typeof idempotencyRecordSchema>;
