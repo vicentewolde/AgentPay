@@ -8,7 +8,7 @@
  * something from an older shape all arrive here as `unknown`, and the parse
  * is what turns "probably fine" into "checked".
  */
-import { stellarAddressSchema, stellarDidSchema } from "@agentpass/core";
+import { stellarAddressSchema, stellarContractIdSchema, stellarDidSchema } from "@agentpass/core";
 import { z } from "zod";
 
 import { ID_PREFIXES, ULID_LENGTH } from "./ids.js";
@@ -134,6 +134,13 @@ export const agentInstanceSchema = z.strictObject({
   label: z.string().max(200).nullable(),
   status: agentStatusSchema,
   onchainState: onchainStateSchema,
+  /**
+   * This tenant's own `policy_rail` (F6/T58) — `null` until it pays for the
+   * first time. Deployed lazily, same cost reasoning `onchainState` already
+   * applies to the classic account (`C-21`): most agents in this pilot never
+   * spend enough to justify one.
+   */
+  policyRailContractId: stellarContractIdSchema.nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

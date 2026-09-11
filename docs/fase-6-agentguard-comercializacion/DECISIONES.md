@@ -1775,3 +1775,49 @@ Archivos tocados: `contracts/policy-rail/src/lib.rs`,
 default), `scripts/lib/deployment.ts` y su test (+2).
 
 ---
+
+### C-62 · El rail por tenant es solo para sesiones con wallet real; el camino clásico sigue en el rail compartido · `Vigente`
+**Fecha:** 2026-09-11 (T58)
+
+El plan de T58 asumía que "rail por tenant" reemplazaba enteramente al
+rail compartido — incluido retirar `POLICY_RAIL_CONTRACT_ID` del todo.
+Leyendo `server.ts` de cerca antes de escribir código apareció algo que
+el plan no había separado: el camino **clásico** (sin conectar wallet,
+`C-34`) también puede pedir pagar vía rail (`body.payer === "policy-rail"`
+no distingue), pero su "principal" es la propia plataforma firmando por
+sí misma (`principalAddress: issuer.publicKey()`) — una ficción de demo
+para poder mostrar el flujo sin wallet, no un cliente real. Nunca pasa por
+`ensureTenantAgent`, no tiene fila en `directory_agents`, no tiene wallet
+real vinculada. Desplegar un contrato Soroban por cada visita sin wallet
+no tendría dueño real a quien pertenecerle, y gastaría fondos de la
+reserva en contratos que nadie puede después retirar de forma
+significativa (el "principal" sería la propia plataforma).
+
+**La decisión:** `ensureTenantPolicyRail` solo se invoca cuando la sesión
+tiene una identidad de tenant real (`tenantAgentId` — viene de
+`ensureTenantAgent`, F4/T40) y una wallet vinculada (`walletAddress`,
+`directory.bindPrincipal`). El camino clásico sigue leyendo
+`POLICY_RAIL_CONTRACT_ID` y pagando desde `AGENT_SECRET_KEY`, exactamente
+como antes de este hito — `DemoSession.railContractId` pasa a documentarse
+como "el rail compartido, camino clásico", no como el general.
+
+Esto no reabre ni contradice ninguna decisión previa: es la misma línea
+que `C-34` ya trazó para la identidad (el camino clásico no tiene una
+propia, y no la necesita para lo que demuestra) aplicada ahora también al
+pago, que es exactamente donde `C-39`/`C-40` ya decían que la separación
+de F4 terminaba y donde empezaba el trabajo de F6.
+
+**Alternativa descartada:** desplegar igual un rail para el camino
+clásico, con `principal = issuer` (la propia plataforma). Descartada
+porque no prueba nada que el rail compartido no probara ya, y multiplica
+contratos Soroban reales (costo de rent, fees de despliegue) por cada
+visitante sin wallet de la demo — exactamente el tipo de gasto que `C-21`
+ya advierte evitar para identidades que no van a usarse de verdad.
+
+Documentación tocada: `BITACORA.md` (T58), `evidencia/T58.md`. Archivos
+tocados: `packages/directory/src/{schema-sql,entities,directory}.ts` (+
+`directory.integration.test.ts`, +3 tests), `apps/web/src/tenant-rail.ts`
+(nuevo) y su test, `apps/web/src/server.ts` (`buy()`, `finishSession`),
+`render.yaml`, `.env.example`.
+
+---

@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 4;
+export const DIRECTORY_SCHEMA_VERSION = 5;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -186,4 +186,10 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
    )`,
 
   `create index if not exists directory_consent_sessions_tenant_idx on directory_consent_sessions (tenant_id)`,
+
+  // Schema version 5 (T58/F6): each wallet-connected tenant's own
+  // `policy_rail`, deployed lazily the first time it actually pays. `null`
+  // is the normal state for the overwhelming majority of agents — same
+  // reasoning `onchain_state` already carries for the classic account.
+  `alter table directory_agents add column if not exists policy_rail_contract_id text`,
 ];

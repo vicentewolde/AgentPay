@@ -97,6 +97,7 @@ function createFakeDirectory(): FakeDirectory {
         label: null,
         status: "active",
         onchainState: "derived",
+        policyRailContractId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

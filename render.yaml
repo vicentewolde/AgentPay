@@ -64,3 +64,10 @@ services:
       # and the MVP no longer has a classic-account button to fall back to.
       - key: POLICY_RAIL_CONTRACT_ID
         value: CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I
+      # Not a secret either — the wasm hash of `contracts/policy-rail`'s
+      # current source (T57, `principal`/`withdraw`/`set_owner`), already
+      # uploaded to testnet. `ensureTenantPolicyRail` (F6/T58) instantiates a
+      # new rail per wallet-connected tenant from this same wasm, without
+      # re-uploading it — one upload, many `createCustomContract` calls.
+      - key: POLICY_RAIL_WASM_HASH
+        value: 8690d1f5ce18e6ef6209a400918d095450c01d7a8621ac795f404e11ea7e3175

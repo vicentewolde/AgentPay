@@ -261,6 +261,7 @@ function toAgent(row: Record<string, unknown>): AgentInstance {
     label: row.label,
     status: row.status,
     onchainState: row.onchain_state,
+    policyRailContractId: row.policy_rail_contract_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -362,6 +363,14 @@ export interface Directory {
   listAgents(tenantId: string): Promise<readonly AgentInstance[]>;
   setAgentStatus(id: string, status: AgentStatus): Promise<AgentInstance>;
   setAgentOnchainState(id: string, state: OnchainState): Promise<AgentInstance>;
+  /**
+   * Persists this agent's own `policy_rail` (F6/T58) — first write wins. A
+   * second call (two concurrent first payments racing to deploy one) does
+   * not overwrite the winner's contract id; it returns the winner's row,
+   * same reconcile-by-re-reading shape `ensureTenantAgent` already uses for
+   * its own creation race.
+   */
+  setAgentPolicyRail(id: string, contractId: string): Promise<AgentInstance>;
 
   recordCredential(input: RecordCredentialInput): Promise<CredentialRecord>;
   findCredentialByHash(credentialHash: string): Promise<CredentialRecord | undefined>;
@@ -686,6 +695,26 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
         throw new AgentPassError("AgentNotFound", "no agent with that id", { details: { agentId: id } });
       }
       return row;
+    },
+
+    async setAgentPolicyRail(id, contractId) {
+      const row = await one(
+        `update directory_agents set policy_rail_contract_id = $2, updated_at = now()
+         where id = $1 and policy_rail_contract_id is null
+         returning *`,
+        [id, contractId],
+        toAgent,
+      );
+      if (row !== undefined) return row;
+
+      // Zero rows means either the agent does not exist, or it already has a
+      // rail — one more read tells them apart, and in the second case hands
+      // back the winner's row rather than pretending this call had no effect.
+      const existing = await one("select * from directory_agents where id = $1", [id], toAgent);
+      if (existing === undefined) {
+        throw new AgentPassError("AgentNotFound", "no agent with that id", { details: { agentId: id } });
+      }
+      return existing;
     },
 
     // ---- credentials ----------------------------------------------------

@@ -3203,3 +3203,63 @@ Pendiente: el resto de F6 (rail por tenant en `apps/web`, bloqueado ya
 no por `G9` sino por el cableado en sí), el rename real a AgentPey
 (`P-11`), desplegar T40/T49/T51/T52 a Render, y G10 (alta automática de
 emisores). Sin tarea nueva delegada a Codex desde acá.
+
+---
+
+## 2026-09-11 (9) — cc/t58-policy-rail-per-tenant (T58 cerrado, resto de F6)
+
+Agente: Claude Code
+
+Qué: **T58 cerrado**. Cada tenant con wallet real conectada despliega y
+usa su propio `policy_rail` desde su primer pago — perezoso, no al
+crearse el tenant. Toca custodia y fondos de terceros (`P-10`): entré en
+modo plan antes de escribir código, presenté el diseño (quién es `owner`,
+quién `principal`, cuándo se despliega, cómo se financia) y esperé
+aprobación explícita del usuario antes de arrancar.
+
+Problema real resuelto en el diseño, no anticipado en el plan original:
+`scripts/deploy-policy-rail.ts` shellea al binario `stellar`, que Render
+no tiene instalado — inválido para desplegar desde el servidor en vivo.
+Solución: `apps/web/src/tenant-rail.ts` usa `@stellar/stellar-sdk`'s
+`contract.Client.deploy` para instanciar un contrato nuevo desde un wasm
+**ya subido** a testnet (el mismo que usa el rail compartido, hash
+confirmado con `stellar contract upload` — "already installed", cero
+costo), sin CLI y sin necesitar el `.wasm` compilado en el servidor.
+
+Ajuste de alcance encontrado leyendo `server.ts` antes de tocarlo: el
+camino clásico sin wallet también puede pedir pagar vía rail, pero su
+"principal" es la propia plataforma firmando por sí misma — no un cliente
+real, nada a quien darle un contrato propio. Se dejó ese camino exactamente
+como estaba (rail compartido, `POLICY_RAIL_CONTRACT_ID`); solo una sesión
+con wallet real y `tenantAgentId` (F4/T40) recibe su propio rail. Detalle
+completo, con la alternativa descartada, en `DECISIONES.md` → `C-62`.
+
+Cambios: `packages/directory` (esquema versión 4 → 5,
+`policy_rail_contract_id` nullable en `directory_agents`,
+`setAgentPolicyRail` con semántica "primera escritura gana" para no pisar
+al ganador de una carrera); `apps/web/src/tenant-rail.ts` (nuevo,
+`ensureTenantPolicyRail`: despliegue, fondeo con Friendbot (XLM) y desde
+la reserva existente (USDC), persistencia idempotente); `apps/web/src/server.ts`
+(`buy()` resuelve el pagador según el camino, wallet vs clásico);
+`render.yaml`/`.env.example` (`POLICY_RAIL_WASM_HASH`, nuevo, público).
+
+Verificado: `pnpm typecheck`/`build` limpios; 907 tests en el monorepo
+(+1); 33 tests de integración de `directory` contra Postgres real (+3).
+Medición real en testnet: dos tenants con wallets frescas, cada uno
+compró desde un `policy_rail` con contract id distinto (hashes
+verificables en Stellar Expert), y un tercer tenant compró diez veces
+hasta su `per_day` — la compra once fue rechazada por el contrato mismo
+(`__check_auth`, `Error(Contract, #8)`), no por el software. Detalle
+completo en `evidencia/T58.md`. El script de prueba no se commiteó, mismo
+criterio que las sondas de T22/T57.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`BITACORA.md` — T58; `PLATAFORMA-PARTNERS.md` — F6 pasa de 🔴 a 🟡, T58
+cerrado, T59 (monitoreo de saldo) nace como ticket pendiente;
+`DECISIONES.md` → `C-62`; `evidencia/T58.md`).
+
+Pendiente: T59 (monitoreo de saldo, el entregable de F6 que T58 no
+cubrió), migrar o no el rail compartido del piloto al constructor de T57,
+el rename real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y
+G10 (alta automática de emisores). Sin tarea nueva delegada a Codex desde
+acá — toda esta fase se queda en Claude Code por `P-10`.

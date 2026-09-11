@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T54 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T58 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -45,7 +45,13 @@ quiera, sin que AgentPay coopere (`C-61`). Y F7 quedó completa: hay dos comerci
 el catálogo del agente — el bazaar del embajador y un segundo x402 real
 e independiente (`examples/reference-merchant/**`, T54) — y agregar
 cualquiera de los dos, o uno nuevo, es una fila en `venues.json`, no
-código.
+código. Y F6 avanzó su parte central: un tenant que conecta una wallet
+real y llega a pagar ya recibe su **propio** `policy_rail` — desplegado y
+fondeado la primera vez que compra, no antes — en vez de compartir el de
+siempre. Verificado en testnet real con dos tenants pagando cada uno desde
+un contrato distinto, y un tercero rechazado por la red, no por el
+software, al superar su `per_day` (T58). El camino clásico sin wallet
+sigue exactamente igual que antes, pagando del rail compartido.
 
 ### Progreso
 
@@ -72,6 +78,7 @@ código.
 | T57 | `withdraw` y `set_owner` en `policy_rail`, gateados por la wallet del principal — resuelve `G9`, el bloqueante duro de F6 | ✅ cerrado 2026-09-11 |
 | T55, T56 | Script de alta de comercio (`scripts/register-venue.ts`) y tests del adaptador genérico sobre un segundo venue sintético | ✅ cerrados 2026-09-11 (Codex, PR #16) |
 | T54 | Comercio de referencia x402 independiente (`examples/reference-merchant/**`) — segundo venue real, cierra F7 | ✅ cerrado 2026-09-11 (Codex, PR #17) |
+| T58 | Rail `policy_rail` por tenant: desplegado y fondeado sin CLI, la primera vez que un tenant con wallet real paga; verificado en testnet con dos tenants en rails distintos y un tercero rechazado por `per_day` | ✅ cerrado 2026-09-11 |
 
 ---
 
@@ -1505,3 +1512,86 @@ ya en `C-60`. **F7 (comercio x402 genérico) queda completa** — ver
 Pendiente: el resto de F6 (rail por tenant en `apps/web`), el rename
 real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y G10
 (alta automática de emisores).
+
+---
+
+## T58 · rail `policy_rail` por tenant — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** Hasta hoy, todos los
+tenants pagaban desde una única cuenta y un único `policy_rail`
+compartidos — `G9` (T57) ya había hecho seguro que un rail tuviera dueño
+real, pero nada lo usaba todavía. Ahora, cuando un tenant que conectó una
+wallet real llega a pagar por primera vez, el sistema le despliega **su
+propio** `policy_rail` ahí mismo — no antes, no de oficio — con la llave
+que ya firma su Mandato como quien autoriza el gasto día a día, y su
+propia wallet como quien puede retirar todo o cambiar esa llave cuando
+quiera. Las compras siguientes de ese mismo tenant reusan el mismo rail;
+nunca se crea uno nuevo por sesión. El camino clásico, el que no pide
+conectar wallet, sigue exactamente igual que siempre — no tiene una
+identidad real detrás de la que colgar un rail propio, y no la necesita
+para lo que demuestra.
+
+**Un problema de diseño real, resuelto antes de escribir código.**
+`scripts/deploy-policy-rail.ts` (el que despliega el rail compartido)
+funciona invocando el binario `stellar` de línea de comandos — perfecto
+para un humano corriéndolo una vez, inválido para el servidor en
+producción, que no tiene ese binario instalado y no debería necesitarlo.
+La solución no fue instalarlo: `@stellar/stellar-sdk` (ya usado en este
+mismo repo para pagar desde un rail) sabe crear una instancia nueva de un
+contrato **a partir de un wasm ya subido a la red**, sin CLI de por
+medio — el mismo wasm que el rail compartido ya usa, subido una sola vez,
+instanciado tantas veces como tenants paguen.
+
+**Un ajuste de alcance frente al plan original, y por qué.** El plan
+inicial hablaba de retirar `POLICY_RAIL_CONTRACT_ID` del todo. Al leer
+`server.ts` de cerca apareció algo que no estaba anticipado: el camino
+sin wallet ("clásico") también puede pedir pagar vía rail, pero no tiene
+ninguna wallet real detrás — su "principal" es la propia plataforma
+firmando por sí misma, una ficción de demo, no un cliente real. Desplegar
+un contrato por cada visita sin wallet no tendría a quién pertenecerle.
+Se mantuvo entonces `POLICY_RAIL_CONTRACT_ID` como lo que siempre fue —el
+rail compartido— pero acotado a ese único camino; todo tenant con wallet
+real usa el suyo propio desde este hito.
+
+**Verificado en testnet real, no solo con tests.** Dos wallets frescas
+conectaron, firmaron su propio Mandato de verdad, y compraron — cada una
+desde un contrato `policy_rail` distinto, confirmado por dirección de
+contrato y por el hash de cada pago liquidado. Un tercer tenant compró
+diez veces seguidas hasta tocar su `per_day` (0.01 USDC, a 0.001 por
+compra) y la compra número once fue rechazada por el contrato mismo
+(`__check_auth`, `Error(Contract, #8)`) — la app nunca llegó a construir
+una transacción para firmar, porque la red la rechazó antes.
+
+**Evidencia técnica.** Detalle completo en
+[`evidencia/T58.md`](evidencia/T58.md); el resumen:
+
+- `packages/directory`: esquema versión 4 → 5, `directory_agents` gana
+  `policy_rail_contract_id` (nullable). `setAgentPolicyRail` escribe una
+  sola vez — una segunda llamada (dos pagos concurrentes desplegando a la
+  vez) no pisa al que ganó la carrera, devuelve su fila. 33 tests de
+  integración contra Postgres real, 3 nuevos.
+- `apps/web/src/tenant-rail.ts` (nuevo): `ensureTenantPolicyRail` —
+  despliegue perezoso vía `contract.Client.deploy` del SDK (sin CLI),
+  fondeo inicial de XLM (Friendbot) y USDC (desde la misma reserva que
+  hoy fondea el rail compartido), persistencia idempotente.
+- `apps/web/src/server.ts`: `buy()` resuelve el pagador según el camino —
+  rail propio para una sesión con wallet, rail compartido sin cambios
+  para la clásica. Ningún llamado nuevo en el camino que no usa rail.
+- `pnpm typecheck`/`build` limpios; 907 tests en el monorepo (+1).
+- Medición real en testnet: dos rails distintos, dos pagos liquidados con
+  hash verificable en Stellar Expert, y un rechazo por `per_day` que pasa
+  por la red.
+
+**Lo que este hito no hizo, a propósito.** No migró el rail compartido
+del piloto al constructor nuevo de T57 — sigue con el viejo, y ahora solo
+lo usa el camino clásico. No agregó monitoreo de saldo (ticket propio,
+T59). No hizo configurables `per_tx`/`per_day` por tenant o partner —
+usa los mismos valores que el rail compartido siempre tuvo.
+
+**Decisión nueva:** ninguna en `DECISIONES.md` — el diseño (quién es
+`owner`, quién es `principal`, cuándo se despliega) ya estaba resuelto
+por `C-20`, `C-21` y `C-61`; este hito lo cablea, no lo redecide.
+
+Pendiente: monitoreo de saldo (T59), migrar o no el rail compartido al
+constructor nuevo, el rename real a AgentPey (`P-11`), desplegar
+T40/T49/T51/T52 a Render, y G10 (alta automática de emisores).

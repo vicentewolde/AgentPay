@@ -74,6 +74,7 @@ import {
   verifyIntent,
   withVault,
   type PolicyRail,
+  type PolicyRailPayer,
 } from "@agentpay/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
@@ -82,6 +83,7 @@ import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
 import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
 import { ensureTenantAgent } from "./tenant-agent.js";
+import { ensureTenantPolicyRail } from "./tenant-rail.js";
 import {
   PENDING_WALLET_SESSION_TTL_MS,
   SESSION_COOKIE,
@@ -158,11 +160,15 @@ interface DemoSession {
   /** The connected wallet that is this session's mandate principal, if any (T35). Absent is the classic, platform-signed path. */
   readonly walletAddress: string | undefined;
   /**
-   * The deployed `policy_rail` smart account, when there is one
-   * (`POLICY_RAIL_CONTRACT_ID`, written by `pnpm run deploy:policy-rail`).
-   * Absent is a normal state: the classic-account path (T24) does not need it.
+   * The **shared, classic-path** `policy_rail` (`POLICY_RAIL_CONTRACT_ID`,
+   * written by `pnpm run deploy:policy-rail`) — used only when there is no
+   * wallet-connected tenant to own a rail of its own (`C-34`). A
+   * wallet-connected session resolves its own rail lazily in `buy()`
+   * (`ensureTenantPolicyRail`, F6/T58) instead of reading this field.
    */
   readonly railContractId: string | undefined;
+  /** This tenant's own `directory_agents` row id (F4/T40) — `undefined` on the classic, no-wallet path. */
+  readonly tenantAgentId: string | undefined;
 }
 
 const sessions = new Map<string, DemoSession>();
@@ -363,6 +369,8 @@ interface FinishSessionParams {
   readonly mandate: DemoSessionMandate;
   readonly mandateSource: MandateSource;
   readonly walletAddress: string | undefined;
+  /** This tenant's own `directory_agents` row id (F4/T40) — `undefined` on the classic, no-wallet path, which has no tenant row at all. */
+  readonly tenantAgentId: string | undefined;
 }
 
 /**
@@ -412,6 +420,7 @@ async function finishSession(params: FinishSessionParams): Promise<DemoSession> 
     venueId: catalog.venueId,
     walletAddress: params.walletAddress,
     railContractId: params.env.get("POLICY_RAIL_CONTRACT_ID"),
+    tenantAgentId: params.tenantAgentId,
   };
 }
 
@@ -541,6 +550,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
         mandate,
         mandateSource,
         walletAddress,
+        tenantAgentId: tenantAgent.instance.id,
       });
       return { kind: "ready", session };
     }
@@ -620,6 +630,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     },
     mandateSource: anchoredMandate.jws,
     walletAddress: undefined,
+    tenantAgentId: undefined,
   });
   return { kind: "ready", session };
 }
@@ -732,6 +743,49 @@ interface Step {
 }
 
 /**
+ * Which `policy_rail` pays for this session, and whose key authorises it
+ * (F6/T58). A wallet-connected session gets its own — deployed lazily, right
+ * here, the first time it actually pays — because it has a real tenant
+ * identity (`tenantAgentId`) and a real bound wallet (`walletAddress`) to be
+ * `owner` and `principal` with. The classic, no-wallet demo path (`C-34`) has
+ * neither, so it keeps paying from the shared rail, exactly as before F6.
+ */
+async function resolveRailPayer(current: DemoSession): Promise<PolicyRailPayer> {
+  if (current.tenantAgentId !== undefined && current.walletAddress !== undefined) {
+    const env = await readEnv();
+    const directory = await getDirectory(env);
+    const agentInstance = await directory.findAgent(current.tenantAgentId);
+    if (agentInstance === undefined) {
+      throw new AgentPassError("AgentNotFound", "esta sesión no tiene un agente propio para desplegar su rail", {
+        details: { tenantAgentId: current.tenantAgentId },
+      });
+    }
+    const reserve = requireSecretKey(env, "AGENT_SECRET_KEY");
+    const wasmHash = requireEnv(env, "POLICY_RAIL_WASM_HASH");
+    const contractId = await ensureTenantPolicyRail(
+      directory,
+      { instance: agentInstance, keypair: Keypair.fromSecret(current.agentSecret) },
+      current.walletAddress,
+      reserve,
+      wasmHash,
+    );
+    // The tenant's own key is both the Mandato's agent and this rail's
+    // `owner` — never `paymentSecret` (`AGENT_SECRET_KEY`), which the
+    // deployed contract does not recognise as its owner.
+    return { contractId, ownerSecret: current.agentSecret };
+  }
+
+  if (current.railContractId === undefined) {
+    throw new AgentPassError(
+      "ConfigError",
+      "no hay ningún policy_rail desplegado — corré `pnpm run deploy:policy-rail` primero",
+      { details: { missing: "POLICY_RAIL_CONTRACT_ID" } },
+    );
+  }
+  return { contractId: current.railContractId, ownerSecret: current.paymentSecret };
+}
+
+/**
  * Mirrors `pnpm run demo:pay-real`'s steps 3-5: sign the intent, then pay for
  * real. With `viaRail`, the `policy_rail` smart account pays instead of the
  * agent's classic account (T31) — same intent, same authorisation, same
@@ -772,21 +826,7 @@ async function buy(
   const resourceUrl = fillRouteTemplate(current.baseUrl, route, ROUTE_PARAMS);
   steps.push({ label: "recurso", value: resourceUrl });
 
-  if (viaRail && current.railContractId === undefined) {
-    throw new AgentPassError(
-      "ConfigError",
-      "no hay ningún policy_rail desplegado — corré `pnpm run deploy:policy-rail` primero",
-      { details: { missing: "POLICY_RAIL_CONTRACT_ID" } },
-    );
-  }
-  // F4 (T40): `paymentSecret`, not `agentSecret` — who pays is still the
-  // shared account on both paths (`C-20`, deferred to F6); who the mandate
-  // and the intent name as the agent is, since F4, this tenant's own
-  // derived identity. See `DemoSession.paymentSecret`'s docstring.
-  const payer =
-    viaRail && current.railContractId !== undefined
-      ? { contractId: current.railContractId, ownerSecret: current.paymentSecret }
-      : undefined;
+  const payer = viaRail ? await resolveRailPayer(current) : undefined;
   steps.push({
     label: "pagador",
     value:
@@ -1316,6 +1356,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         },
         mandateSource: { mandate: pending.mandate, signature: pending.signature },
         walletAddress: pending.walletAddress,
+        tenantAgentId: tenantAgent.instance.id,
       });
       sessions.set(sessionId, session);
       pendingWalletSessions.delete(sessionId);

@@ -18,6 +18,7 @@ function fakeAgent(overrides: Partial<AgentInstance> = {}): AgentInstance {
     label: null,
     status: "active",
     onchainState: "derived",
+    policyRailContractId: null,
     createdAt: new Date("2026-09-10T00:00:00.000Z"),
     updatedAt: new Date("2026-09-10T00:00:00.000Z"),
     ...overrides,

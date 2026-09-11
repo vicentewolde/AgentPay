@@ -955,7 +955,19 @@ Claude Code congele el contrato.
 
 ---
 
-### F6 · Cuenta pagadora autónoma por tenant 🔴
+### F6 · Cuenta pagadora autónoma por tenant 🟡
+
+> **T58 cerrado el 2026-09-11.** Un tenant con wallet real conectada ya
+> despliega y usa su propio `policy_rail`, la primera vez que paga —
+> perezoso, sin CLI (SDK nativo, `contract.Client.deploy` desde un wasm ya
+> subido), fondeado desde la misma reserva que hoy fondea el rail
+> compartido. Verificado en testnet real: dos tenants pagando cada uno
+> desde un contrato distinto, y un tercero rechazado por la red al superar
+> `per_day` — el "listo cuando" de esta fase, cumplido. El camino clásico
+> sin wallet (`C-34`) sigue pagando del rail compartido, sin cambios — ver
+> `DECISIONES.md` → `C-62` para por qué eso es correcto y no una brecha.
+> Fuera de este hito, a propósito: monitoreo de saldo (**T59**, ticket
+> nuevo) y migrar el rail compartido del piloto al constructor de T57.
 
 - **Objetivo llano.** Que el dinero salga de una cuenta del cliente con
   límites que aplica la red, no de una cuenta nuestra.
@@ -967,13 +979,15 @@ Claude Code congele el contrato.
   `principal.require_auth()`, ver `DECISIONES.md` → `C-61`. Cualquier otro
   cambio al contrato sigue necesitando aprobación aparte.
 - **Decisiones previas.** 4.1 resuelta; G9 ✅ resuelto (T57).
-- **Entregables.** Despliegue por tenant, fondeo, monitoreo de saldo.
+- **Entregables.** Despliegue por tenant ✅ (T58), fondeo ✅ (T58),
+  monitoreo de saldo (pendiente, T59).
 - **Evidencia.** Un pago por tenant, con el rechazo del segundo por
-  `per_day` visible en la respuesta del contrato.
+  `per_day` visible en la respuesta del contrato. ✅ Cumplida — dos rails
+  distintos y un rechazo por `per_day` en testnet real (`evidencia/T58.md`).
 - **Riesgos.** Los más altos del plan: fondos atrapados, costo de despliegue
   por tenant, límite de rent de Soroban.
 - **Listo cuando.** Dos tenants gastan de rails distintos y el exceso lo
-  rechaza el contrato, no el software.
+  rechaza el contrato, no el software. ✅ Cumplido (T58).
 
 **Delegación Claude Code / Codex.**
 
@@ -996,6 +1010,8 @@ Claude Code congele el contrato.
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
 | T57 | Claude | Aprobación explícita del usuario sobre `G9` | 🔴 Alto — cambia un contrato Soroban y decide sobre fondos de un tercero | `contracts/policy-rail/**`, `scripts/deploy-policy-rail.ts`, `scripts/lib/deployment.ts` | ✅ cerrado — `principal` separado de `owner`, `withdraw`/`set_owner` con `require_auth()`, `__check_auth` intacto; 11 tests nuevos (21 → 32), cuatro mutaciones dirigidas que matan tests, y medición en testnet real donde un firmante que no es el principal es rechazado por la red con `require_auth` incluso forzando la transacción hasta el ledger (`C-61`, `evidencia/T57.md`) |
+| T58 | Claude | T57 mergeado | 🔴 Alto — despliega contratos reales y decide sobre fondos de un tercero | `packages/directory/src/*`, `apps/web/src/tenant-rail.ts` (nuevo), `apps/web/src/server.ts`, `render.yaml`, `.env.example` | ✅ cerrado — despliegue perezoso sin CLI vía SDK, fondeo desde la reserva existente, persistencia idempotente ante carrera; verificado en testnet real con dos tenants en rails distintos y un tercero rechazado por `per_day` (`C-62`, `evidencia/T58.md`) |
+| T59 | Claude | T58 mergeado | Medio — lee saldos, no decide sobre ellos | por definir | Pendiente — monitoreo de saldo, el entregable de F6 que T58 no cubrió |
 | resto | Claude | — | — | — | Sin tickets de Codex — 🔴 el resto de la fase se queda en Claude Code, incluido el scaffolding |
 
 ---

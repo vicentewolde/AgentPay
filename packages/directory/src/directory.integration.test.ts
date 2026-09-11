@@ -237,6 +237,44 @@ describe("createDirectory", () => {
     expect(funded.onchainState).toBe("funded");
   });
 
+  it("creates an agent with no policy_rail yet, then persists one once deployed (F6/T58)", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_no_rail_yet" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+
+    expect(agent.policyRailContractId).toBeNull();
+    const railContractId = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";
+    const withRail = await directory.setAgentPolicyRail(agent.id, railContractId);
+    expect(withRail.policyRailContractId).toBe(railContractId);
+
+    // Persisted, not just returned — a fresh read agrees.
+    const reread = await directory.findAgent(agent.id);
+    expect(reread?.policyRailContractId).toBe(railContractId);
+  });
+
+  it("keeps the first policy_rail on a race — a second deploy does not overwrite it", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_rail_race" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+
+    const first = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";
+    const second = "CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ";
+    const won = await directory.setAgentPolicyRail(agent.id, first);
+    const lost = await directory.setAgentPolicyRail(agent.id, second);
+
+    expect(won.policyRailContractId).toBe(first);
+    // The loser's call reports the winner's contract, not its own — the
+    // caller that "lost" a race must not believe its own deploy is the one
+    // that counts.
+    expect(lost.policyRailContractId).toBe(first);
+  });
+
+  it("refuses to set a policy_rail on an agent that does not exist", async () => {
+    await expect(
+      directory.setAgentPolicyRail(newId("agent"), "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526"),
+    ).rejects.toSatisfy((error) => hasErrorCode(error, "AgentNotFound"));
+  });
+
   it("refuses an agent for a tenant that does not exist, without burning the derivation", async () => {
     let derivations = 0;
     await expect(
