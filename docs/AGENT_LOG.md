@@ -3006,3 +3006,31 @@ usuario en el chat, no como archivo — mismo criterio que T46–T48.
 Pendiente: que el usuario arranque T54–T56 en Codex. F6 sigue bloqueada
 por `G9`. Sigue pendiente de antes: el rename real a AgentPey (`P-11`),
 desplegar a Render, G10 (alta automática de emisores).
+
+---
+
+## 2026-09-11 — codex/delegated-task (T55 y T56)
+
+Agente: Codex
+
+Qué: se agregó `scripts/register-venue.ts`, un script manual que inserta una
+fila de venue desde `--slug`, `--contract-id` opcional, `--base-url` opcional
+y uno o más `--asset CODE:ISSUER`. Deriva un contrato StrKey determinista si
+no se entrega uno, valida la fila con `registryVenueSchema` y valida el
+registro completo con `loadVenueRegistry` antes de escribir. También se agregó
+`apps/agent/src/catalog/x402-catalog.test.ts`, con nueve casos sobre un venue
+sintético independiente: catálogo, mapeo de asset, rutas pagadas y fallos de
+transporte.
+
+Por qué: T53 publicó el registro y el adaptador genérico; faltaban el camino
+mecánico para dar de alta una fila sin editar TypeScript y cobertura directa
+del adaptador sobre un segundo venue.
+
+Verificado: el script agregó una fila a una copia temporal de `venues.json`;
+un slug existente fue rechazado y la copia quedó idéntica byte a byte. `pnpm
+typecheck`, `pnpm build` y `pnpm test` pasaron; la suite completa quedó en 904
+tests, incluidos los 9 nuevos de T56.
+
+Pendiente: T54 (el comercio de referencia) exige la prueba de pago real en
+Stellar testnet con una wallet pagadora que tenga USDC de prueba; no se creó ni
+se usó una cuenta o llave para ese flujo en esta tarea.
