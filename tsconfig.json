@@ -10,6 +10,7 @@
     { "path": "./packages/directory" },
     { "path": "./packages/partner-api" },
     { "path": "./packages/partner-sdk" },
+    { "path": "./packages/webhooks" },
     { "path": "./apps/agent" },
     { "path": "./apps/web" }
   ]

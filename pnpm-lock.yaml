@@ -221,6 +221,15 @@ importers:
         specifier: ^8.11.0
         version: 8.23.1
 
+  packages/webhooks:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../core
+      '@agentpay/partner-api':
+        specifier: workspace:*
+        version: link:../partner-api
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':

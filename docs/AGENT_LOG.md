@@ -2447,6 +2447,7 @@ brecha de `C-47`) sigue siendo trabajo de Claude Code, sin empezar —
 próximo hito propuesto. Sigue pendiente de antes: rename a VynGent
 (`P-9`), desplegar T40 a Render, G10.
 
+<<<<<<< HEAD
 ## 2026-09-10 (11) — `codex/t46-openapi`
 
 Agente: Codex
@@ -2499,3 +2500,74 @@ provisto.
 
 Pendiente: revisión y merge del PR; T49 sigue siendo responsable de los
 handlers reales y de la autorización de acceso a `/v1`.
+
+## 2026-09-10 (13) — `codex/t48-webhooks-worker`
+
+Agente: Codex
+
+Qué: se agregó `@agentpay/webhooks`, un worker de entrega que recibe un
+`WebhookEvent` ya armado, serializa el body, lo firma con
+`signWebhookPayload` y lo POSTea usando `fetch`. Reintenta fallos de red,
+timeout y 5xx; corta inmediatamente ante 4xx. Se agregó una cola en memoria
+con `deliver`, `list` y `clear` que conserva los fallos agotados sin guardar
+el secreto del endpoint. El README documenta el backoff exponencial: base de
+1 s, doble por intento, tope de 30 s y jitter uniforme de 0–250 ms.
+
+Por qué: T48 construye exclusivamente el mecanismo confiable de entrega; no
+decide cuándo se crea ni se emite un evento, decisión que queda fuera de este
+paquete y de Codex.
+
+Verificado: cinco tests usan un servidor `node:http` efímero que se cierra al
+terminar. Cubren 5xx seguido de 2xx con backoff creciente, error de red por
+`fetchImpl` inyectado, 4xx sin retry, firma recibida verificada por
+`verifyWebhookSignature` y la cola sin secreto. `pnpm typecheck` y
+`pnpm test` pasan (836 tests).
+
+Pendiente: revisión y merge del PR; T49 o un sucesor sigue siendo responsable
+de decidir cuándo se emite cada evento y de conectar los emisores reales.
+
+## 2026-09-10 (14) — main (revisión y merge de T46, T47, T48)
+
+Agente: Claude Code
+
+Qué: se revisaron los tres PR de Codex (T46 `#6`, T47 `#7`, T48 `#8`) —
+diff completo, y build/typecheck/tests corridos en worktrees aislados
+(`/tmp/agentpay-review/t46`, `/t47`, y directo en `~/dev/AgentPay-codex`
+para T48) antes de tocar `main`. Ninguno tocó un archivo prohibido por su
+propio ticket ni ningún punto de autorización. Se mergearon los tres a
+`main` (T46 fast-forward; T47 y T48 con conflictos triviales de
+`docs/AGENT_LOG.md`/`tsconfig.json` resueltos a mano — cada uno agregaba su
+propia línea al mismo array/archivo, sin solaparse en sustancia) y se
+pusheó.
+
+Hallazgos de la revisión, ninguno bloqueante:
+- T46 (`scripts/generate-openapi.ts`) agregó `@agentpay/directory` al mapa
+  de paths de `tsconfig.scripts.json` sin que el script lo importe —
+  inofensivo, no se pidió corregir.
+- T47 castea el `code` remoto del envelope de error a `AgentPassErrorCode`
+  sin validarlo contra el union — coherente con que el servidor es quien
+  define esa taxonomía, y ya documentado en los tests; no es una brecha de
+  seguridad.
+- T48 arrastra un campo `retryable` en `AttemptFailure` que siempre vale
+  `true` y nunca se lee condicionalmente — código muerto, sin efecto en el
+  comportamiento (los tests cubren exactamente el comportamiento
+  documentado: reintenta red/timeout/5xx, corta en 4xx).
+
+Verificado en `main` ya fusionado: `git diff --stat 889f053..HEAD -- apps
+contracts` no devuelve nada. `pnpm install` reconcilia el lockfile
+mergeado sin advertencias. `pnpm typecheck`, `pnpm build` y `pnpm test`
+(841 tests: 831 + 5 de `@agentpay/partner-sdk` + 5 de `@agentpay/webhooks`)
+limpios.
+
+Por qué: es el paso no negociable del protocolo (`CLAUDE.md` § Coordinación
+con Codex, punto 5) — ningún PR de Codex se mergea a ciegas, con atención
+particular a cualquier cambio cerca de un punto de autorización (ninguno
+de los tres se acercó a uno).
+
+Pendiente: **F5 tiene T45-T48 cerrados.** Queda T49 (cablear las rutas
+reales de `/v1`, el middleware de autenticación, y resolver la brecha de
+`C-47` — nadie tiene ticket para conectar el contrato con
+`@agentpay/directory` de verdad) y T50 (documentación/ejemplo de partner,
+depende de T49). T49 se queda en Claude Code por tocar un punto de
+autorización nuevo — sin empezar. Sigue pendiente de antes: rename a
+VynGent (`P-9`), desplegar T40 a Render, G10 (alta automática de emisores).
