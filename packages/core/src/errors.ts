@@ -150,7 +150,9 @@ export type AgentPassErrorCode =
   /** The consent session's invitation window has passed — its link can no longer be signed. */
   | "ConsentSessionExpired"
   /** The consent session was already signed; a second principal cannot complete it again. */
-  | "ConsentSessionAlreadyCompleted";
+  | "ConsentSessionAlreadyCompleted"
+  /** The server-wide cap on automatic issuer registrations (`G10`) was reached — the admin key stops paying for more until the window resets. */
+  | "IssuerRegistrationRateLimited";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

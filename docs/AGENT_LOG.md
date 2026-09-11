@@ -3346,3 +3346,44 @@ esperando). Migrar o no el rail compartido, el rename a AgentPey
 (`P-11`), desplegar a Render, y G10 (sigue pendiente de que el usuario
 confirme si vale la pena revisitar `C-15` ahora o dejarlo para más
 adelante — es una decisión deliberada del piloto, no un bug).
+
+---
+
+## 2026-09-11 (12) — main (mitigación de G10, sin numerar)
+
+Agente: Claude Code
+
+Qué: le pregunté al usuario si quería revisitar `G10` (registro
+automático de emisores, pagado por la cuenta admin, sin límite) ahora que
+`C-15` lo dejó como riesgo deliberado — pidió explícitamente un tope de
+gasto, no todavía la cola de aprobación manual. Agregué
+`apps/web/src/issuer-registration-limit.ts`: un contador de ventana
+deslizante, server-wide (no por wallet — una wallet nueva es gratis de
+generar, así que limitar por dirección no frena nada), 20 registros por
+hora. `ensureWalletIsRegisteredIssuer` lo consulta antes de llamar a
+`registerIssuer`, no después — un cupo se gasta al intentar, para que dos
+pedidos concurrentes no pasen juntos el chequeo.
+
+`C-15` no se tocó — sigue siendo la decisión vigente de que una wallet
+que prueba control de su dirección se registra sin aprobación manual.
+Este hito no revierte eso, solo le pone un techo al costo.
+
+Verificado: 4 tests nuevos (ventana, liberación de cupo, tiempo de espera
+reportado); `pnpm typecheck`/`build` limpios, 911 tests unitarios en el
+monorepo. Corrida real contra testnet (`pnpm --filter @agentpay/web run
+dev`): una wallet fresca conecta y llega a `pending: wallet-consent`
+exactamente igual que antes del cambio — el límite es invisible hasta que
+se supera. Script de la corrida no commiteado, mismo criterio que las
+sondas de T22/T57/T58.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/`
+(`DECISIONES.md` → `C-63`; `BITACORA.md`; `PLATAFORMA-PARTNERS.md` — fila
+`G10` marcada mitigada, no resuelta del todo; `evidencia/G10-mitigacion.md`).
+No le puse número de ticket — mismo criterio que el fix de producción del
+vault en T33 y la licencia del repo: real, pero fuera de la secuencia de
+hitos planificados.
+
+Pendiente: que el usuario arranque T59 en Codex, migrar o no el rail
+compartido, el rename a AgentPey (`P-11`), y desplegar T40/T49/T51/T52 a
+Render — el único pendiente de la lista original que sigue completamente
+sin tocar.

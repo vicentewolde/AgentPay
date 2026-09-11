@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T60 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T60 (+ mitigación de G10, sin numerar) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -1648,3 +1648,45 @@ Pendiente: migrar o no el rail compartido al constructor de T57, el
 rename real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y
 G10 (alta automática de emisores). Sin tarea nueva delegada a Codex desde
 acá — reservado a Claude Code por `P-10` (lee cuentas pagadoras).
+
+---
+
+## G10 · tope de gasto para el registro automático de emisores — mitigado 2026-09-11 (sin numerar)
+
+**Qué quedó funcionando, en palabras llanas.** Cualquiera puede crear una
+wallet Stellar gratis, en su computadora, sin pedirle nada a nadie. Hasta
+hoy, cada una de esas wallets que se conectaba a la demo hacía que
+AgentPay pagara, de su propio bolsillo (la cuenta admin), una transacción
+real para registrarla — sin ningún límite en cuántas veces podía pasar
+eso. Ahora hay un tope: la cuenta admin paga como máximo 20 registros
+nuevos por hora, para toda la demo junta. Pasado ese número, se corta
+—nadie nuevo se registra hasta que pase la hora— pero nada de lo que ya
+funciona se rompe: una wallet que ya está registrada nunca toca ese
+límite.
+
+**Lo que esto no es.** No es la cola de aprobación manual que `C-15`
+consideró y descartó en su momento por la fricción que le agrega a la
+demo — esa decisión sigue en pie, a propósito. Esto es un techo de
+gasto, no un filtro de quién es de fiar.
+
+**Evidencia técnica.** Detalle completo en
+[`evidencia/G10-mitigacion.md`](evidencia/G10-mitigacion.md); el resumen:
+
+- `apps/web/src/issuer-registration-limit.ts` (nuevo): contador de
+  ventana deslizante, server-wide, 20/hora por defecto. Consume el cupo
+  **antes** de llamar a `registerIssuer`, no después, para que dos
+  pedidos concurrentes no pasen juntos el chequeo.
+- Código de error nuevo en `@agentpass/core`:
+  `IssuerRegistrationRateLimited`.
+- 4 tests nuevos (ventana, liberación de cupo, tiempo de espera
+  reportado). `pnpm typecheck`/`build` limpios; 911 tests unitarios en
+  el monorepo.
+- Verificado en testnet real: una wallet fresca conecta y llega a
+  `pending: wallet-consent` exactamente igual que antes — el límite es
+  invisible hasta que se supera.
+
+**Decisión nueva:** `C-63`. `C-15` no se tocó — sigue vigente.
+
+Pendiente: lo de siempre — migrar o no el rail compartido, el rename a
+AgentPey (`P-11`), desplegar a Render, y que el usuario arranque T59 en
+Codex.

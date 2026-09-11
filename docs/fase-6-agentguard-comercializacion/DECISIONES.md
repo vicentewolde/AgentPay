@@ -1821,3 +1821,74 @@ tocados: `packages/directory/src/{schema-sql,entities,directory}.ts` (+
 `render.yaml`, `.env.example`.
 
 ---
+
+### C-63 · `G10` gana un tope de gasto, no una cola de aprobación — `C-15` sigue vigente · `Vigente`
+**Fecha:** 2026-09-11
+
+`G10` describía un riesgo real dejado a propósito sin resolver por `C-15`:
+`ensureWalletIsRegisteredIssuer` paga, con la llave admin, el registro de
+**cualquier** wallet que pruebe controlar su dirección — y probar eso es
+gratis, cualquiera puede generar una wallet Stellar nueva sin pedirle nada
+a nadie. Nada limitaba cuántas de esas escrituras reales el admin
+terminaba pagando en una ventana de tiempo.
+
+**Lo que el usuario pidió explícitamente:** un tope de gasto o
+rate-limit, **no** todavía la cola de aprobación manual que `C-15` ya
+había descartado por fricción — sin revertir esa decisión, acotarle el
+costo.
+
+**La decisión:** `apps/web/src/issuer-registration-limit.ts`, un contador
+de ventana deslizante server-wide (no por wallet — una wallet nueva no
+vuelve a pedir registro, así que limitar por dirección no frena a un
+atacante que genera una dirección distinta por intento). Tope: **20
+registros por hora**, elegido para cubrir con margen el tráfico real de
+un piloto (un puñado de visitantes conectando su wallet, cada uno una
+sola vez) mientras acota a un número conocido cuánto puede costarle a la
+cuenta admin un script insistiendo contra `/api/wallet/verify`. Superado
+el tope, `ensureWalletIsRegisteredIssuer` lanza
+`IssuerRegistrationRateLimited` (código nuevo en `@agentpass/core`) antes
+de llamar a `registerIssuer` — nunca después: consumir un cupo antes del
+intento, no después de que resulte, es lo que evita que dos pedidos
+concurrentes pasen juntos el chequeo y gasten uno de más.
+
+**Por qué server-wide y no por wallet.** El costo que se protege es el de
+la cuenta admin, no el de ninguna wallet en particular — una wallet ya
+registrada nunca vuelve a tocar el contador (se corta antes, en
+`issuerStatus`), así que el tope solo se gasta con registros *nuevos* de
+verdad.
+
+**Por qué en memoria, no en Postgres.** Mismo criterio ya aceptado para
+`walletChallenges`/`pendingWalletSessions` (`G12`, pendiente para F8): a
+esta escala (un piloto, no producción con más de una instancia), un
+contador que se reinicia en un redeploy es una degradación aceptable, no
+una vulnerabilidad — en el peor caso, un redeploy le da a un atacante una
+ventana nueva completa, que es exactamente el mismo riesgo que ya existía
+sin este hito, no uno nuevo. Pasarlo a Postgres es straightforward si F8
+alguna vez lo pide, pero hacerlo ahora sería resolver un problema que
+`G12` ya tiene en su lista, no uno que este hito necesite resolver de
+nuevo.
+
+**`C-15` no se tocó.** Sigue siendo la decisión vigente: una wallet que
+prueba control de su dirección se registra sin aprobación manual. Este
+hito no vuelve a preguntar esa pregunta — acota cuánto cuesta la
+respuesta que `C-15` ya dio, nada más.
+
+**Alternativa descartada:** limitar por dirección de wallet en vez de
+server-wide. Descartada porque no protege nada: el costo lo paga el
+registro en sí, no la repetición de un mismo registro, y una wallet no
+puede pedir que la registren dos veces (el `if (existing.registered &&
+existing.active) return` ya la corta antes de llegar al límite).
+**Segunda alternativa descartada:** un tope de gasto medido en XLM en vez
+de en cantidad de transacciones. Descartada por simplicidad — el fee de
+`register_issuer` es esencialmente constante entre llamadas, así que
+contar transacciones y contar XLM gastado dan prácticamente el mismo
+límite real, y contar transacciones no depende de leer el fee de la red
+en cada intento.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (fila `G10`, marcada
+mitigada, no resuelta del todo — sigue sin aprobación manual a
+propósito). Archivos tocados: `packages/core/src/errors.ts`
+(`IssuerRegistrationRateLimited`, código nuevo), `apps/web/src/issuer-registration-limit.ts`
+(nuevo) y su test, `apps/web/src/server.ts` (`ensureWalletIsRegisteredIssuer`).
+
+---

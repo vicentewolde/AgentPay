@@ -78,6 +78,7 @@ import {
 } from "@agentpay/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
+import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
 import { routePartnerRequest } from "./partner-routes.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
@@ -261,12 +262,27 @@ const pendingConsentSessions = createExpiringStore<PendingConsentSession>(PENDIN
 const walletAddressByConsentSession = new Map<string, string>();
 
 /**
+ * Server-wide across every session, on purpose (`G10`/`C-63`): the thing
+ * being bounded is how many Soroban writes the admin key pays for in a
+ * stretch of time, not how many any one visitor asks for.
+ */
+const issuerRegistrationLimiter = createIssuerRegistrationLimiter();
+
+/**
  * Anchoring a mandate under a wallet's address needs that address to be a
  * registered, active issuer first — the contract's own rule (`M-17`),
  * unchanged since T20. A wallet that just proved it controls its address
  * (T34) gets registered automatically, no manual approval step: this pilot
  * treats "connected and verified" as sufficient trust, a deliberate choice
- * for a testnet demo, not a production policy (`docs/fase-6-agentguard-comercializacion/DECISIONES.md`).
+ * for a testnet demo, not a production policy (`docs/fase-6-agentguard-comercializacion/DECISIONES.md`
+ * → `C-15`). `G10` flagged the unbounded cost of that choice — anyone can
+ * mint a fresh keypair for free and make the admin key pay for registering
+ * it — so `issuerRegistrationLimiter` caps how many of these the admin key
+ * will fund per window (`C-63`), without adding the approval step `C-15`
+ * deliberately chose not to have yet.
+ *
+ * @throws AgentPassError `IssuerRegistrationRateLimited` if the server-wide
+ * cap for this window is already spent.
  */
 async function ensureWalletIsRegisteredIssuer(
   agentpass: AgentPass,
@@ -275,6 +291,10 @@ async function ensureWalletIsRegisteredIssuer(
 ): Promise<void> {
   const existing = await agentpass.issuerStatus(walletAddress);
   if (existing.registered && existing.active) return;
+  // Checked only once a real registration is actually needed — a wallet
+  // that is already registered never touches the cap, no matter how often
+  // it reconnects.
+  issuerRegistrationLimiter.consume();
   // Read the admin key here rather than at session start: only a wallet that
   // is not registered yet needs it at all, so one already registered keeps
   // working even if `ADMIN_SECRET_KEY` is unset or wrong on this deploy.
