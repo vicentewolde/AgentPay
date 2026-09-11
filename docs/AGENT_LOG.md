@@ -2657,3 +2657,13 @@ política — no de la wallet personal.
 Pendiente: revisión creativa del usuario; los tiempos, textos y colores se
 pueden ajustar desde el HTML sin modificar ningún flujo, contrato o punto de
 autorización del producto.
+
+## 2026-09-11 (2) — codex/agentpay-explainer
+
+Agente: Codex
+
+Qué: se creó una segunda versión del video (`agentpay-autonomia-dentro-de-reglas-45s-v2.webm`). Añade un mapa persistente de las entidades del flujo y extiende el cierre de pago/evidencia a 12 segundos.
+
+Por qué: incorporar la revisión creativa del usuario: permitir seguir el mapa completo en más escenas y dar tiempo legible a los mensajes finales.
+
+Pendiente: revisión creativa final del usuario; no hubo cambios al producto, sus flujos de autorización ni su lógica de pagos.
