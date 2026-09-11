@@ -3125,3 +3125,35 @@ Pendiente: que el usuario arranque T54 en Codex. F6 sigue con el resto
 del trabajo (rail por tenant en `apps/web`). Sigue pendiente de antes: el
 rename real a AgentPey (`P-11`), desplegar T40/T49/T51/T52 a Render, y
 G10 (alta automática de emisores).
+
+---
+
+## 2026-09-11 — codex/t54-reference-merchant
+
+Agente: Codex
+
+Qué: se implementó `examples/reference-merchant/`, un comercio x402 mínimo
+e independiente con `node:http`: discovery compatible con el adaptador
+genérico, desafío HTTP `402` v2 y una ruta pagada. El servidor valida el
+payload, lo verifica mediante `@x402/stellar` y sólo entrega el recurso tras
+un `settle` exitoso en Stellar testnet. Incluye scripts reproducibles para
+crear claves descartables, pedir XLM a Friendbot, abrir trustlines USDC y
+comprar contra un servidor local; las dependencias están fijadas en un lockfile
+aislado del monorepo.
+
+Por qué: T54 necesita un segundo comercio que no sea el bazaar del embajador,
+para ejercitar el protocolo x402 real y permitir registrar después un venue
+puramente como datos.
+
+Verificado: TypeScript estricto del ejemplo; discovery local `200` y desafío
+`402` con header `PAYMENT-REQUIRED`; `pnpm typecheck`, `pnpm build` y `pnpm
+test` del monorepo en verde (904 tests). Con autorización explícita del
+usuario se crearon tres cuentas efímeras, Friendbot las fondeó y se abrieron
+trustlines USDC; Circle Faucet acreditó 20 USDC de testnet al pagador. `pnpm
+run pay` obtuvo el 402, firmó y liquidó 0.0025 USDC, y recibió el recurso. Hash
+de settlement: `c2ec6e74e1b8b1b333d016719b9b72c28e257f90bcb0072efecf97cf6f9c7747`
+([Stellar Expert](https://stellar.expert/explorer/testnet/tx/c2ec6e74e1b8b1b333d016719b9b72c28e257f90bcb0072efecf97cf6f9c7747));
+Horizon confirmó `successful: true` en ledger `4626738`.
+
+Pendiente: abrir PR y esperar la revisión de Claude Code; no se tocó
+`apps/agent/src/**` ni `contracts/**`.
