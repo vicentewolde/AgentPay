@@ -2473,3 +2473,29 @@ representación que no poseen.
 
 Pendiente: revisión y merge del PR; T49 sigue debiendo conectar los handlers
 reales de `/v1` y decidir la brecha C-47.
+
+## 2026-09-10 (12) — `codex/t47-partner-sdk`
+
+Agente: Codex
+
+Qué: se agregó el paquete `@agentpay/partner-sdk`, cliente tipado y delgado
+para las siete rutas de `/v1` sobre `fetch` nativo. Cada respuesta se valida
+contra los schemas de `@agentpay/partner-api` dentro de un sobre de éxito;
+los sobres de error se convierten en `AgentPassError` con su `code` remoto.
+Los POST validan el input, mandan `Authorization` e `Idempotency-Key`, y
+generan el UUID si el caller no lo provee. Se agregó la referencia de build
+del paquete y su importer al lockfile.
+
+Por qué: T47 necesita dar a un partner una superficie tipada sin duplicar la
+lógica de negocio ni depender de que T49 implemente los handlers reales.
+
+Verificado: cinco tests levantan un `node:http` local en puerto efímero y lo
+cierran al terminar; cubren una respuesta válida por cada ruta, auth 401/403
+tipada, idempotencia, timeout y body de éxito inválido. `pnpm typecheck` y
+`pnpm test` pasan (836 tests). No hay reintentos automáticos: cada llamada
+POST crea un único UUID antes de hacer su único `fetch`; un caller que
+reintente debe reutilizar explícitamente el `idempotencyKey` recibido o
+provisto.
+
+Pendiente: revisión y merge del PR; T49 sigue siendo responsable de los
+handlers reales y de la autorización de acceso a `/v1`.

@@ -9,6 +9,7 @@
     { "path": "./packages/tenancy" },
     { "path": "./packages/directory" },
     { "path": "./packages/partner-api" },
+    { "path": "./packages/partner-sdk" },
     { "path": "./apps/agent" },
     { "path": "./apps/web" }
   ]
