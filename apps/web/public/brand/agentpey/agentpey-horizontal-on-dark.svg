@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">AgentPey horizontal logo for dark backgrounds</title>
+  <desc id="desc">AgentPey wordmark with an interlocked geometric A and P monogram.</desc>
+  <g transform="translate(22 18) scale(.75)" fill="none" stroke="#F5F7FA" stroke-width="60" stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M72 416 196 96h86v320"/>
+    <path d="M136 282h146"/>
+    <path d="M282 112h96"/>
+    <path d="M432 166v84l-48 48H282"/>
+  </g>
+  <path d="M305.5 102l40.5 40.5" fill="none" stroke="#176BFF" stroke-width="45" stroke-linecap="butt"/>
+  <text x="420" y="276" fill="#F5F7FA" font-family="Inter, Satoshi, Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="164" font-weight="650" letter-spacing="-8">AgentPey</text>
+</svg>
