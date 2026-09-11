@@ -2446,3 +2446,28 @@ archivo. T49 (middleware de auth + conectar las rutas reales de `/v1`,
 brecha de `C-47`) sigue siendo trabajo de Claude Code, sin empezar —
 próximo hito propuesto. Sigue pendiente de antes: rename a VynGent
 (`P-9`), desplegar T40 a Render, G10.
+
+## 2026-09-10 (11) — `codex/t48-webhooks-worker`
+
+Agente: Codex
+
+Qué: se agregó `@agentpay/webhooks`, un worker de entrega que recibe un
+`WebhookEvent` ya armado, serializa el body, lo firma con
+`signWebhookPayload` y lo POSTea usando `fetch`. Reintenta fallos de red,
+timeout y 5xx; corta inmediatamente ante 4xx. Se agregó una cola en memoria
+con `deliver`, `list` y `clear` que conserva los fallos agotados sin guardar
+el secreto del endpoint. El README documenta el backoff exponencial: base de
+1 s, doble por intento, tope de 30 s y jitter uniforme de 0–250 ms.
+
+Por qué: T48 construye exclusivamente el mecanismo confiable de entrega; no
+decide cuándo se crea ni se emite un evento, decisión que queda fuera de este
+paquete y de Codex.
+
+Verificado: cinco tests usan un servidor `node:http` efímero que se cierra al
+terminar. Cubren 5xx seguido de 2xx con backoff creciente, error de red por
+`fetchImpl` inyectado, 4xx sin retry, firma recibida verificada por
+`verifyWebhookSignature` y la cola sin secreto. `pnpm typecheck` y
+`pnpm test` pasan (836 tests).
+
+Pendiente: revisión y merge del PR; T49 o un sucesor sigue siendo responsable
+de decidir cuándo se emite cada evento y de conectar los emisores reales.
