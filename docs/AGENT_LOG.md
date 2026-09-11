@@ -2641,3 +2641,19 @@ pushear**, esperando revisión del usuario — mismo patrón que T45. Siguiente
 hito propuesto: **T51** (`consent_sessions`), 🔴 alto riesgo por tocar el
 flujo de firma de wallet, sin empezar. Sigue pendiente de antes: rename a
 VynGent (`P-9`), desplegar T40/T49 a Render, G10.
+
+## 2026-09-11 — codex/agentpay-explainer
+
+Agente: Codex
+
+Qué: se creó un video explicativo editorial de 45 segundos para AgentPay,
+con una versión WebM y una fuente HTML/Canvas editable en
+`docs/fase-6-agentguard-comercializacion/evidencia/`.
+
+Por qué: explicar visualmente el consentimiento de Vinny, el mandato con
+límites, la identidad separada de CloudOps y que el pago sale del pagador con
+política — no de la wallet personal.
+
+Pendiente: revisión creativa del usuario; los tiempos, textos y colores se
+pueden ajustar desde el HTML sin modificar ningún flujo, contrato o punto de
+autorización del producto.

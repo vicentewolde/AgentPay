@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgentPay — autonomía dentro de reglas</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #06101e; color: #edf8ff; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(100vw, 1280px); padding: 20px; text-align: center; }
+    canvas { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 14px; background: #08162a; box-shadow: 0 28px 80px rgba(0,0,0,.5); }
+    button { margin-top: 18px; border: 0; border-radius: 999px; padding: 12px 20px; font: 600 14px/1 Inter, sans-serif; letter-spacing: .01em; color: #03131d; background: #61e2df; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: progress; }
+    p { min-height: 1.2em; margin: 9px 0 0; color: #a8bccd; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="film" width="1280" height="720" aria-label="Video explicativo de AgentPay"></canvas>
+    <button id="export">Generar video de 45 segundos</button>
+    <p id="status">Vista previa en bucle · 16:9 · audio ambiental incluido</p>
+  </main>
+  <script>
+    const canvas = document.querySelector('#film');
+    const ctx = canvas.getContext('2d');
+    const button = document.querySelector('#export');
+    const status = document.querySelector('#status');
+    const W = canvas.width, H = canvas.height, D = 45;
+    let previewStart = performance.now(), recording = false, raf;
+    const C = { bg:'#071426', panel:'#0e233b', panel2:'#102a45', line:'#25415b', text:'#edf8ff', muted:'#9bb0c4', teal:'#62e3df', teal2:'#20babd', gold:'#e7be7c', green:'#6be6a9', dark:'#06101e', white:'#ffffff' };
+    const clamp = (v, a=0, b=1) => Math.max(a, Math.min(b, v));
+    const smooth = v => { v = clamp(v); return v*v*(3-2*v); };
+    const mix = (a,b,t) => a + (b-a)*t;
+    const rgba = (hex, a=1) => { const n=parseInt(hex.slice(1),16); return `rgba(${n>>16},${(n>>8)&255},${n&255},${a})`; };
+    const scene = (t, from, to) => smooth(Math.min((t-from)/.55,(to-t)/.55));
+    const enter = (p, delay=0) => smooth((p-delay)/(1-delay));
+    function font(size, weight=500) { ctx.font = `${weight} ${size}px Inter, ui-sans-serif, system-ui, sans-serif`; }
+    function text(str,x,y,size,colour=C.text,align='left',weight=500,alpha=1) { ctx.save(); ctx.globalAlpha=alpha; ctx.fillStyle=colour; font(size,weight); ctx.textAlign=align; ctx.textBaseline='middle'; ctx.fillText(str,x,y); ctx.restore(); }
+    function rr(x,y,w,h,r,fill,stroke,alpha=1) { ctx.save(); ctx.globalAlpha=alpha; ctx.beginPath(); ctx.roundRect(x,y,w,h,r); if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=1;ctx.stroke();} ctx.restore(); }
+    function line(x1,y1,x2,y2,colour,width=2,alpha=1) { ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=colour;ctx.lineWidth=width;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.restore(); }
+    function dot(x,y,r,colour,alpha=1) { ctx.save();ctx.globalAlpha=alpha;ctx.fillStyle=colour;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.restore(); }
+    function card(x,y,w,h,title,alpha=1) { rr(x,y,w,h,18,rgba(C.panel,.96),rgba(C.line,.9),alpha); if(title) text(title,x+24,y+30,16,C.text,'left',650,alpha); }
+    function pill(x,y,label,colour=C.teal,alpha=1) { font(12,650); const w=ctx.measureText(label).width+28; rr(x,y,w,27,14,rgba(colour,.13),rgba(colour,.7),alpha); text(label,x+14,y+14,12,colour,'left',650,alpha); return w; }
+    function icon(type,x,y,colour=C.teal,alpha=1) { ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=colour;ctx.fillStyle=colour;ctx.lineWidth=2;ctx.lineJoin='round'; if(type==='user'){ctx.beginPath();ctx.arc(x,y-7,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.arc(x,y+16,13,Math.PI,0);ctx.stroke();} if(type==='wallet'){ctx.strokeRect(x-17,y-11,34,23);ctx.beginPath();ctx.moveTo(x-11,y-17);ctx.lineTo(x+12,y-17);ctx.lineTo(x+17,y-11);ctx.stroke();ctx.beginPath();ctx.arc(x+8,y,2,0,Math.PI*2);ctx.fill();} if(type==='shield'){ctx.beginPath();ctx.moveTo(x,y-20);ctx.lineTo(x+17,y-12);ctx.lineTo(x+14,y+12);ctx.lineTo(x,y+22);ctx.lineTo(x-14,y+12);ctx.lineTo(x-17,y-12);ctx.closePath();ctx.stroke();} if(type==='bot'){ctx.strokeRect(x-17,y-14,34,29);ctx.beginPath();ctx.moveTo(x,y-14);ctx.lineTo(x,y-23);ctx.stroke();ctx.beginPath();ctx.arc(x,y-25,2,0,Math.PI*2);ctx.fill();ctx.beginPath();ctx.arc(x-7,y,2,0,Math.PI*2);ctx.arc(x+7,y,2,0,Math.PI*2);ctx.fill();} if(type==='check'){ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x-3,y+8);ctx.lineTo(x+12,y-10);ctx.stroke();} if(type==='receipt'){ctx.strokeRect(x-14,y-19,28,38);ctx.beginPath();ctx.moveTo(x-7,y-8);ctx.lineTo(x+7,y-8);ctx.moveTo(x-7,y);ctx.lineTo(x+7,y);ctx.moveTo(x-7,y+8);ctx.lineTo(x+4,y+8);ctx.stroke();} ctx.restore(); }
+    function background(t) { const g=ctx.createRadialGradient(640,300,0,640,320,800); g.addColorStop(0,'#102b48');g.addColorStop(.55,C.bg);g.addColorStop(1,'#050d1b');ctx.fillStyle=g;ctx.fillRect(0,0,W,H); for(let i=0;i<20;i++){ const x=(i*173+Math.sin(t*.3+i)*36)%W, y=80+(i*97)%590; dot(x,y,1.3,i%3===0?C.teal:C.gold,.08); } line(72,104,1208,104,rgba(C.line,.55),1); text('AGENTPAY / EXPLAINER',72,72,11,C.muted,'left',650,.75); text('STELLAR TESTNET',1208,72,11,C.muted,'right',650,.75); }
+    function footer(label,alpha) { text(label,640,655,15,C.muted,'center',500,alpha); }
+    function opening(p) { const a=enter(p); text('AgentPay',640,304,74,C.text,'center',700,a); line(570,355,710,355,C.teal,3,a); text('Autonomía para agentes. Control para las personas.',640,400,24,C.muted,'center',500,a); }
+    function userPlatform(p) { const a=enter(p); const y=mix(410,355,a); card(245,y,270,166,'CloudOps',a); icon('user',292,y+83,C.teal,a); text('Vinny',334,y+75,23,C.text,'left',650,a); pill(334,y+102,'activo',C.green,a); card(570,y,465,166,'Cuenta de plataforma',a); text('CloudOps · usr_123',600,y+84,25,C.text,'left',600,a); line(600,y+116,1005,y+116,C.line,1,a); text('Vinny activa un agente de compras.',640,245,25,C.text,'center',550,a); }
+    function wallet(p) { const a=enter(p); card(325,286,630,204,'Consentimiento de Vinny',a); icon('wallet',385,378,C.teal,a); text('Wallet de Vinny · G-VINNY',435,350,22,C.text,'left',650,a); text('Prueba de control',435,383,15,C.muted,'left',500,a); const q=smooth((p-.42)/.35); if(q>0){ rr(750,345,155,54,27,rgba(C.teal,.13),rgba(C.teal,.7),q); icon('check',785,372,C.teal,q); text('Firmado',812,372,15,C.teal,'left',650,q); } text('Conecta su wallet y prueba que la controla.',640,246,24,C.text,'center',550,a); }
+    function mandate(p) { const a=enter(p); card(345,195,590,360,'Mandato',a); const rows=[['Agente:','CloudOps Compras'],['Máximo:','10 USDC por compra'],['Presupuesto:','50 USDC al mes'],['Destino permitido:','ComputeAPI']]; rows.forEach((r,i)=>{ const y=270+i*53; text(r[0],375,y,15,C.muted,'left',550,a); text(r[1],590,y,17,C.text,'left',650,a); if(i<3)line(375,y+25,905,y+25,rgba(C.line,.65),1,a); }); const q=smooth((p-.5)/.26); rr(375,488,170,40,20,rgba(C.teal,.15),rgba(C.teal,.8),a); text('Firmar mandato',460,508,14,C.teal,'center',650,a); if(q>0){ pill(600,488,'Firmado',C.green,q); pill(728,488,'Anclado',C.gold,q); } text('Vinny define las reglas antes de delegar.',640,128,24,C.text,'center',550,a); }
+    function identity(p) { const a=enter(p); const x1=335,x2=945,y=363; line(x1+104,y,x2-104,y,rgba(C.teal,.6),3,a); const travel=smooth((p-.25)/.6); dot(mix(x1+104,x2-104,travel),y,7,C.teal,a); card(x1-128,y-96,256,192,'Principal',a); icon('wallet',x1,y-26,C.gold,a); text('Wallet de Vinny',x1,y+42,18,C.text,'center',650,a); card(x2-128,y-96,256,192,'Agente',a); icon('bot',x2,y-28,C.teal,a); text('CloudOps Compras',x2,y+42,18,C.text,'center',650,a); pill(566,319,'Mandato activo',C.teal,a); text('El agente tiene identidad técnica propia.',640,172,24,C.text,'center',550,a); }
+    function request(p) { const a=enter(p); card(150,286,285,190,'Agente',a); icon('bot',206,370,C.teal,a); text('CloudOps Compras',252,356,17,C.text,'left',650,a); text('Solicita un servicio',252,389,14,C.muted,'left',500,a); card(846,286,285,190,'ComputeAPI',a); icon('receipt',902,370,C.gold,a); text('Factura x402 · 8 USDC',948,356,16,C.text,'left',650,a); text('Destino: ComputeAPI',948,389,14,C.muted,'left',500,a); const q=smooth((p-.25)/.55); line(435,381,846,381,rgba(C.gold,.7),3,a); dot(mix(450,830,q),381,7,C.gold,a); card(540,498,200,78,'AgentPay',a); line(740,476,650,498,rgba(C.gold,.7),2,q); text('La factura llega a AgentPay.',640,204,24,C.text,'center',550,a); }
+    function checks(p) { const a=enter(p); card(370,184,540,420,'AgentPay',a); icon('shield',640,255,C.teal,a); text('Verificación de política',640,325,23,C.text,'center',650,a); const items=['Identidad válida','Mandato activo','Monto permitido','Destino permitido']; items.forEach((v,i)=>{ const q=smooth((p-(.18+i*.16))/.15); const y=375+i*46; rr(445,y-16,390,34,10,rgba(C.green,.07),rgba(C.green,.23),a*q); icon('check',476,y,C.green,q); text(v,510,y,17,C.text,'left',550,q); }); text('El agente no decide solo.',640,126,25,C.text,'center',600,a); }
+    function evidence(p) { const a=enter(p); card(130,240,310,175,'Pagador con política',a); text('Stellar testnet',285,314,17,C.muted,'center',550,a); icon('shield',285,374,C.teal,a); card(840,240,310,175,'ComputeAPI',a); const q=smooth((p-.1)/.36); line(440,327,840,327,rgba(C.teal,.7),4,a); dot(mix(457,823,q),327,8,C.teal,a); if(q>.65) pill(900,375,'Pago confirmado',C.green,smooth((q-.65)/.2)); const labels=['Mandato','Validación','Pago','Evidencia']; const x0=265, gap=250, y=530; labels.forEach((v,i)=>{ const r=smooth((p-(.38+i*.08))/.15); dot(x0+i*gap,y,12,i===3?C.gold:C.teal,r); text(v,x0+i*gap,y+37,15,C.text,'center',600,r); if(i<3) line(x0+i*gap+14,y,x0+(i+1)*gap-14,y,rgba(C.teal,.65),2,r); }); text('Cada pago deja evidencia verificable.',640,153,24,C.text,'center',600,a); const end=smooth((p-.72)/.18); if(end>0){ rr(415,585,450,45,22,rgba(C.gold,.12),rgba(C.gold,.55),end); text('AgentPay · autonomía dentro de reglas.',640,608,18,C.gold,'center',650,end); } }
+    function draw(t){ background(t); const parts=[[0,4,opening],[4,9,userPlatform],[9,15,wallet],[15,22,mandate],[22,27,identity],[27,32,request],[32,38,checks],[38,45,evidence]]; for(const [from,to,fn] of parts){const p=scene(t,from,to);if(p>0)fn(clamp((t-from)/(to-from))*p);} footer('El consentimiento define las reglas. La política habilita cada pago.', clamp(Math.sin(t*.13)*.08+.2)); }
+    function tick(now){ const elapsed=recording ? (now-previewStart)/1000 : ((now-previewStart)/1000)%D; draw(Math.min(elapsed,D)); if(recording && elapsed>=D+.08) return; raf=requestAnimationFrame(tick); }
+    function makeAmbient(audio, destination){ const gain=audio.createGain(); gain.gain.value=.035; gain.connect(destination); [110,164.81,220].forEach((hz,i)=>{ const osc=audio.createOscillator(), g=audio.createGain(); osc.type=i===0?'sine':'triangle'; osc.frequency.value=hz; g.gain.value=.25/(i+1); osc.connect(g);g.connect(gain);osc.start(); }); const lfo=audio.createOscillator(), lfoGain=audio.createGain(); lfo.frequency.value=.09;lfoGain.gain.value=.018;lfo.connect(lfoGain);lfoGain.connect(gain.gain);lfo.start(); }
+    function startPreview(){ cancelAnimationFrame(raf); previewStart=performance.now(); recording=false; raf=requestAnimationFrame(tick); }
+    button.addEventListener('click', async ()=>{ button.disabled=true; status.textContent='Renderizando 45 segundos…'; const stream=canvas.captureStream(30); const audio=new (window.AudioContext||window.webkitAudioContext)(); await audio.resume(); const audioDest=audio.createMediaStreamDestination(); makeAmbient(audio,audioDest); audioDest.stream.getAudioTracks().forEach(track=>stream.addTrack(track)); const mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')?'video/webm;codecs=vp9,opus':'video/webm'; const chunks=[]; const recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:6500000}); recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);}; recorder.onstop=()=>{ const blob=new Blob(chunks,{type:'video/webm'}); const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='agentpay-autonomia-dentro-de-reglas-45s.webm';link.click(); URL.revokeObjectURL(link.href); status.textContent='Video generado y descargado.'; button.disabled=false; button.textContent='Generar de nuevo'; audio.close(); startPreview();}; recording=true; previewStart=performance.now(); cancelAnimationFrame(raf);raf=requestAnimationFrame(tick);recorder.start(250); setTimeout(()=>recorder.stop(),(D+.15)*1000); });
+    startPreview();
+  </script>
+</body>
+</html>
