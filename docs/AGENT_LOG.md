@@ -2868,3 +2868,37 @@ Pendiente: que el usuario arranque T50 en Codex con el prompt nuevo. El
 rename completo a AgentPey sigue como su propia sesión, sin fecha
 todavía. Sigue pendiente de antes: desplegar T40/T49/T51/T52 a Render, y
 G10 (alta automática de emisores).
+
+---
+
+## 2026-09-11 — codex/t50-partner-guide
+
+Agente: Codex
+
+Qué: se agregó `examples/cloudops-partner-integration.md`, la guía para que
+CloudOps integre `/v1` sin modificar el repo: emisión por el operador con
+`pnpm run partner:create`, tenant, listado de agentes, consentimiento con
+`payTo`, entrega de `consent_url`, consulta de la sesión y del mandato. Cubre
+los envelopes y códigos de error de `/v1`, idempotencia de 24 h y los estados
+terminales del flujo público. La evidencia está en
+`docs/fase-6-agentguard-comercializacion/evidencia/T50.md`.
+
+Por qué: T45, T49 y T51 ya exponen el recorrido real; faltaba una guía con
+comandos `curl` exactos que un partner pueda seguir de punta a punta sin una
+ruta de onboarding inventada ni acceso al repositorio.
+
+Verificado: todos los bloques `sh` de la guía pasan sintaxis y el JSON del
+grant pasa `jq`; `pnpm typecheck`, `pnpm build` y `pnpm test` (882 pruebas)
+limpios. Contra `pnpm run web` local, Postgres real y Stellar testnet se creó
+un partner de prueba, tenant y sesión mediante los `curl` documentados; una
+wallet efímera firmó con `signStellarMessage`, ancló el mandato y produjo
+`mdt_01M28BP9HY51F6N1GW1Q0AGA4A` en la transacción
+`34276de2b712957d81000dd5bc87419abb6dda91d9b4f72291ef96f3598029a9`.
+También se comprobó el replay y el conflicto de idempotencia (`409`). Todos
+los partners, keys, tenants, idempotencias, sesiones, mandatos, credenciales,
+agentes, bindings y principals temporales se borraron de Postgres; la
+configuración copiada y scripts descartables quedan fuera del commit.
+
+Pendiente: revisión del PR; no se tocó código bajo `apps/`, `packages/` ni
+`contracts/` en el diff versionado. Sigue pendiente de antes el rename real a
+AgentPey, el despliegue a Render y G10.
