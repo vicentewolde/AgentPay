@@ -6,6 +6,7 @@ import {
   newTenantId,
   type AgentInstance,
   type ApiKey,
+  type ConsentSessionRecord,
   type IdempotencyRecord,
   type MandateRecord,
   type Tenant,
@@ -24,8 +25,10 @@ interface FakeDirectory extends PartnerRoutesDirectory {
   seedTenant(overrides?: Partial<Tenant>): Tenant;
   seedAgent(tenantId: string, overrides?: Partial<AgentInstance>): AgentInstance;
   seedMandate(tenantId: string, overrides?: Partial<MandateRecord>): MandateRecord;
+  seedConsentSession(tenantId: string, overrides?: Partial<ConsentSessionRecord>): ConsentSessionRecord;
   revoke(secret: string): void;
   createTenantCalls: number;
+  createConsentSessionCalls: number;
 }
 
 function fakeApiKeyRecord(partnerId: string, scopes: readonly string[]): ApiKey {
@@ -42,19 +45,25 @@ function fakeApiKeyRecord(partnerId: string, scopes: readonly string[]): ApiKey 
 
 function createFakeDirectory(): FakeDirectory {
   const apiKeys = new Map<string, { partnerId: string; scopes: readonly string[]; revoked: boolean }>();
-  apiKeys.set(SECRET_A, { partnerId: PARTNER_A, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read"], revoked: false });
-  apiKeys.set(SECRET_B, { partnerId: PARTNER_B, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read"], revoked: false });
+  apiKeys.set(SECRET_A, { partnerId: PARTNER_A, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read", "consent_sessions:read", "consent_sessions:write"], revoked: false });
+  apiKeys.set(SECRET_B, { partnerId: PARTNER_B, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read", "consent_sessions:read", "consent_sessions:write"], revoked: false });
 
   const tenants = new Map<string, Tenant>();
   const agentsByTenant = new Map<string, AgentInstance[]>();
   const mandatesById = new Map<string, MandateRecord>();
   const mandatesByTenant = new Map<string, MandateRecord[]>();
   const idempotency = new Map<string, IdempotencyRecord>();
+  const consentSessions = new Map<string, ConsentSessionRecord>();
   let createTenantCalls = 0;
+  let createConsentSessionCalls = 0;
 
   return {
     get createTenantCalls() {
       return createTenantCalls;
+    },
+
+    get createConsentSessionCalls() {
+      return createConsentSessionCalls;
     },
 
     revoke(secret) {
@@ -121,6 +130,24 @@ function createFakeDirectory(): FakeDirectory {
       return mandate;
     },
 
+    seedConsentSession(tenantId, overrides = {}) {
+      const now = new Date();
+      const session: ConsentSessionRecord = {
+        id: newId("consentSession"),
+        tenantId,
+        status: "pending",
+        grant: { actions: ["catalog:read"], venues: [], assets: [], limits: { perTx: "1", perDay: "1", currency: "USDC" } },
+        validFrom: now,
+        validUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        mandateId: null,
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+        ...overrides,
+      };
+      consentSessions.set(session.id, session);
+      return session;
+    },
+
     async authenticate(secret) {
       const key = apiKeys.get(secret);
       if (key === undefined || key.revoked) return undefined;
@@ -182,6 +209,27 @@ function createFakeDirectory(): FakeDirectory {
       idempotency.set(`${input.partnerId}:${input.key}`, record);
       return record;
     },
+
+    async createConsentSession(input) {
+      createConsentSessionCalls += 1;
+      const session: ConsentSessionRecord = {
+        id: newId("consentSession"),
+        tenantId: input.tenantId,
+        status: "pending",
+        grant: input.grant,
+        validFrom: input.validFrom,
+        validUntil: input.validUntil,
+        mandateId: null,
+        createdAt: new Date(),
+        expiresAt: input.expiresAt,
+      };
+      consentSessions.set(session.id, session);
+      return session;
+    },
+
+    async findConsentSession(id) {
+      return consentSessions.get(id);
+    },
   };
 }
 
@@ -200,6 +248,7 @@ function baseRequest(overrides: Partial<Parameters<typeof routePartnerRequest>[0
     idempotencyKeyHeader: undefined,
     body: undefined,
     directory,
+    baseUrl: "https://agentpay.example",
     ...overrides,
   };
 }
@@ -373,6 +422,114 @@ describe("routePartnerRequest — GET /v1/mandates/{id} and /v1/mandates", () =>
     expect(result.status).toBe(200);
     const ids = (result.body as { data: Array<{ id: string }> }).data.map((m) => m.id).sort();
     expect(ids).toEqual([active.id, revoked.id].sort());
+  });
+});
+
+describe("routePartnerRequest — POST /v1/consent_sessions", () => {
+  const validBody = {
+    tenant_id: "",
+    grant: { actions: ["catalog:read"], venues: [], assets: [], limits: { perTx: "1", perDay: "1", currency: "USDC" } },
+    valid_until: "2026-12-01T00:00:00.000Z",
+  };
+
+  it("requires an Idempotency-Key", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/consent_sessions", body: { ...validBody, tenant_id: tenant.id } }),
+    );
+    expect(result.status).toBe(400);
+    expect(directory.createConsentSessionCalls).toBe(0);
+  });
+
+  it("creates a pending consent session with a consent_url built from baseUrl", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/consent_sessions",
+        body: { ...validBody, tenant_id: tenant.id },
+        idempotencyKeyHeader: "cs-key-1",
+        baseUrl: "https://agentpay.example",
+      }),
+    );
+    expect(result.status).toBe(201);
+    const data = (result.body as { data: { id: string; status: string; consent_url: string; tenant_id: string } }).data;
+    expect(data.status).toBe("pending");
+    expect(data.tenant_id).toBe(tenant.id);
+    expect(data.consent_url).toBe(`https://agentpay.example/consent/${data.id}`);
+    expect(directory.createConsentSessionCalls).toBe(1);
+  });
+
+  it("404s when the tenant belongs to a different partner, and never creates a session", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    const result = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/consent_sessions",
+        body: { ...validBody, tenant_id: tenant.id },
+        idempotencyKeyHeader: "cs-key-2",
+      }),
+    );
+    expect(result.status).toBe(404);
+    expect(directory.createConsentSessionCalls).toBe(0);
+  });
+
+  it("400s a malformed grant without creating anything", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/consent_sessions",
+        body: { tenant_id: tenant.id, grant: { actions: [] }, valid_until: "2026-12-01T00:00:00.000Z" },
+        idempotencyKeyHeader: "cs-key-3",
+      }),
+    );
+    expect(result.status).toBe(400);
+    expect(directory.createConsentSessionCalls).toBe(0);
+  });
+});
+
+describe("routePartnerRequest — GET /v1/consent_sessions/{id}", () => {
+  it("returns a pending session with its consent_url", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const session = directory.seedConsentSession(tenant.id);
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/consent_sessions/${session.id}` }));
+    expect(result.status).toBe(200);
+    const data = (result.body as { data: { status: string; consent_url: string | null } }).data;
+    expect(data.status).toBe("pending");
+    expect(data.consent_url).toBe(`https://agentpay.example/consent/${session.id}`);
+  });
+
+  it("hides consent_url and shows the mandate_id once completed", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const mandateId = newId("mandate");
+    const session = directory.seedConsentSession(tenant.id, { status: "completed", mandateId });
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/consent_sessions/${session.id}` }));
+    const data = (result.body as { data: { consent_url: string | null; mandate_id: string | null } }).data;
+    expect(data.consent_url).toBeNull();
+    expect(data.mandate_id).toBe(mandateId);
+  });
+
+  it("shows status 'expired' once the invitation window passes, purely computed", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const past = new Date("2026-01-01T00:00:00.000Z");
+    const session = directory.seedConsentSession(tenant.id, { expiresAt: past });
+    const result = await routePartnerRequest(
+      baseRequest({ pathname: `/v1/consent_sessions/${session.id}`, now: new Date("2026-06-01T00:00:00.000Z") }),
+    );
+    expect((result.body as { data: { status: string } }).data.status).toBe("expired");
+  });
+
+  it("404s a consent session belonging to a different partner", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    const session = directory.seedConsentSession(tenant.id);
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/consent_sessions/${session.id}` }));
+    expect(result.status).toBe(404);
+  });
+
+  it("404s an id that does not exist", async () => {
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/consent_sessions/${newId("consentSession")}` }));
+    expect(result.status).toBe(404);
   });
 });
 

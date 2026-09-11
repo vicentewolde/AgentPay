@@ -99,4 +99,35 @@ describe("buildSessionDocuments", () => {
     expect(credential.credentialStatus.registry).toBe(REGISTRY);
     expect(mandate.credentialStatus.registry).toBe(REGISTRY);
   });
+
+  // T51: a partner-proposed grant can carry `payTo`, which a credential's
+  // plain `Scope` cannot express (`M-14`). These four assert the explicit
+  // `grant` param without touching a single existing call site's behaviour —
+  // every test above this one calls `buildSessionDocuments` with no `grant`
+  // at all, and still passes unchanged.
+  describe("with an explicit grant (T51)", () => {
+    const grantWithPayTo = { ...SCOPE.scope, payTo: [WALLET] };
+
+    it("uses the explicit grant for the mandate instead of the credential's scope", () => {
+      const { mandate } = buildSessionDocuments(params({ grant: grantWithPayTo }));
+      expect(mandate.credentialSubject.grant).toEqual(grantWithPayTo);
+    });
+
+    it("still gives the credential only the plain scope — payTo never reaches it", () => {
+      const { credential } = buildSessionDocuments(params({ grant: grantWithPayTo }));
+      expect(credential.credentialSubject.scope).toEqual(SCOPE.scope);
+      expect(credential.credentialSubject.scope).not.toHaveProperty("payTo");
+    });
+
+    it("does not disturb the C-17 invariant — principal and issuer still agree", () => {
+      const { credential, mandate } = buildSessionDocuments(params({ walletAddress: WALLET, grant: grantWithPayTo }));
+      expect(credential.credentialSubject.principal).toBe(mandate.issuer);
+    });
+
+    it("falls back to scope.scope when grant is omitted — the default every prior call site relies on", () => {
+      const withGrant = buildSessionDocuments(params({ grant: SCOPE.scope }));
+      const withoutGrant = buildSessionDocuments(params());
+      expect(withoutGrant.mandate.credentialSubject.grant).toEqual(withGrant.mandate.credentialSubject.grant);
+    });
+  });
 });

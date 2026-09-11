@@ -144,7 +144,11 @@ export type AgentPassErrorCode =
   /** No mandate visible to this partner has that id. */
   | "MandateNotFound"
   /** No consent session visible to this partner has that id. */
-  | "ConsentSessionNotFound";
+  | "ConsentSessionNotFound"
+  /** The consent session's invitation window has passed — its link can no longer be signed. */
+  | "ConsentSessionExpired"
+  /** The consent session was already signed; a second principal cannot complete it again. */
+  | "ConsentSessionAlreadyCompleted";
 
 /** Structured, non-secret context attached to an error for logs and tests. */
 export type AgentPassErrorDetails = Readonly<Record<string, unknown>>;

@@ -74,6 +74,7 @@ export const ID_PREFIXES = {
   agent: "agt",
   credential: "crd",
   mandate: "mdt",
+  consentSession: "cns",
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIXES;

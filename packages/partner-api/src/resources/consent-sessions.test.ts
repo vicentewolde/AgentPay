@@ -1,10 +1,12 @@
-import { newId, newTenantId } from "@agentpay/directory";
+import { newId, newTenantId, type ConsentSessionRecord } from "@agentpay/directory";
 import { describe, expect, it } from "vitest";
 
 import {
+  computeConsentSessionStatus,
   consentSessionIdSchema,
   consentSessionResourceSchema,
   createConsentSessionRequestSchema,
+  toConsentSessionResource,
 } from "./consent-sessions.js";
 
 const tenantId = newTenantId(newId("partner"));
@@ -63,5 +65,61 @@ describe("consentSessionResourceSchema", () => {
       expires_at: "2026-09-10T01:00:00.000Z",
     });
     expect(result.success).toBe(true);
+  });
+});
+
+function fakeSession(overrides: Partial<ConsentSessionRecord> = {}): ConsentSessionRecord {
+  return {
+    id: newId("consentSession"),
+    tenantId,
+    status: "pending",
+    grant: validGrant,
+    validFrom: new Date("2026-09-10T00:00:00.000Z"),
+    validUntil: new Date("2026-12-01T00:00:00.000Z"),
+    mandateId: null,
+    createdAt: new Date("2026-09-10T00:00:00.000Z"),
+    expiresAt: new Date("2026-09-10T01:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+describe("computeConsentSessionStatus", () => {
+  it("is 'pending' before the invitation expires", () => {
+    expect(computeConsentSessionStatus(fakeSession(), new Date("2026-09-10T00:30:00.000Z"))).toBe("pending");
+  });
+
+  it("is 'expired' once the invitation window passes, even though nothing stored the transition", () => {
+    expect(computeConsentSessionStatus(fakeSession(), new Date("2026-09-10T02:00:00.000Z"))).toBe("expired");
+  });
+
+  it("stays 'completed' regardless of the invitation window — a signed session does not expire retroactively", () => {
+    expect(computeConsentSessionStatus(fakeSession({ status: "completed" }), new Date("2026-09-10T02:00:00.000Z"))).toBe(
+      "completed",
+    );
+  });
+});
+
+describe("toConsentSessionResource", () => {
+  it("shows consent_url only while pending", () => {
+    const resource = toConsentSessionResource(fakeSession(), new Date("2026-09-10T00:30:00.000Z"), "https://agentpay.example/consent/abc");
+    expect(resource.status).toBe("pending");
+    expect(resource.consent_url).toBe("https://agentpay.example/consent/abc");
+  });
+
+  it("hides consent_url once expired — nothing left to redirect anyone to", () => {
+    const resource = toConsentSessionResource(fakeSession(), new Date("2026-09-10T02:00:00.000Z"), "https://agentpay.example/consent/abc");
+    expect(resource.status).toBe("expired");
+    expect(resource.consent_url).toBeNull();
+  });
+
+  it("hides consent_url once completed, and carries the resulting mandate_id", () => {
+    const mandateId = newId("mandate");
+    const resource = toConsentSessionResource(
+      fakeSession({ status: "completed", mandateId }),
+      new Date("2026-09-10T00:30:00.000Z"),
+      "https://agentpay.example/consent/abc",
+    );
+    expect(resource.consent_url).toBeNull();
+    expect(resource.mandate_id).toBe(mandateId);
   });
 });

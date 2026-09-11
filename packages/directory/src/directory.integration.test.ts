@@ -71,6 +71,10 @@ describe("createDirectory", () => {
     while (partnerIds.length > 0) {
       const partnerId = partnerIds.pop();
       await pool.query(
+        `delete from directory_consent_sessions where tenant_id in (select id from directory_tenants where partner_id = $1)`,
+        [partnerId],
+      );
+      await pool.query(
         `delete from directory_mandates where tenant_id in (select id from directory_tenants where partner_id = $1)`,
         [partnerId],
       );
@@ -627,6 +631,124 @@ describe("createDirectory", () => {
     });
 
     expect(await directory.findIdempotentResponse(partnerB.id, "shared-key-name")).toBeUndefined();
+  });
+
+  // ---- consent sessions (T51) ---------------------------------------------
+
+  const SAMPLE_GRANT = {
+    actions: ["catalog:read", "intent:create"],
+    venues: ["mock-bazaar:CCL57L4ZQVQCGTQKGQMOAX7QDPEDW4LX2QSPBQMTMLB7BFQ7I3TM7F4A"],
+    assets: ["USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"],
+    limits: { perTx: "50.0000000", perDay: "200.0000000", currency: "USDC" },
+    payTo: ["GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"],
+  };
+
+  it("creates a pending consent session and finds it back, grant byte for byte", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_consent_1" });
+    const now = new Date("2026-09-10T00:00:00.000Z");
+
+    const created = await directory.createConsentSession({
+      tenantId: tenant.id,
+      grant: SAMPLE_GRANT,
+      validFrom: now,
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    });
+
+    expect(created.status).toBe("pending");
+    expect(created.mandateId).toBeNull();
+    expect(created.grant).toEqual(SAMPLE_GRANT);
+
+    const found = await directory.findConsentSession(created.id);
+    expect(found).toEqual(created);
+  });
+
+  it("returns undefined for an id that does not exist", async () => {
+    expect(await directory.findConsentSession("cns_doesnotexist")).toBeUndefined();
+  });
+
+  it("completes a pending session with the mandate it produced", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_consent_2" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+    const vinny = await freshPrincipal(12);
+    const now = new Date("2026-09-10T00:00:00.000Z");
+
+    const session = await directory.createConsentSession({
+      tenantId: tenant.id,
+      grant: SAMPLE_GRANT,
+      validFrom: now,
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    });
+    const mandate = await directory.recordMandate({
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: vinny.id,
+      signatureKind: "wallet-sep53",
+      document: { grant: SAMPLE_GRANT },
+      anchorTx: "tx-consent-1",
+      mandateHash: "8".repeat(64),
+      validFrom: now,
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+    });
+
+    const completed = await directory.completeConsentSession(session.id, mandate.id);
+    expect(completed.status).toBe("completed");
+    expect(completed.mandateId).toBe(mandate.id);
+    expect((await directory.findConsentSession(session.id))?.status).toBe("completed");
+  });
+
+  it("refuses to complete the same consent session twice", async () => {
+    const partner = await freshPartner();
+    const tenant = await directory.createTenant({ partnerId: partner.id, externalRef: "usr_consent_3" });
+    const agent = await directory.createAgent({ tenantId: tenant.id, derive: deriveFromMaster });
+    const vinny = await freshPrincipal(13);
+    const now = new Date("2026-09-10T00:00:00.000Z");
+
+    const session = await directory.createConsentSession({
+      tenantId: tenant.id,
+      grant: SAMPLE_GRANT,
+      validFrom: now,
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    });
+    const firstMandate = await directory.recordMandate({
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: vinny.id,
+      signatureKind: "wallet-sep53",
+      document: { grant: SAMPLE_GRANT },
+      anchorTx: "tx-consent-2a",
+      mandateHash: "9".repeat(64),
+      validFrom: now,
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+    });
+    const secondMandate = await directory.recordMandate({
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: vinny.id,
+      signatureKind: "wallet-sep53",
+      document: { grant: SAMPLE_GRANT },
+      anchorTx: "tx-consent-2b",
+      mandateHash: "b".repeat(64),
+      validFrom: now,
+      validUntil: new Date("2026-12-01T00:00:00.000Z"),
+    });
+
+    await directory.completeConsentSession(session.id, firstMandate.id);
+    await expect(directory.completeConsentSession(session.id, secondMandate.id)).rejects.toEqual(
+      expect.objectContaining({ code: "ConsentSessionAlreadyCompleted" }),
+    );
+    // The first completion is what stands — a losing second attempt never overwrites it.
+    expect((await directory.findConsentSession(session.id))?.mandateId).toBe(firstMandate.id);
+  });
+
+  it("refuses to complete a consent session that does not exist", async () => {
+    await expect(directory.completeConsentSession("cns_doesnotexist", "mdt_doesnotexist")).rejects.toEqual(
+      expect.objectContaining({ code: "ConsentSessionNotFound" }),
+    );
   });
 
   // ---- survives a restart ------------------------------------------------

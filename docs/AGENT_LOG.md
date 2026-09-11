@@ -2641,3 +2641,73 @@ pushear**, esperando revisión del usuario — mismo patrón que T45. Siguiente
 hito propuesto: **T51** (`consent_sessions`), 🔴 alto riesgo por tocar el
 flujo de firma de wallet, sin empezar. Sigue pendiente de antes: rename a
 VynGent (`P-9`), desplegar T40/T49 a Render, G10.
+
+## 2026-09-11 — cc/t51-consent-sessions (T51 cerrado)
+
+Agente: Claude Code
+
+Qué: **T51 cerrado**, usando `EnterPlanMode`/`ExitPlanMode` de nuevo (más
+sensible que T49: no es solo lectura/aislamiento, es la pieza que hace
+firmar un Mandato real a partir de un `grant` propuesto por un tercero).
+`consent_sessions` funciona de punta a punta: `POST/GET
+/v1/consent_sessions` (partner-facing) más cinco rutas públicas nuevas en
+`apps/web` (sin API key — el id de la invitación, un ULID de 128 bits, es
+la capacidad que autoriza, `C-57`) que reutilizan el flujo de firma de
+wallet de T35 (`wallet-verify`/`start`/`wallet-consent`/`wallet-anchor`)
+sin llamar nunca `finishSession` — un `consent_session` no compra nada.
+
+Decisión de alcance tomada en el plan, con el usuario, antes de tocar
+código: la página `consent.html` que un humano ve queda afuera, como
+**T52**, delegable a Codex — no decide nada, solo llama a endpoints que
+este hito deja estables. Verificar sin ella fue posible con un script
+descartable (nunca commiteado, misma técnica que T39/T40) que hace de
+wallet real: genera un `Keypair`, lo fondea por Friendbot, firma los
+mensajes SEP-0053 y la transacción de anclaje exactamente como lo haría
+Freighter.
+
+Cambio más delicado: `apps/web/src/session-documents.ts` (protege el
+invariante `C-17` — credencial y Mandato nunca pueden nombrar principals
+distintos) ganó un `grant` opcional para que el Mandato pueda llevar
+`payTo` (soportado por `@agentpay/mandate` desde `M-14`, nunca usado por
+ningún flujo real hasta ahora). Sin tocar una línea del único call site
+que ya existía ni de los seis tests que fijan el invariante (`C-56`).
+
+Aditivo en `@agentpay/directory`: tabla `directory_consent_sessions` y
+tres métodos nuevos. Hallazgo real escribiendo el SQL, no en el diseño:
+la columna no puede llamarse `grant` — es palabra reservada de SQL —
+quedó `proposed_grant` en la base, `grant` en TypeScript (`C-55`).
+Aditivo en `@agentpay/partner-api`: `computeConsentSessionStatus`/
+`toConsentSessionResource`, lo que T45 había dejado pendiente "para quien
+construya la ruta".
+
+**Cero cambios en puntos de autorización de compra**, verificado:
+`git diff --stat` contra `apps/agent` y `contracts` no devuelve nada.
+`checkMandate`, `checkScope`, `checkDailyLimit`, `policy_rail`,
+`agent_registry` intactos.
+
+**Verificado contra Postgres y testnet reales, de punta a punta, sin
+navegador:** el script simulador de wallet recorrió las diez llamadas de
+la cadena completa — crear tenant → crear `consent_session` con un
+`payTo` → leer el grant públicamente → conectar wallet → iniciar → firmar
+el mensaje del mandato → firmar la transacción de anclaje → confirmar
+`completed` con el `mandate_id` correcto → confirmar el Mandato `active`
+→ leer directo en Postgres que el `payTo` propuesto llegó exacto hasta el
+documento anclado. Los datos de prueba se limpiaron de la base real al
+terminar (un primer intento de limpieza falló por no borrar
+`directory_idempotency` primero — corregido y re-verificado limpio).
+
+Verificado offline: 19 tests nuevos (882 en total), más 5 de integración
+de `@agentpay/directory` contra Postgres real (30 en esa suite). `pnpm
+typecheck`, `pnpm build` y `pnpm test` limpios en todo el monorepo.
+
+Documentación tocada: este archivo, y en
+`docs/fase-6-agentguard-comercializacion/`: `BITACORA.md` (T51 cerrado),
+`DECISIONES.md` (`C-55` a `C-59`), `PLATAFORMA-PARTNERS.md` (F5: T51
+marcado resuelto, T52 agregado a la tabla, T50 ya no depende de T52).
+`.env.example` documenta `PUBLIC_BASE_URL` (opcional).
+
+Pendiente: la rama `cc/t51-consent-sessions` queda **sin mergear ni
+pushear**, esperando revisión del usuario. Siguiente hito propuesto:
+**T52** (la página `consent.html`), delegable a Codex una vez aprobado
+este hito. Sigue pendiente de antes: rename a VynGent (`P-9`), desplegar
+T40/T49/T51 a Render, G10 (alta automática de emisores).

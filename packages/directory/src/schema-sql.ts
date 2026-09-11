@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 3;
+export const DIRECTORY_SCHEMA_VERSION = 4;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -165,4 +165,25 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
      created_at      timestamptz not null default now(),
      primary key (partner_id, key)
    )`,
+
+  // Schema version 4 (T51): a partner's hosted-consent invitation, waiting
+  // for a principal to sign it. `proposed_grant` (not `grant` — a reserved
+  // SQL keyword, would need quoting on every statement) is `json`, not
+  // `jsonb` — same `C-5` reasoning as `directory_mandates.document`, even
+  // though nothing hashes this particular value: there is still no reason
+  // for Postgres to rewrite key order in something only ever handed back
+  // verbatim.
+  `create table if not exists directory_consent_sessions (
+     id             text        primary key,
+     tenant_id      text        not null references directory_tenants(id),
+     status         text        not null,
+     proposed_grant json        not null,
+     valid_from     timestamptz not null,
+     valid_until    timestamptz not null,
+     mandate_id     text        references directory_mandates(id),
+     created_at     timestamptz not null default now(),
+     expires_at     timestamptz not null
+   )`,
+
+  `create index if not exists directory_consent_sessions_tenant_idx on directory_consent_sessions (tenant_id)`,
 ];

@@ -2,11 +2,16 @@
  * `/v1/consent_sessions` — the hosted flow `PLATAFORMA-PARTNERS.md` §2.5/§3
  * describes: a partner proposes a grant, gets back a `consent_url`, redirects
  * the principal there to connect a wallet and sign the Mandate, and polls or
- * gets a webhook when it resolves. Nothing here persists a session or drives
- * that flow — `@agentpay/directory` has no `consent_sessions` table yet, and
- * adding one is a decision for whichever ticket builds the route (T49 or a
- * successor), not for T45. What T45 freezes is the shape both sides agree on
- * before that exists.
+ * gets a webhook when it resolves.
+ *
+ * T45 froze the request/response shape before `@agentpay/directory` had a
+ * `consent_sessions` table at all — `consentSessionIdSchema` and
+ * `consentSessionStatusSchema` were hand-rolled here for that reason.
+ * T51 gives the table a home, so this file now imports both from
+ * `@agentpay/directory` instead (same pattern `tenants.ts`/`agents.ts`
+ * already use) and adds the mapping from a stored record to the public
+ * resource — the piece T45's own doc comment had explicitly left for
+ * "whichever ticket builds the route".
  *
  * The proposed grant reuses `@agentpay/mandate`'s `mandateGrantSchema`
  * verbatim rather than re-describing `actions`/`venues`/`assets`/`limits`/
@@ -14,24 +19,11 @@
  * carry, and a second definition of the same shape is a second place for the
  * two to drift apart.
  */
-import { ULID_LENGTH, tenantIdSchema, mandateIdSchema } from "@agentpay/directory";
+import { consentSessionIdSchema, consentSessionStatusSchema, tenantIdSchema, mandateIdSchema, type ConsentSessionRecord } from "@agentpay/directory";
 import { mandateGrantSchema } from "@agentpay/mandate";
 import { z } from "zod";
 
-/**
- * Mirrors `@agentpay/directory`'s ULID-behind-a-prefix id convention
- * (`ids.ts`) without depending on it — that package does not know about
- * consent sessions yet. Whichever ticket adds persistence should mint ids
- * this shape, with prefix `cns`, so the format does not have to change under
- * partners once it is real.
- */
-const CROCKFORD_CLASS = "[0-9ABCDEFGHJKMNPQRSTVWXYZ]";
-export const consentSessionIdSchema = z.string().regex(new RegExp(`^cns_${CROCKFORD_CLASS}{${ULID_LENGTH}}$`), {
-  message: "expected a consent session id (cns_...)",
-});
-
-export const consentSessionStatusSchema = z.enum(["pending", "completed", "expired", "cancelled"]);
-
+export { consentSessionIdSchema, consentSessionStatusSchema };
 export type ConsentSessionStatus = z.infer<typeof consentSessionStatusSchema>;
 
 export const createConsentSessionRequestSchema = z.strictObject({
@@ -57,3 +49,41 @@ export const consentSessionResourceSchema = z.strictObject({
 });
 
 export type ConsentSessionResource = z.infer<typeof consentSessionResourceSchema>;
+
+/**
+ * `directory_consent_sessions` never stores `"expired"` — same posture as a
+ * mandate's status (`computeMandateStatus`): a stored `"completed"` is
+ * permanent, but `"pending"` is only true until `expiresAt` passes, and
+ * nothing needs to write that transition, only compute it at read time.
+ */
+export function computeConsentSessionStatus(
+  session: Pick<ConsentSessionRecord, "status" | "expiresAt">,
+  now: Date,
+): ConsentSessionStatus {
+  if (session.status !== "pending") return session.status;
+  return now > session.expiresAt ? "expired" : "pending";
+}
+
+/**
+ * `consentUrl` is supplied by the caller, not derived here: it depends on
+ * `apps/web`'s own base URL, which this transport-agnostic package has no
+ * business knowing. It is only ever shown while the session is still
+ * `"pending"` — a completed, expired, or cancelled invitation has nothing
+ * left to redirect anyone to.
+ */
+export function toConsentSessionResource(
+  session: ConsentSessionRecord,
+  now: Date,
+  consentUrl: string,
+): ConsentSessionResource {
+  const status = computeConsentSessionStatus(session, now);
+  return consentSessionResourceSchema.parse({
+    id: session.id,
+    tenant_id: session.tenantId,
+    status,
+    consent_url: status === "pending" ? consentUrl : null,
+    mandate_id: session.mandateId,
+    created_at: session.createdAt.toISOString(),
+    expires_at: session.expiresAt.toISOString(),
+  });
+}

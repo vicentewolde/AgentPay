@@ -14,7 +14,7 @@ import {
   VC_CONTEXT_V2,
   stellarAddressToDid,
 } from "@agentpass/core";
-import { createMandate, type AgentPayMandate } from "@agentpay/mandate";
+import { createMandate, type AgentPayMandate, type MandateGrant } from "@agentpay/mandate";
 
 export interface SessionDocumentsParams {
   /** The platform key that issues (and signs) the credential. */
@@ -27,6 +27,15 @@ export interface SessionDocumentsParams {
    */
   readonly walletAddress: string | undefined;
   readonly scope: CredentialRequest;
+  /**
+   * What the Mandate grants. Defaults to `scope.scope` — every call site
+   * before T51 relied on this default, and still does; the credential's
+   * `credentialSubject.scope` always gets `scope.scope` regardless, since a
+   * plain `Scope` is all that field can express. Only diverges when a
+   * partner-proposed grant (T51's `consent_sessions`) carries a `payTo` a
+   * credential cannot carry (`M-14`) but a Mandate can.
+   */
+  readonly grant?: MandateGrant;
   readonly registryContractId: string;
   readonly now: Date;
   readonly validUntil: Date;
@@ -82,7 +91,7 @@ export function buildSessionDocuments(params: SessionDocumentsParams): SessionDo
   const mandate = createMandate({
     principal,
     agent: agentDid,
-    grant: params.scope.scope,
+    grant: params.grant ?? params.scope.scope,
     registry: params.registryContractId,
     validFrom,
     validUntil,

@@ -15,14 +15,16 @@
  * it" rule `InvalidApiKey` already applies to a revoked key.
  */
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
-import type { AgentInstance, Directory, MandateRecord, Tenant } from "@agentpay/directory";
+import type { AgentInstance, ConsentSessionRecord, Directory, MandateRecord, Tenant } from "@agentpay/directory";
 import {
   authorizeRequest,
+  createConsentSessionRequestSchema,
   createTenantRequestSchema,
   hashRequestBody,
   resolveIdempotency,
   successEnvelope,
   toAgentResource,
+  toConsentSessionResource,
   toErrorEnvelope,
   toMandateResource,
   toTenantResource,
@@ -41,6 +43,8 @@ export type PartnerRoutesDirectory = Pick<
   | "listMandates"
   | "findIdempotentResponse"
   | "recordIdempotentResponse"
+  | "createConsentSession"
+  | "findConsentSession"
 >;
 
 export interface PartnerRouteRequest {
@@ -51,6 +55,8 @@ export interface PartnerRouteRequest {
   readonly idempotencyKeyHeader: string | undefined;
   readonly body: unknown;
   readonly directory: PartnerRoutesDirectory;
+  /** This deployment's own origin, e.g. `https://agentpay-web.onrender.com` — used to build a `consent_url`. Only read by `POST /v1/consent_sessions`. */
+  readonly baseUrl: string;
   readonly now?: Date;
 }
 
@@ -74,6 +80,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   AgentNotFound: 404,
   MandateNotFound: 404,
   ConsentSessionNotFound: 404,
+  ConsentSessionExpired: 410,
+  ConsentSessionAlreadyCompleted: 409,
 };
 
 export function statusForError(error: unknown): number {
@@ -116,6 +124,22 @@ async function requireOwnedMandate(directory: PartnerRoutesDirectory, mandateId:
     throw new AgentPassError("MandateNotFound", "no mandate with that id", { details: { mandateId } });
   }
   return mandate;
+}
+
+async function requireOwnedConsentSession(
+  directory: PartnerRoutesDirectory,
+  id: string,
+  partnerId: string,
+): Promise<ConsentSessionRecord> {
+  const session = await directory.findConsentSession(id);
+  if (session === undefined) {
+    throw new AgentPassError("ConsentSessionNotFound", "no consent session with that id", { details: { consentSessionId: id } });
+  }
+  const tenant = await directory.findTenant(session.tenantId);
+  if (tenant === undefined || tenant.partnerId !== partnerId) {
+    throw new AgentPassError("ConsentSessionNotFound", "no consent session with that id", { details: { consentSessionId: id } });
+  }
+  return session;
 }
 
 async function respondOrCache(
@@ -199,6 +223,46 @@ async function handleListMandates(input: PartnerRouteRequest, now: Date): Promis
   return { status: 200, body: successEnvelope(mandates.map((mandate) => toMandateResource(mandate, now))) };
 }
 
+/** How long a partner's invitation link stays signable. Distinct from the grant's own `valid_until`. */
+const CONSENT_SESSION_TTL_MS = 60 * 60 * 1000;
+
+async function handleCreateConsentSession(input: PartnerRouteRequest, now: Date): Promise<PartnerRouteResponse> {
+  const auth = await authorizeRequest(input.authorizationHeader, "consent_sessions:write" satisfies ApiScope, input.directory.authenticate);
+
+  const outcome = await resolveIdempotency({
+    partnerId: auth.partnerId,
+    idempotencyKeyHeader: input.idempotencyKeyHeader,
+    body: input.body,
+    lookup: input.directory.findIdempotentResponse,
+    now,
+  });
+  if (outcome.kind === "replay") return { status: outcome.record.responseStatus, body: outcome.record.responseBody };
+
+  return respondOrCache(input.directory, auth.partnerId, input.idempotencyKeyHeader!, input.body, async () => {
+    const request = parseBody(createConsentSessionRequestSchema, input.body);
+    await requireOwnedTenant(input.directory, request.tenant_id, auth.partnerId);
+
+    const validFrom = request.valid_from === undefined ? now : new Date(request.valid_from);
+    const session = await input.directory.createConsentSession({
+      tenantId: request.tenant_id,
+      grant: request.grant,
+      validFrom,
+      validUntil: new Date(request.valid_until),
+      expiresAt: new Date(now.getTime() + CONSENT_SESSION_TTL_MS),
+    });
+
+    const consentUrl = `${input.baseUrl}/consent/${session.id}`;
+    return { status: 201, body: successEnvelope(toConsentSessionResource(session, now, consentUrl)) };
+  });
+}
+
+async function handleGetConsentSession(input: PartnerRouteRequest, id: string, now: Date): Promise<PartnerRouteResponse> {
+  const auth = await authorizeRequest(input.authorizationHeader, "consent_sessions:read" satisfies ApiScope, input.directory.authenticate);
+  const session = await requireOwnedConsentSession(input.directory, id, auth.partnerId);
+  const consentUrl = `${input.baseUrl}/consent/${session.id}`;
+  return { status: 200, body: successEnvelope(toConsentSessionResource(session, now, consentUrl)) };
+}
+
 function notFound(method: string, pathname: string): PartnerRouteResponse {
   return { status: 404, body: { ok: false, code: "NotFound", message: `no /v1 route for ${method} ${pathname}`, details: {} } };
 }
@@ -222,6 +286,15 @@ export async function routePartnerRequest(input: PartnerRouteRequest): Promise<P
 
     if (input.method === "GET" && input.pathname === "/v1/agents") {
       return await handleListAgents(input);
+    }
+
+    if (input.method === "POST" && input.pathname === "/v1/consent_sessions") {
+      return await handleCreateConsentSession(input, now);
+    }
+
+    const consentSessionMatch = /^\/v1\/consent_sessions\/([^/]+)$/.exec(input.pathname);
+    if (input.method === "GET" && consentSessionMatch?.[1] !== undefined) {
+      return await handleGetConsentSession(input, decodeURIComponent(consentSessionMatch[1]), now);
     }
 
     const mandateMatch = /^\/v1\/mandates\/([^/]+)$/.exec(input.pathname);

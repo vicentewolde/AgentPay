@@ -45,11 +45,12 @@ import {
 import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
-import { createDirectory, type Directory, type MandateRecord } from "@agentpay/directory";
+import { createDirectory, type ConsentSessionRecord, type Directory, type MandateRecord } from "@agentpay/directory";
 import {
   agentPayMandateSchema,
   anchorMandate,
   mandateChallengeMessage,
+  mandateGrantSchema,
   prepareWalletAnchor,
   prepareWalletRevoke,
   revokeMandate,
@@ -57,7 +58,7 @@ import {
   type AgentPayMandate,
 } from "@agentpay/mandate";
 import { createPostgresMandateVault, type MandateVault } from "@agentpay/vault";
-import { AUTHORIZATION_HEADER, IDEMPOTENCY_KEY_HEADER } from "@agentpay/partner-api";
+import { AUTHORIZATION_HEADER, computeConsentSessionStatus, IDEMPOTENCY_KEY_HEADER } from "@agentpay/partner-api";
 
 import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, MandateSource, VenueId } from "@agentpay/agent";
 import {
@@ -223,6 +224,36 @@ interface PendingWalletSession {
 /** Steps 2 and 3 of the wallet flow both read this without ending it, so `peek`, not `take`. */
 const pendingWalletSessions = createExpiringStore<PendingWalletSession>(PENDING_WALLET_SESSION_TTL_MS);
 
+// ---- Hosted consent sessions (T51) -----------------------------------------
+
+/**
+ * The same "credential issued, Mandate unsigned, waiting on two more wallet
+ * round trips" shape as {@link PendingWalletSession}, minus everything that
+ * only matters to the demo purchase flow (`paymentSecret`, `demoScope`,
+ * `baseUrl`, `agentKeypair` — nothing here ever calls `finishSession`, this
+ * session never buys anything). Keyed by the `consent_session` id, not a
+ * cookie — the principal signing it may never visit any other page on this
+ * site.
+ */
+interface PendingConsentSession {
+  readonly agentpass: AgentPass;
+  readonly issuedCredentialJws: string;
+  readonly credentialHash: string;
+  readonly credentialAnchorTx: string;
+  readonly credential: AgentPassCredential;
+  readonly mandate: AgentPayMandate;
+  readonly walletAddress: string;
+  readonly tenantId: string;
+  /** Set once `/api/consent/{id}/wallet-consent` verifies the SEP-0053 signature. */
+  signature?: string;
+  /** Set once the anchor transaction is prepared — names which one `wallet-anchor` finishes. */
+  requestId?: string;
+}
+const pendingConsentSessions = createExpiringStore<PendingConsentSession>(PENDING_WALLET_SESSION_TTL_MS);
+
+/** The wallet that proved control for a given `consent_session`, between `/wallet-verify` and `/start`. Not an `ExpiringStore`: the session's own `expiresAt` (checked in `startConsentSession`) is what actually gates staleness here. */
+const walletAddressByConsentSession = new Map<string, string>();
+
 /**
  * Anchoring a mandate under a wallet's address needs that address to be a
  * registered, active issuer first — the contract's own rule (`M-17`),
@@ -276,6 +307,28 @@ async function readScope(): Promise<CredentialRequest> {
 /** This server's own `.env.local`, with `process.env` behind it — see `env.ts`. */
 function readEnv(): Promise<Map<string, string>> {
   return readEnvFrom(ENV_PATH);
+}
+
+/**
+ * This deployment's own origin — the first time `apps/web` has needed to
+ * refer to itself rather than to Stellar or the bazaar. `PUBLIC_BASE_URL`
+ * is the explicit override (set once on Render); without it, the `Host`
+ * header (and `X-Forwarded-Proto` behind a reverse proxy) is what's actually
+ * true of the request that arrived, which is right for local dev too.
+ */
+function resolveBaseUrl(req: IncomingMessage, env: ReadonlyMap<string, string>): string {
+  const configured = env.get("PUBLIC_BASE_URL");
+  if (configured !== undefined && configured.length > 0) return configured.replace(/\/+$/, "");
+
+  const host = req.headers.host ?? `localhost:${PORT}`;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const proto =
+    typeof forwardedProto === "string"
+      ? (forwardedProto.split(",")[0] ?? "https")
+      : host.startsWith("localhost") || host.startsWith("127.0.0.1")
+        ? "http"
+        : "https";
+  return `${proto}://${host}`;
 }
 
 // ---- Persistent directory (T39) --------------------------------------------
@@ -569,6 +622,108 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     walletAddress: undefined,
   });
   return { kind: "ready", session };
+}
+
+interface StartConsentSessionResult {
+  readonly pending: "wallet-consent";
+  readonly credentialHash: string;
+  readonly challengeMessage: string;
+}
+
+/**
+ * The consent-session analogue of `startSession`'s wallet branch, without
+ * `finishSession`: this never buys anything, so it never needs a catalogue,
+ * a vault, or a `PolicyRail` — only the credential and the unsigned Mandate,
+ * built from the partner's own proposed grant instead of the demo's
+ * `scope-stellar-bazaar.json`.
+ *
+ * @throws AgentPassError `ConfigError` if no wallet has verified control yet
+ * (`/api/consent/{id}/wallet-verify` first).
+ * @throws AgentPassError `ConsentSessionNotFound`, `ConsentSessionExpired`,
+ * `ConsentSessionAlreadyCompleted` — the three ways this invitation can be
+ * unusable.
+ */
+async function startConsentSession(consentSessionId: string): Promise<StartConsentSessionResult> {
+  const walletAddress = walletAddressByConsentSession.get(consentSessionId);
+  if (walletAddress === undefined) {
+    throw new AgentPassError("ConfigError", "conectá la wallet primero", { details: { consentSessionId } });
+  }
+
+  const env = await readEnv();
+  const directory = await getDirectory(env);
+  const session = await directory.findConsentSession(consentSessionId);
+  if (session === undefined) {
+    throw new AgentPassError("ConsentSessionNotFound", "no existe esa invitación", { details: { consentSessionId } });
+  }
+  if (session.status !== "pending") {
+    throw new AgentPassError("ConsentSessionAlreadyCompleted", "esta invitación ya se firmó", { details: { consentSessionId } });
+  }
+  const now = new Date();
+  if (now > session.expiresAt) {
+    throw new AgentPassError("ConsentSessionExpired", "esta invitación venció", { details: { consentSessionId } });
+  }
+
+  const tenant = await directory.findTenant(session.tenantId);
+  if (tenant === undefined) {
+    // The session's own foreign key guarantees this — reaching here would
+    // mean the directory's referential integrity broke.
+    throw new AgentPassError("TenantNotFound", "el tenant de esta invitación ya no existe", { details: { consentSessionId } });
+  }
+  const partner = await directory.findPartner(tenant.partnerId);
+  if (partner === undefined) {
+    throw new AgentPassError("PartnerNotFound", "el partner de esta invitación ya no existe", { details: { consentSessionId } });
+  }
+
+  const issuer = requireSecretKey(env, "ISSUER_SECRET_KEY");
+  const contractId = requireEnv(env, "AGENT_REGISTRY_CONTRACT_ID");
+  const masterMnemonic = requireEnv(env, "MASTER_MNEMONIC");
+  const agentpass = await createAgentPass({
+    contractId,
+    rpcUrl: TESTNET.rpcUrl,
+    networkPassphrase: TESTNET.passphrase,
+    network: TESTNET.network,
+  });
+  const tenantAgent = await ensureTenantAgent(directory, masterMnemonic, session.tenantId);
+
+  // Validated here, not trusted from storage: `@agentpay/directory` stores
+  // `grant` unvalidated by design (`C-5`-style separation of storing from
+  // judging) — this is the point where it is actually about to be signed
+  // into a real Mandate, so it is the point that has to be sure.
+  const grant = mandateGrantSchema.parse(session.grant);
+  // The credential's `scope` is a plain `Scope` — it cannot carry `payTo`
+  // (`M-14`) — so it gets the grant minus that field; the Mandate gets the
+  // grant exactly as the partner proposed it.
+  const { payTo: _payTo, ...scopeOnly } = grant;
+
+  const { credential, mandate: mandateDocument } = buildSessionDocuments({
+    issuerAddress: issuer.publicKey(),
+    agentAddress: tenantAgent.keypair.publicKey(),
+    walletAddress,
+    scope: {
+      agent: { name: `consent-${session.id}`, model: "partner-managed", operator: partner.name },
+      scope: scopeOnly,
+    },
+    grant,
+    registryContractId: agentpass.config.contractId,
+    now,
+    validUntil: session.validUntil,
+  });
+  const issued = await agentpass.issue({ credential, issuer });
+
+  await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
+
+  pendingConsentSessions.set(consentSessionId, {
+    agentpass,
+    issuedCredentialJws: issued.jws,
+    credentialHash: issued.hash,
+    credentialAnchorTx: issued.transactionHash,
+    credential,
+    mandate: mandateDocument,
+    walletAddress,
+    tenantId: session.tenantId,
+  });
+
+  return { pending: "wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
 }
 
 interface Step {
@@ -876,7 +1031,19 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
 };
 
 async function serveStatic(pathname: string, res: ServerResponse): Promise<void> {
-  const relative = pathname === "/" ? "/index.html" : pathname === "/landing" ? "/landing.html" : pathname;
+  // `/consent/{id}` (T51's consent_url) has no file of its own — the id is
+  // read client-side from the URL path, same as any single-page route.
+  // `consent.html` itself is T52, not this hito: until it exists, visiting
+  // a real consent_url 404s here exactly like any other missing file — the
+  // backend behind it is already complete and verified without a browser.
+  const relative =
+    pathname === "/"
+      ? "/index.html"
+      : pathname === "/landing"
+        ? "/landing.html"
+        : pathname.startsWith("/consent/")
+          ? "/consent.html"
+          : pathname;
   const filePath = join(PUBLIC_DIR, relative);
   // No user input reaches this join beyond the URL pathname of a same-origin
   // GET, and every route below is fixed — but refuse a path that escapes
@@ -923,6 +1090,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       idempotencyKeyHeader: typeof idempotencyKeyHeader === "string" ? idempotencyKeyHeader : undefined,
       body: await readJsonBody(req),
       directory,
+      baseUrl: resolveBaseUrl(req, env),
     });
     sendJson(res, result.status, result.body);
     return;
@@ -1162,6 +1330,203 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         perDay: `${session.scope.limits.perDay} ${session.scope.limits.currency}`,
         policyRail: session.railContractId ?? null,
         walletAddress: session.walletAddress ?? null,
+      });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  // ---- Hosted consent sessions (T51) ---------------------------------------
+  // Public — no API key. A `consent_session` id (a 128-bit ULID a partner's
+  // `POST /v1/consent_sessions` minted) is the capability that authorises
+  // these, the same trust model a DocuSign envelope link uses. None of this
+  // ever calls `finishSession`: a consent session issues and anchors a
+  // credential and a Mandate, it never buys anything.
+
+  const consentReadMatch = /^\/api\/consent\/([^/]+)$/.exec(pathname);
+  if (req.method === "GET" && consentReadMatch?.[1] !== undefined) {
+    const consentSessionId = decodeURIComponent(consentReadMatch[1]);
+    try {
+      const env = await readEnv();
+      const directory = await getDirectory(env);
+      const session = await directory.findConsentSession(consentSessionId);
+      if (session === undefined) {
+        sendJson(res, 404, { ok: false, code: "ConsentSessionNotFound", message: "no existe esa invitación" });
+        return;
+      }
+      sendJson(res, 200, {
+        ok: true,
+        id: session.id,
+        status: computeConsentSessionStatus(session, new Date()),
+        grant: session.grant,
+        validUntil: session.validUntil.toISOString(),
+        expiresAt: session.expiresAt.toISOString(),
+      });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  const consentVerifyMatch = /^\/api\/consent\/([^/]+)\/wallet-verify$/.exec(pathname);
+  if (req.method === "POST" && consentVerifyMatch?.[1] !== undefined) {
+    const consentSessionId = decodeURIComponent(consentVerifyMatch[1]);
+    const body = await readJsonBody(req);
+    const address = typeof body.address === "string" ? body.address : undefined;
+    const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
+    const signature = typeof body.signature === "string" ? body.signature : undefined;
+
+    if (address === undefined || nonce === undefined || signature === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta address, nonce o signature" });
+      return;
+    }
+    if (walletChallenges.take(nonce) === undefined) {
+      sendJson(res, 400, {
+        ok: false,
+        code: "InvalidArguments",
+        message: "ese challenge no existe, ya se usó, o venció — pedí uno nuevo",
+      });
+      return;
+    }
+    if (!verifyStellarMessage(address, challengeMessage(nonce), signature)) {
+      sendJson(res, 400, { ok: false, code: "InvalidSignature", message: "la firma no corresponde a esa wallet" });
+      return;
+    }
+
+    try {
+      const env = await readEnv();
+      const directory = await getDirectory(env);
+      const session = await directory.findConsentSession(consentSessionId);
+      if (session === undefined) {
+        sendJson(res, 404, { ok: false, code: "ConsentSessionNotFound", message: "no existe esa invitación" });
+        return;
+      }
+      // Binds to the tenant the *partner* already created — never a new one.
+      // `ensureVisitorTenant` (the classic wallet-connect path) does not
+      // apply here: this wallet is consenting for a tenant that already
+      // exists, not registering itself as a brand new visitor.
+      const principal = await directory.upsertPrincipal({ address, did: stellarAddressToDid(address, "testnet") });
+      await directory.bindPrincipal({
+        tenantId: session.tenantId,
+        principalId: principal.id,
+        proofNonce: nonce,
+        proofSignature: signature,
+      });
+      walletAddressByConsentSession.set(consentSessionId, address);
+      sendJson(res, 200, { ok: true, address });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  const consentStartMatch = /^\/api\/consent\/([^/]+)\/start$/.exec(pathname);
+  if (req.method === "POST" && consentStartMatch?.[1] !== undefined) {
+    const consentSessionId = decodeURIComponent(consentStartMatch[1]);
+    try {
+      const result = await startConsentSession(consentSessionId);
+      sendJson(res, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  const consentConsentMatch = /^\/api\/consent\/([^/]+)\/wallet-consent$/.exec(pathname);
+  if (req.method === "POST" && consentConsentMatch?.[1] !== undefined) {
+    const consentSessionId = decodeURIComponent(consentConsentMatch[1]);
+    const pending = pendingConsentSessions.peek(consentSessionId);
+    if (pending === undefined) {
+      sendJson(res, 400, {
+        ok: false,
+        code: "ConfigError",
+        message: "no hay ninguna invitación esperando la firma de la wallet — empezá el flujo de nuevo",
+      });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const signature = typeof body.signature === "string" ? body.signature : undefined;
+    if (signature === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta signature" });
+      return;
+    }
+    try {
+      const prepared = await prepareWalletAnchor(pending.agentpass, { mandate: pending.mandate, signature });
+      pending.signature = signature;
+      pending.requestId = prepared.requestId;
+      sendJson(res, 200, { ok: true, requestId: prepared.requestId, xdr: prepared.xdr });
+    } catch (error) {
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  const consentAnchorMatch = /^\/api\/consent\/([^/]+)\/wallet-anchor$/.exec(pathname);
+  if (req.method === "POST" && consentAnchorMatch?.[1] !== undefined) {
+    const consentSessionId = decodeURIComponent(consentAnchorMatch[1]);
+    const pending = pendingConsentSessions.peek(consentSessionId);
+    if (pending === undefined || pending.signature === undefined) {
+      sendJson(res, 400, {
+        ok: false,
+        code: "ConfigError",
+        message: "no hay ninguna invitación esperando el anclaje — empezá el flujo de nuevo",
+      });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const requestId = typeof body.requestId === "string" ? body.requestId : undefined;
+    const signedXdr = typeof body.signedXdr === "string" ? body.signedXdr : undefined;
+    if (requestId === undefined || signedXdr === undefined || requestId !== pending.requestId) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta requestId o signedXdr, o no coincide" });
+      return;
+    }
+    try {
+      const transactionHash = await pending.agentpass.submitSigned(requestId, signedXdr);
+      const env = await readEnv();
+      const directory = await getDirectory(env);
+      const masterMnemonic = requireEnv(env, "MASTER_MNEMONIC");
+      // Idempotent re-resolve, same pattern `/api/session/wallet-anchor`
+      // already uses: the row was created in `startConsentSession`, this
+      // just finds it again rather than threading its id through the
+      // pending struct.
+      const tenantAgent = await ensureTenantAgent(directory, masterMnemonic, pending.tenantId);
+      const principal = await directory.upsertPrincipal({
+        address: pending.walletAddress,
+        did: stellarAddressToDid(pending.walletAddress, "testnet"),
+      });
+      await directory.recordCredential({
+        agentId: tenantAgent.instance.id,
+        tenantId: pending.tenantId,
+        credentialHash: pending.credentialHash,
+        issuerDid: pending.credential.issuer,
+        principalDid: pending.credential.credentialSubject.principal,
+        jws: pending.issuedCredentialJws,
+        validFrom: new Date(pending.credential.validFrom),
+        validUntil: new Date(pending.credential.validUntil),
+        anchorTx: pending.credentialAnchorTx,
+      });
+      const mandateRecord = await directory.recordMandate({
+        tenantId: pending.tenantId,
+        agentId: tenantAgent.instance.id,
+        principalId: principal.id,
+        mandateHash: walletMandateHash(pending.mandate),
+        signatureKind: "wallet-sep53",
+        document: { ...pending.mandate },
+        signature: pending.signature,
+        validFrom: new Date(pending.mandate.validFrom),
+        validUntil: new Date(pending.mandate.validUntil),
+        anchorTx: transactionHash,
+      });
+      const completed = await directory.completeConsentSession(consentSessionId, mandateRecord.id);
+      pendingConsentSessions.delete(consentSessionId);
+      walletAddressByConsentSession.delete(consentSessionId);
+      sendJson(res, 200, {
+        ok: true,
+        status: completed.status,
+        mandateId: mandateRecord.id,
+        mandateHash: mandateRecord.mandateHash,
+        transactionHash,
       });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });

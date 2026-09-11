@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-10 · **Último hito cerrado:** T49 · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** T51 · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -21,10 +21,14 @@ hasta F6 (`C-39` a `C-42`, T40). `/v1` ya es real: un partner con su
 propia API key (emitida con `pnpm run partner:create`) puede crear un
 tenant, leerlo, listar sus agentes y consultar sus mandatos contra
 Postgres de verdad — con idempotencia y aislamiento entre partners
-verificados, no solo diseñados (`C-49` a `C-54`, T49). Lo que falta para
-que un partner integre de punta a punta: `consent_sessions` (crear un
-consentimiento, que un principal lo firme, consultarlo) — el hito nuevo
-que sigue, `T51`.
+verificados, no solo diseñados (`C-49` a `C-54`, T49). Y ahora el círculo
+completo funciona: un partner propone un `grant` (con `payTo` si quiere),
+un principal lo firma con su wallet en un flujo hospedado, y el Mandato
+resultante queda anclado en testnet y consultable por el partner —
+verificado de punta a punta contra Postgres y testnet reales, sin
+necesitar todavía la página que un humano ve (`C-55` a `C-59`, T51). Esa
+página (`consent.html`) es **T52**, delegable a Codex — el backend que
+consume no tiene nada más que decidir.
 
 ### Progreso
 
@@ -44,6 +48,7 @@ que sigue, `T51`.
 | T47 | `@agentpay/partner-sdk`: cliente tipado sobre `fetch` nativo para las siete rutas de `/v1` | ✅ cerrado 2026-09-10 (Codex, PR #7) |
 | T48 | `@agentpay/webhooks`: worker de entrega con reintentos y backoff, firma HMAC | ✅ cerrado 2026-09-10 (Codex, PR #8) |
 | T49 | `/v1` cableado de verdad contra `@agentpay/directory`: tenants, agentes, mandatos, idempotencia, aislamiento entre partners | ✅ cerrado 2026-09-10 |
+| T51 | `consent_sessions`: un partner propone un grant, un principal lo firma por wallet en un flujo hospedado, el Mandato queda anclado — backend completo, verificado sin la página | ✅ cerrado 2026-09-11 |
 
 ---
 
@@ -1059,4 +1064,98 @@ Pendiente: **T51** (`consent_sessions` — tabla, rutas, página hospedada
 reutilizando el flujo de firma de wallet), sin empezar, esperando
 revisión de este hito primero. Sigue pendiente de antes: el rename a
 VynGent (`P-9`), desplegar T40/T49 a Render, y G10 (alta automática de
+emisores).
+
+---
+
+## T51 · `consent_sessions` — el flujo hospedado de consentimiento — cerrado 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** Ya se puede recorrer la
+cadena completa que F5 prometía: CloudOps crea un tenant, le propone un
+grant de gasto —incluyendo a quién se le puede pagar (`payTo`), algo que
+el proyecto soporta desde la Fase 3 pero que ningún flujo real usaba
+todavía—, y le manda a Vinny un link. Vinny conecta su wallet en ese
+link, ve exactamente lo que se le está pidiendo autorizar, y lo firma.
+Del otro lado, CloudOps consulta el mandato resultante y confirma que
+tiene el `payTo` que pidió, byte a byte. Todo esto ya funciona contra
+Postgres y testnet reales — falta solo la página que Vinny efectivamente
+ve en el navegador (**T52**, aparte, delegable).
+
+**Por qué se partió en dos hitos.** Al diseñar esto (con `EnterPlanMode`,
+dado el riesgo) aparecieron dos piezas: el backend completo
+(tabla, rutas, la extensión al invariante `C-17` para que un Mandato
+pueda llevar `payTo`) y la página HTML que un humano ve. La página no
+decide nada — solo llama a endpoints que este hito deja ya estables — así
+que separarla no perdía nada y evitaba un PR mucho más grande
+(`C-49`, de T49, ya había anotado esta división).
+
+**Lo nuevo en `@agentpay/directory`:** tabla `directory_consent_sessions`
+y tres métodos (`createConsentSession`, `findConsentSession`,
+`completeConsentSession`). Un detalle que solo apareció escribiendo el
+SQL, no en el diseño: la columna no se puede llamar `grant` a secas
+—es palabra reservada de SQL— así que quedó `proposed_grant` en la base,
+`grant` en TypeScript (`C-55`).
+
+**Lo nuevo en `@agentpay/partner-api`:** `computeConsentSessionStatus`/
+`toConsentSessionResource`, exactamente lo que T45 había dejado
+pendiente "para quien construya la ruta".
+
+**El cambio más delicado: `session-documents.ts`.** Es el archivo que
+protege el invariante más importante de la Fase 3 (`C-17`: la credencial
+y el Mandato nunca pueden nombrar principals distintos). Ganó un `grant`
+opcional que, si no se pasa, se comporta exactamente igual que antes —el
+único call site que ya existía no cambió una línea, y los seis tests que
+fijan el invariante tampoco. Cuando `consent_sessions` sí lo pasa, el
+Mandato puede llevar `payTo` (algo que `@agentpay/mandate` soporta desde
+`M-14` pero que nunca se había usado) mientras la credencial sigue
+recibiendo solo el `Scope` plano, que nunca pudo expresarlo (`C-56`).
+
+**Las rutas nuevas.** Dos en `/v1` (partner-facing, mismo patrón que T49):
+`POST`/`GET /v1/consent_sessions`. Cinco públicas, sin API key, en
+`apps/web` — el id de la invitación (un ULID de 128 bits) es la
+capacidad que autoriza, el mismo modelo de confianza que un link de
+DocuSign (`C-57`): `GET /api/consent/{id}` (lectura pública del grant),
+`wallet-verify`, `start`, `wallet-consent`, `wallet-anchor` — estas
+últimas cuatro repiten paso a paso el flujo de firma de wallet que T35
+ya construyó, pero nunca llaman `finishSession`: un `consent_session` no
+compra nada, solo emite y ancla documentos.
+
+**Verificado contra Postgres y testnet reales, de punta a punta, sin
+navegador.** Un script descartable (nunca commiteado, misma técnica que
+T39/T40) hizo de wallet real —generó un `Keypair`, lo fondeó por
+Friendbot, firmó los mensajes SEP-0053 y la transacción de anclaje
+exactamente como lo haría Freighter— y recorrió las diez llamadas de la
+cadena completa: crear tenant → crear consent_session con un `payTo` →
+leer el grant públicamente → conectar wallet → iniciar → firmar el
+mensaje del mandato → firmar la transacción de anclaje → confirmar en
+`/v1/consent_sessions/{id}` que quedó `completed` con el `mandate_id`
+correcto → confirmar en `/v1/mandates/{id}` que el Mandato quedó
+`active` → y una lectura directa a Postgres confirmando que el `payTo`
+propuesto llegó exactamente igual hasta el documento anclado. Los datos
+de prueba se limpiaron de la base real al terminar.
+
+Verificado offline: 19 tests nuevos (6 de
+`computeConsentSessionStatus`/`toConsentSessionResource` en
+`@agentpay/partner-api`, 4 de `session-documents.ts` con `grant`
+explícito, 9 de las dos rutas nuevas de `partner-routes.ts` con un
+directorio falso), **882 en total**. Más 5 tests de integración nuevos de
+`@agentpay/directory` contra Postgres real (30 en total en esa suite,
+aparte de los 882 — corre con `test:integration`, no con `pnpm test`).
+`pnpm typecheck`, `pnpm build` y `pnpm test` limpios en todo el
+monorepo. `git diff --stat` contra `apps/agent` y `contracts` en cero —
+cero cambios a `checkMandate`, `policy_rail`, `agent_registry` o el
+flujo de compra.
+
+Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta:
+`BITACORA.md`, `DECISIONES.md` (`C-55` a `C-59`),
+`PLATAFORMA-PARTNERS.md` (F5, T51 agregado a la tabla, T50 re-vinculado).
+Archivos nuevos: `apps/web/src/partner-routes.ts` ya existía, se
+extendió; nada nuevo del lado de archivos (solo ediciones aditivas a lo
+que T49 dejó). `.env.example` documenta `PUBLIC_BASE_URL` (opcional, con
+un fallback derivado del propio `Host` de la petición).
+
+Pendiente: **T52** (la página `consent.html`, HTML/JS puro consumiendo
+estos endpoints — delegable a Codex una vez que el usuario dé el visto
+bueno de este hito). Sigue pendiente de antes: el rename a VynGent
+(`P-9`), desplegar T40/T49/T51 a Render, y G10 (alta automática de
 emisores).

@@ -862,6 +862,23 @@ despliegue — el despliegue en sí no es parte de este hito.
 > existente — y pasa a ser **T51**, un hito nuevo. El "listo cuando" de
 > esta fase (el `curl` que abre un consentimiento) sigue sin cumplirse
 > hasta que T51 cierre.
+>
+> **T51 cerrado el 2026-09-11.** `consent_sessions` ya funciona de punta a
+> punta: `POST/GET /v1/consent_sessions` (partner-facing) y cinco rutas
+> públicas nuevas en `apps/web` (`GET /api/consent/{id}`, y el flujo de
+> firma completo — `wallet-verify`/`start`/`wallet-consent`/
+> `wallet-anchor`) que reutilizan el flujo de wallet de T35 sin llamar
+> nunca a `finishSession` — un `consent_session` no compra nada.
+> `session-documents.ts` (guardián del invariante `C-17`) ganó un `grant`
+> opcional para que el Mandato pueda llevar `payTo`, sin tocar el call
+> site que ya existía ni sus tests (`C-56`). Verificado de punta a punta
+> contra Postgres y testnet reales con un script que firma como
+> Freighter, sin necesitar navegador — el `payTo` propuesto por el
+> partner llegó exacto hasta el documento anclado. El "listo cuando" de
+> esta fase **ya se cumple**: el `curl` completo existe y corrió de
+> verdad. Falta solo `consent.html` —la página que un humano ve—, **T52**,
+> delegable a Codex porque no decide nada, solo llama a lo que este hito
+> ya deja estable.
 
 - **Objetivo llano.** Que CloudOps integre leyendo documentación, sin
   hablar con nosotros.
@@ -918,8 +935,9 @@ Claude Code congele el contrato.
 | T47 | Codex | T45 mergeado | Bajo — envoltorios tipados, sin lógica | `packages/partner-sdk/**` (nuevo) (prohibido: `apps/web/**`, `packages/directory/**`) | ✅ cerrado — `/v1` real no existe todavía, así que se verificó contra un `node:http` de prueba en vez del criterio original; revisado y mergeado (PR #7) |
 | T48 | Codex | ✅ forma del evento publicada (`webhooks.ts` en `@agentpay/partner-api`, `C-48`) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | ✅ cerrado — reintentos con backoff verificados contra un servidor de prueba que falla intermitentemente; revisado y mergeado (PR #8) |
 | T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | ✅ cerrado — tenants/agentes/mandatos cableados contra `@agentpay/directory`, aislamiento entre partners y revocación verificados con `curl` real contra Postgres (`C-49` a `C-54`) |
-| T51 | Claude | T49 mergeado; `C-49` | 🔴 Alto — toca el flujo de firma de wallet (`C-17`) | `packages/directory/src/*` (tabla nueva), `apps/web/src/*` (rutas + página hospedada) | Un `curl` que abre un `consent_session`, un principal lo firma en la página hospedada reutilizando `/api/session/wallet-consent`/`wallet-anchor`, y el `consent_session` pasa a `completed` con su `mandate_id` |
-| T50 | Codex | T45, T49 y T51 mergeados | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo — su propio "listo cuando" (crear tenant, abrir consentimiento, consultar mandato) necesita T51, no solo T49 |
+| T51 | Claude | T49 mergeado; `C-49` | 🔴 Alto — toca el flujo de firma de wallet (`C-17`) | `packages/directory/src/*` (tabla nueva), `packages/partner-api/src/*`, `apps/web/src/*` (rutas, sin la página) | ✅ cerrado — backend completo, verificado de punta a punta contra Postgres y testnet reales con un script que firma como Freighter; `payTo` propuesto llegó exacto hasta el Mandato anclado (`C-55` a `C-59`) |
+| T52 | Codex | T51 mergeado | Bajo — HTML/JS que llama a endpoints ya estables, no decide nada | `apps/web/public/consent.html` (nuevo) (prohibido: cualquier `.ts` de `apps/web/src`) | Un principal conecta Freighter, ve el `grant` de `GET /api/consent/{id}`, y completa el flujo de firma en el navegador — mismo criterio que la vista de historial de solo lectura de F3 |
+| T50 | Codex | T45, T49 y T51 mergeados (T52 no es requisito — el `curl` no necesita la página) | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | Un partner ficticio integrado usando solo la guía, sin tocar el repo — su propio "listo cuando" (crear tenant, abrir consentimiento, consultar mandato) ya se puede cumplir con `curl` desde que T51 cerró |
 
 ---
 

@@ -1512,3 +1512,120 @@ arriba — y porque habría dejado sin resolver qué hacer con el `200` que
 sí se cachea, es un resultado válido de un intento completo).
 
 ---
+
+### C-55 · `directory_consent_sessions`: `proposed_grant` en vez de `grant`, y dos ventanas de tiempo distintas · `Vigente`
+**Fecha:** 2026-09-10 (T51)
+
+Dos decisiones de la tabla nueva, encontradas escribiendo el SQL, no en el
+diseño:
+
+1. **La columna se llama `proposed_grant`, no `grant`.** `GRANT` es
+   palabra reservada de SQL (el propio comando de privilegios de
+   Postgres) — usarla sin comillas rompe cada sentencia que la toque.
+   Ninguna herramienta ni test la hubiera atrapado hasta ejecutarse contra
+   Postgres real. El nombre del campo en TypeScript sigue siendo `grant`
+   (el mapeo de columnas ya traduce `snake_case` a `camelCase` en cada
+   entidad de este paquete) — el cambio queda contenido en el SQL.
+2. **`expires_at` (la ventana de la invitación) es un campo aparte de
+   `valid_until` (la ventana del Mandato que resultaría de firmarla).**
+   Confundirlos habría atado cuánto tiempo tiene Vinny para decidir si
+   firma a cuánto tiempo dura el Mandato una vez firmado — dos cosas que
+   un partner puede querer configurar de forma completamente
+   independiente (una invitación de una hora para un Mandato de tres
+   meses es el caso normal, no una excepción).
+
+---
+
+### C-56 · `session-documents.ts` gana un `grant` opcional, sin tocar el único call site que ya existía · `Vigente`
+**Fecha:** 2026-09-10 (T51)
+
+`buildSessionDocuments` (T36, protege el invariante `C-17`) pasaba
+siempre `scope.scope` como el `grant` del Mandato — nunca soportó
+`payTo`, aunque `@agentpay/mandate` lo tiene desde `M-14`. Un
+`consent_session` necesita que el partner pueda proponer `payTo`.
+
+**La corrección.** `SessionDocumentsParams` gana `grant?: MandateGrant`,
+que por defecto es `scope.scope` — exactamente el valor que el único call
+site de antes de T51 (`server.ts`'s `startSession`) ya usaba. Ese call
+site no cambió una línea, y los seis tests que fijan el invariante
+`C-17` tampoco. La credencial sigue recibiendo solo `scope.scope`
+—`credentialSubject.scope` no puede expresar `payTo`, no es una
+limitación nueva de T51— y el Mandato recibe el `grant` explícito cuando
+se pasa uno.
+
+**Alternativa descartada:** una función nueva y paralela
+(`buildConsentSessionDocuments`) en vez de extender la existente.
+Descartada porque habría duplicado exactamente la lógica que protege
+`C-17` —derivar el `principal` una sola vez y usarlo en ambos
+documentos— en dos lugares que tendrían que mantenerse de acuerdo para
+siempre.
+
+---
+
+### C-57 · El flujo hospedado de consentimiento se autentica por el id de la invitación, sin API key · `Vigente`
+**Fecha:** 2026-09-10 (T51)
+
+`GET /api/consent/{id}` y las tres rutas de firma
+(`wallet-verify`/`start`/`wallet-consent`/`wallet-anchor`) no piden
+`Authorization`. Quien las llama es el **principal** (Vinny), no el
+partner — no tiene, ni debería tener, una API key de `/v1`. El id del
+`consent_session` (un ULID de 128 bits, la misma familia de ids que
+`@agentpay/directory` ya usa para todo) es la capacidad que autoriza:
+mismo modelo de confianza que un link de sobre de DocuSign, o el link de
+recuperación de contraseña de cualquier producto — quien tiene el link
+puede actuar, y el link es indistinguible de un ULID al azar. `apps/web`
+nunca lista `consent_sessions`, así que no hay forma de enumerarlos.
+
+**Riesgo real, y por qué se acepta.** Si el link se filtra (queda en un
+log de un proxy, en un historial de navegador compartido) antes de que
+Vinny lo use, quien lo tenga puede firmar el Mandato en su lugar. Esto es
+exactamente el riesgo que cualquier magic link tiene, no uno nuevo de
+este diseño — mitigado por la ventana corta de `expires_at` (1 hora,
+`C-55`), no eliminado. Un `consent_session` ya completado se rechaza de
+nuevo (`ConsentSessionAlreadyCompleted`), así que un link reusado después
+de firmar no puede firmar una segunda vez.
+
+**Alternativa descartada:** exigir que el partner también pase su API key
+en la página hospedada (vía query param u otro mecanismo). Descartada
+porque expondría el secreto de `/v1` en una URL que termina en el
+navegador de un tercero — el propio principal, no un sistema del
+partner — precisamente el tipo de exposición que `PLATAFORMA-PARTNERS.md`
+§2.7 evita para las API keys en general.
+
+---
+
+### C-58 · Un Mandato de `consent_session` nunca encadena `supersedesId` · `Vigente`
+**Fecha:** 2026-09-10 (T51)
+
+El flujo de wallet-connect (T35/T39) sí encadena `supersedesId` porque
+ahí "renovar sin crear un agente nuevo" es un requisito explícito del
+producto (`G7`) — cada tenant tiene, en cualquier momento, como mucho un
+Mandato activo, y volver a conectar debe encontrar ese Mandato, no
+apilar uno nuevo. Un `consent_session` es distinto: un partner puede
+legítimamente pedir varios consentimientos independientes para el mismo
+tenant a lo largo del tiempo (un `perDay` para gastos chicos, otro
+consentimiento aparte para una compra puntual más grande), y no hay
+ninguna regla de producto que diga que el segundo reemplaza al primero.
+T51 no impone esa relación — cada Mandato de `consent_session` es
+independiente. Si un producto real necesita "esto reemplaza el anterior",
+es una decisión de negocio para cuando exista un caso real, no algo para
+adivinar acá.
+
+---
+
+### C-59 · `consent.html`, la página que consume estos endpoints, es un hito aparte (T52) y delegable · `Vigente`
+**Fecha:** 2026-09-10 (T51)
+
+T51 deja `/consent/{id}` respondiendo `404` (no hay archivo que
+`serveStatic` pueda servir todavía) — a propósito. Todo el backend se
+verificó de punta a punta contra Postgres y testnet reales con un script
+descartable que firma como lo haría Freighter (misma técnica que
+T39/T40), sin necesitar ningún navegador. La página que un humano
+realmente ve —conectar wallet, mostrar el `grant`, disparar las mismas
+llamadas que el script ya probó— no decide nada: es HTML/JS que llama a
+endpoints ya estables, la misma descripción que ya calificó como
+delegable a Codex la vista de historial de solo lectura de F3
+(`PLATAFORMA-PARTNERS.md` § F3). Construirla ahora, en el mismo hito, sólo
+habría hecho el PR más grande sin agregar riesgo real a revisar.
+
+---

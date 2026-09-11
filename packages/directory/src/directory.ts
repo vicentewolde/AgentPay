@@ -25,6 +25,7 @@ import { Pool } from "pg";
 import {
   agentInstanceSchema,
   apiKeySchema,
+  consentSessionRecordSchema,
   credentialRecordSchema,
   idempotencyRecordSchema,
   mandateRecordSchema,
@@ -35,6 +36,7 @@ import {
   type AgentInstance,
   type AgentStatus,
   type ApiKey,
+  type ConsentSessionRecord,
   type CredentialRecord,
   type IdempotencyRecord,
   type MandateRecord,
@@ -175,6 +177,15 @@ export interface IssuedApiKey {
   readonly secret: string;
 }
 
+export interface CreateConsentSessionInput {
+  readonly tenantId: string;
+  readonly grant: Readonly<Record<string, unknown>>;
+  readonly validFrom: Date;
+  readonly validUntil: Date;
+  /** The invitation link's own window — distinct from `validUntil`, the resulting Mandate's window. */
+  readonly expiresAt: Date;
+}
+
 export interface RecordIdempotentResponseInput {
   readonly partnerId: string;
   readonly key: string;
@@ -304,6 +315,20 @@ function toIdempotencyRecord(row: Record<string, unknown>): IdempotencyRecord {
   });
 }
 
+function toConsentSession(row: Record<string, unknown>): ConsentSessionRecord {
+  return consentSessionRecordSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    status: row.status,
+    grant: row.proposed_grant,
+    validFrom: row.valid_from,
+    validUntil: row.valid_until,
+    mandateId: row.mandate_id,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  });
+}
+
 // ---- The port -------------------------------------------------------------
 
 export interface Directory {
@@ -363,6 +388,11 @@ export interface Directory {
   /** `/v1`'s idempotency store — `resolveIdempotency` (`@agentpay/partner-api`) reads through this. */
   findIdempotentResponse(partnerId: string, key: string): Promise<IdempotencyRecord | undefined>;
   recordIdempotentResponse(input: RecordIdempotentResponseInput): Promise<IdempotencyRecord>;
+
+  createConsentSession(input: CreateConsentSessionInput): Promise<ConsentSessionRecord>;
+  findConsentSession(id: string): Promise<ConsentSessionRecord | undefined>;
+  /** Sets `status = 'completed'` and the Mandate it produced. Refuses (`ConsentSessionAlreadyCompleted`) if already completed — a session signs once. */
+  completeConsentSession(id: string, mandateId: string): Promise<ConsentSessionRecord>;
 
   close(): Promise<void>;
 }
@@ -803,6 +833,48 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
         toIdempotencyRecord,
       );
       if (row === undefined) throw wrap("recording an idempotent response returned no row", undefined, { partnerId: input.partnerId });
+      return row;
+    },
+
+    // ---- consent sessions (T51) --------------------------------------------
+    async createConsentSession(input) {
+      const id = newId("consentSession");
+      const row = await one(
+        `insert into directory_consent_sessions
+           (id, tenant_id, status, proposed_grant, valid_from, valid_until, expires_at)
+         values ($1, $2, 'pending', $3, $4, $5, $6) returning *`,
+        [id, input.tenantId, JSON.stringify(input.grant), input.validFrom, input.validUntil, input.expiresAt],
+        toConsentSession,
+      );
+      if (row === undefined) throw wrap("inserting a consent session returned no row", undefined, { consentSessionId: id });
+      return row;
+    },
+
+    findConsentSession(id) {
+      return one("select * from directory_consent_sessions where id = $1", [id], toConsentSession);
+    },
+
+    async completeConsentSession(id, mandateId) {
+      const row = await one(
+        `update directory_consent_sessions
+         set status = 'completed', mandate_id = $2
+         where id = $1 and status = 'pending'
+         returning *`,
+        [id, mandateId],
+        toConsentSession,
+      );
+      if (row === undefined) {
+        const existing = await one("select * from directory_consent_sessions where id = $1", [id], toConsentSession);
+        if (existing === undefined) {
+          throw new AgentPassError("ConsentSessionNotFound", "no consent session with that id", { details: { consentSessionId: id } });
+        }
+        // Reaching here with a real row means the `where status = 'pending'`
+        // guard is what refused the update — it was already completed
+        // (racing to sign twice, or replaying an old link), not vanished.
+        throw new AgentPassError("ConsentSessionAlreadyCompleted", "this consent session was already completed", {
+          details: { consentSessionId: id },
+        });
+      }
       return row;
     },
 

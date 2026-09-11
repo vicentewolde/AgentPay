@@ -62,10 +62,12 @@ export {
 } from "./resources/mandates.js";
 
 export {
+  computeConsentSessionStatus,
   consentSessionIdSchema,
   consentSessionResourceSchema,
   consentSessionStatusSchema,
   createConsentSessionRequestSchema,
+  toConsentSessionResource,
   type ConsentSessionResource,
   type ConsentSessionStatus,
   type CreateConsentSessionRequest,

@@ -28,6 +28,7 @@ export const bindingIdSchema = idSchema("binding");
 export const agentIdSchema = idSchema("agent");
 export const credentialIdSchema = idSchema("credential");
 export const mandateIdSchema = idSchema("mandate");
+export const consentSessionIdSchema = idSchema("consentSession");
 
 export const tenantIdSchema = z
   .string()
@@ -53,6 +54,17 @@ export const onchainStateSchema = z.enum(["derived", "funded"]);
 
 /** How a mandate was signed — the two paths T35 left in place. */
 export const mandateSignatureKindSchema = z.enum(["wallet-sep53", "platform-jws"]);
+
+/**
+ * Same four values `@agentpay/partner-api`'s `consentSessionStatusSchema`
+ * freezes (T45) — not imported, the dependency runs the other way. This
+ * package only ever writes `pending` and `completed`; `expired` is computed
+ * at read time from `expires_at` (`computeConsentSessionStatus`, T51), the
+ * same way a mandate's status is never stored. `cancelled` is reserved,
+ * unused until something needs it — same posture as an `ApiScope` nobody can
+ * be granted yet.
+ */
+export const consentSessionStatusSchema = z.enum(["pending", "completed", "expired", "cancelled"]);
 
 export const partnerSchema = z.strictObject({
   id: partnerIdSchema,
@@ -178,6 +190,34 @@ export const mandateRecordSchema = z.strictObject({
 });
 
 /**
+ * A partner's hosted-consent invitation (T51): a proposed grant, waiting for
+ * a principal to sign it into a real Mandate. `expiresAt` is the
+ * invitation's own window — separate from `validUntil`, the window the
+ * *resulting Mandate* would carry once signed. `grant` is `json`, same
+ * reasoning as `mandateRecordSchema.document` (`C-5`): nothing hashes this
+ * value, but nothing benefits from Postgres reordering it either, since
+ * `GET /v1/consent_sessions/{id}` hands it back exactly as stored.
+ */
+export const consentSessionRecordSchema = z.strictObject({
+  id: consentSessionIdSchema,
+  tenantId: tenantIdSchema,
+  status: consentSessionStatusSchema,
+  /**
+   * The `MandateGrant` the partner proposed. Typed as an object, not
+   * re-validated against `@agentpay/mandate`'s schema, for the same reason
+   * `mandateRecordSchema.document` is: this package stores documents, it
+   * does not judge them.
+   */
+  grant: z.record(z.string(), z.unknown()),
+  validFrom: z.date(),
+  validUntil: z.date(),
+  /** Set once a principal signs — the Mandate this consent session produced. */
+  mandateId: mandateIdSchema.nullable(),
+  createdAt: z.date(),
+  expiresAt: z.date(),
+});
+
+/**
  * A cached `/v1` response, keyed by `(partnerId, key)` — the storage side of
  * `@agentpay/partner-api`'s `resolveIdempotency`. Field names match that
  * package's own `IdempotencyRecord` exactly (not imported — the dependency
@@ -208,3 +248,5 @@ export type AgentStatus = z.infer<typeof agentStatusSchema>;
 export type OnchainState = z.infer<typeof onchainStateSchema>;
 export type MandateSignatureKind = z.infer<typeof mandateSignatureKindSchema>;
 export type IdempotencyRecord = z.infer<typeof idempotencyRecordSchema>;
+export type ConsentSessionRecord = z.infer<typeof consentSessionRecordSchema>;
+export type ConsentSessionStatus = z.infer<typeof consentSessionStatusSchema>;
