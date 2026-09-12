@@ -22,6 +22,7 @@ const server = createRealOpsServer({
   store,
   targets: TARGETS,
   signalDeskUrl: "https://signaldesk.example",
+  agentpeyBaseUrl: "https://agentpey.example",
   baseUrl: "http://127.0.0.1",
   delivery: { mode: "email", send: async (email, link) => void sent.push({ email, link }) },
   secureCookies: false,

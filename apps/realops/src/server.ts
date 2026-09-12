@@ -126,6 +126,7 @@ const agentpey =
 const server = createRealOpsServer({
   store,
   agentpey,
+  agentpeyBaseUrl,
   targets,
   signalDeskUrl,
   baseUrl,

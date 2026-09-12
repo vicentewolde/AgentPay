@@ -256,7 +256,12 @@ const ENFORCER_COPY: Readonly<Record<ExplainedControl["enforcedBy"], { readonly 
  * the person is about to sign that exact object and anything else would be a
  * paraphrase of what they authorised.
  */
-export function reviewPage(agent: AgentConfig, grant: ProposedGrant, controls: readonly ExplainedControl[]): string {
+export function reviewPage(
+  agent: AgentConfig,
+  grant: ProposedGrant,
+  controls: readonly ExplainedControl[],
+  revokeBaseUrl: string,
+): string {
   return layout({
     title: "Revisar el permiso",
     signedIn: true,
@@ -289,17 +294,21 @@ export function reviewPage(agent: AgentConfig, grant: ProposedGrant, controls: r
   <div class="card">
     <p><strong>La firma ocurre en el sitio de AgentPey, no acá.</strong> Si alguna vez ves una pantalla
     pidiéndote firmar un Mandato en el dominio de RealOps, no es nuestra.</p>
-    ${signState(agent)}
+    ${signState(agent, revokeBaseUrl)}
   </div>
 `,
   });
 }
 
 /** What the review card offers, given how far this agent has got. */
-function signState(agent: AgentConfig): string {
+function signState(agent: AgentConfig, revokeBaseUrl: string): string {
   if (agent.mandateId !== null) {
     return `<p>✓ Firmado. Mandato <code>${escape(agent.mandateId)}</code>.</p>
-    <p><a href="/servicios">Ir a Mis servicios</a></p>`;
+    <p><a href="/servicios">Ir a Mis servicios</a></p>
+    <p style="margin-top:1.25rem"><a class="button secondary" href="${escape(revokeBaseUrl)}/revocar/${escape(agent.mandateId)}?volver=/agentes/${escape(agent.id)}">Revocar este permiso</a></p>
+    <p style="color:var(--muted);font-size:.88rem">Revocar corta la autorización <strong>desde afuera del
+    agente</strong>: no importa qué le digan después, sin Mandato válido no puede pagar nada. Se hace en el
+    sitio de AgentPey y lo firmás con tu wallet — RealOps no puede revocar por vos, ni aunque quisiera.</p>`;
   }
   if (agent.consentSessionId !== null) {
     return `<p>Ya empezaste a firmar este permiso y no terminaste, o la invitación venció.</p>

@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentPey — revocar permiso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #fbfaf8;
+    --paper-2: #f2f0ea;
+    --ink: #0f1211;
+    --ink-2: #434946;
+    --ink-3: #707875;
+    --rule: #e3e0d9;
+    --accent: #0a7a56;
+    --accent-wash: #e9f3ee;
+    --danger: #b3261e;
+    --danger-wash: #fbeceb;
+    --serif: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { width: 100%; max-width: 760px; margin: 0 auto; padding: 0 24px 72px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; padding: 28px 0 0; gap: 16px; }
+  .mark { color: var(--ink); text-decoration: none; font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
+  .network { color: var(--ink-3); font-size: 13px; }
+
+  .hero { padding: clamp(30px, 6vw, 54px) 0 32px; }
+  .eyebrow { margin: 0; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+  h1 { margin: 12px 0 0; font-family: var(--serif); font-size: clamp(2.25rem, 7vw, 3.25rem); font-weight: 400; letter-spacing: -0.02em; line-height: 1.05; }
+  .intro { max-width: 60ch; margin: 16px 0 0; color: var(--ink-2); }
+  .session-id { margin: 16px 0 0; color: var(--ink-3); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+  .panel { border-top: 1px solid var(--rule); padding: 28px 0; }
+  .panel:last-child { border-bottom: 1px solid var(--rule); }
+  .panel-kicker { color: var(--ink-3); font-family: var(--mono); font-size: 12px; letter-spacing: 0.04em; }
+  h2 { margin: 6px 0 8px; font-family: var(--serif); font-size: 1.75rem; font-weight: 400; letter-spacing: -0.015em; line-height: 1.15; }
+  .lead { margin: 0 0 18px; color: var(--ink-2); font-size: 14.5px; }
+
+  .grant { margin: 0; }
+  .grant-row { display: grid; grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr); gap: 16px; padding: 15px 0; border-top: 1px dashed var(--rule); }
+  .grant-row:first-child { border-top: 0; }
+  .grant dt { color: var(--ink-3); font-size: 14px; }
+  .grant dd { margin: 0; min-width: 0; }
+  .values { display: flex; flex-wrap: wrap; gap: 7px; margin: 0; padding: 0; list-style: none; }
+  .values li { border: 1px solid var(--rule); border-radius: 5px; background: var(--paper); color: var(--ink-2); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; padding: 4px 7px; }
+  .limits { display: grid; gap: 7px; }
+  .limit { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; border-bottom: 1px dashed var(--rule); padding-bottom: 7px; color: var(--ink-2); font-size: 14px; }
+  .limit:last-child { border-bottom: 0; padding-bottom: 0; }
+  .limit b { color: var(--ink); font-family: var(--mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; text-align: right; }
+  .time-note { margin: 18px 0 0; color: var(--ink-3); font-size: 13px; }
+  .time-note strong { color: var(--ink-2); font-weight: 500; }
+
+  .btn { appearance: none; border: 1px solid var(--ink); border-radius: 7px; background: var(--ink); color: var(--paper); cursor: pointer; font-family: var(--sans); font-size: 14px; font-weight: 500; padding: 11px 18px; transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease; }
+  .btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); transform: translateY(-1px); }
+  .btn:disabled { background: var(--rule); border-color: var(--rule); color: var(--ink-3); cursor: not-allowed; }
+  .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .btn.secondary { background: transparent; border-color: var(--rule); color: var(--ink); }
+  .btn.secondary:hover:not(:disabled) { background: var(--paper-2); border-color: var(--ink-3); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .status { min-height: 1.5em; margin: 14px 0 0; color: var(--ink-2); font-size: 14px; }
+  .status.ok { color: var(--accent); }
+  .status.err { color: var(--danger); }
+  .notice { border-left: 3px solid var(--accent); background: var(--accent-wash); color: var(--ink-2); margin: 0; padding: 13px 15px; font-size: 14px; }
+  .notice.err { border-color: var(--danger); background: var(--danger-wash); color: var(--danger); }
+  .wallet-address { margin: 14px 0 0; color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+  .result { margin: 0; }
+  .result-row { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 16px; border-top: 1px dashed var(--rule); padding: 10px 0; font-size: 13px; }
+  .result-row:first-child { border-top: 0; }
+  .result dt { color: var(--ink-3); }
+  .result dd { margin: 0; color: var(--ink); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+
+  @media (max-width: 520px) {
+    .wrap { padding: 0 20px 56px; }
+    .top { align-items: flex-start; flex-direction: column; gap: 3px; }
+    .grant-row, .result-row { grid-template-columns: 1fr; gap: 5px; }
+  }
+</style>
+</head>
+<body>
+<script src="https://unpkg.com/@stellar/freighter-api@6.0.1/build/index.min.js"></script>
+
+<main class="wrap">
+  <header class="top">
+    <p class="eyebrow">AgentPey</p>
+    <h1 class="hero">Revocar un permiso</h1>
+    <p class="intro">Revocar corta la autorizaci&oacute;n desde afuera del agente: no importa qu&eacute; le digan
+    al agente despu&eacute;s, sin Mandato v&aacute;lido no puede pagar nada.</p>
+    <p class="network">Stellar Testnet &middot; <span id="session-id" class="session-id"></span></p>
+  </header>
+
+  <p id="page-notice" class="notice" hidden></p>
+
+  <section id="state-panel" class="panel" hidden>
+    <p class="panel-kicker">01 &mdash; Qu&eacute; vas a revocar</p>
+    <h2 id="state-title">Permiso</h2>
+    <p class="lead" id="state-lead"></p>
+    <p class="time-note"><strong>Vence:</strong> <span id="valid-until"></span></p>
+  </section>
+
+  <section id="wallet-panel" class="panel" hidden>
+    <p class="panel-kicker">02 &mdash; Verific&aacute; tu wallet</p>
+    <h2>Conect&aacute; la wallet que firm&oacute; este permiso</h2>
+    <p class="lead">Solo esa wallet puede revocarlo. No es una regla de esta p&aacute;gina: el contrato en
+    Stellar rechaza una revocaci&oacute;n que no venga firmada por ella.</p>
+    <div class="actions"><button id="wallet-btn" class="btn secondary" type="button">Conectar wallet</button></div>
+    <p id="wallet-status" class="status" role="status"></p>
+    <p id="wallet-address" class="wallet-address" hidden></p>
+  </section>
+
+  <section id="detail-panel" class="panel" hidden>
+    <p class="panel-kicker">03 &mdash; Lo que este permiso autoriza hoy</p>
+    <h2>Antes de cortarlo</h2>
+    <dl id="grant" class="grant"></dl>
+  </section>
+
+  <section id="revoke-panel" class="panel" hidden>
+    <p class="panel-kicker">04 &mdash; Firm&aacute; la revocaci&oacute;n</p>
+    <h2>Revocar</h2>
+    <p class="lead">Freighter te va a pedir una aprobaci&oacute;n para escribir la revocaci&oacute;n en Stellar
+    Testnet. Despu&eacute;s de esto, el agente deja de poder pagar.</p>
+    <div class="actions"><button id="revoke-btn" class="btn" type="button">Revocar el permiso</button></div>
+    <p id="revoke-status" class="status" role="status"></p>
+  </section>
+
+  <section id="done-panel" class="panel" hidden>
+    <p class="panel-kicker">Completado</p>
+    <h2>Permiso revocado</h2>
+    <p class="notice">El Mandato qued&oacute; revocado en Stellar Testnet. El agente ya no puede pagar con &eacute;l.</p>
+    <dl id="done-facts" class="result"></dl>
+    <p id="return-row" hidden><a id="return-link" class="btn secondary">Volver</a></p>
+  </section>
+</main>
+
+<script>
+var mandateId = "";
+var apiPath = "";
+var walletAddress = "";
+var prepared = null;
+
+async function api(path, options) {
+  const res = await fetch(path, Object.assign({ headers: { "content-type": "application/json" } }, options || {}));
+  return { status: res.status, body: await res.json() };
+}
+
+/** Freighter returns a signature either as base64 already, or as bytes. */
+function toBase64Signature(signedMessage) {
+  if (typeof signedMessage === "string") return signedMessage;
+  var bytes = new Uint8Array(signedMessage);
+  var binary = "";
+  for (var i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function errorMessage(error, fallback) {
+  return error && error.body && error.body.message ? error.body.message : error && error.message ? error.message : fallback;
+}
+
+function setPageNotice(kind, text) {
+  var el = document.getElementById("page-notice");
+  el.className = "notice " + (kind === "error" ? "err" : kind === "ok" ? "ok" : "");
+  el.textContent = text;
+  el.hidden = false;
+}
+
+function setStatus(id, kind, text) {
+  var el = document.getElementById(id);
+  el.className = "status " + (kind === "error" ? "err" : kind === "ok" ? "ok" : "");
+  el.textContent = text;
+}
+
+function formatDate(value) {
+  var date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
+}
+
+function row(label, value) {
+  var wrapper = document.createElement("div");
+  wrapper.className = "grant-row";
+  var name = document.createElement("dt");
+  var detail = document.createElement("dd");
+  name.textContent = label;
+  detail.textContent = value;
+  wrapper.append(name, detail);
+  return wrapper;
+}
+
+/**
+ * What the permission still allows, shown only after the wallet proved itself.
+ * Before that the page knows nothing but whether it is live.
+ */
+function renderGrant(mandate) {
+  var grant = mandate.grant || {};
+  var el = document.getElementById("grant");
+  el.innerHTML = "";
+  if (Array.isArray(grant.venues)) el.append(row("Comercios", grant.venues.join(", ")));
+  if (Array.isArray(grant.products)) el.append(row("Productos", grant.products.join(", ")));
+  if (Array.isArray(grant.assets)) el.append(row("Activos", grant.assets.join(", ")));
+  if (grant.limits) {
+    el.append(row("Por compra", grant.limits.perTx + " " + (grant.limits.currency || "")));
+    el.append(row("Por dia", grant.limits.perDay + " " + (grant.limits.currency || "")));
+  }
+  el.append(row("Hash del Mandato", mandate.mandateHash));
+  document.getElementById("detail-panel").hidden = false;
+}
+
+async function connectWallet() {
+  var button = document.getElementById("wallet-btn");
+  if (typeof freighterApi === "undefined") {
+    setStatus("wallet-status", "error", "No encontramos Freighter. Instalalo y volve a cargar la pagina.");
+    return;
+  }
+  button.disabled = true;
+  setStatus("wallet-status", "", "Esperando a Freighter...");
+
+  try {
+    var presence = await freighterApi.isConnected();
+    if (presence && presence.error) throw new Error(presence.error);
+
+    var access = await freighterApi.requestAccess();
+    if (access && access.error) throw new Error(access.error);
+    var address = access.address || access;
+
+    var challenge = await api("/api/wallet/challenge", { method: "POST" });
+    if (!challenge.body.ok) throw { body: challenge.body };
+
+    var signed = await freighterApi.signMessage(challenge.body.message, { address: address });
+    if (signed && signed.error) throw new Error(signed.error);
+
+    // One call: proving the wallet and preparing the transaction happen
+    // together, so no state has to be kept between them and the challenge is
+    // consumed exactly once.
+    var result = await api(apiPath + "/prepare", {
+      method: "POST",
+      body: JSON.stringify({
+        address: address,
+        nonce: challenge.body.nonce,
+        signature: toBase64Signature(signed.signedMessage || signed),
+      }),
+    });
+    if (!result.body.ok) throw { body: result.body };
+
+    walletAddress = address;
+    prepared = result.body;
+    var addressEl = document.getElementById("wallet-address");
+    addressEl.textContent = address;
+    addressEl.hidden = false;
+    setStatus("wallet-status", "ok", "Wallet verificada.");
+    renderGrant(result.body.mandate);
+    document.getElementById("revoke-panel").hidden = false;
+  } catch (error) {
+    setStatus("wallet-status", "error", errorMessage(error, "No se pudo verificar la wallet."));
+    button.disabled = false;
+  }
+}
+
+async function revoke() {
+  var button = document.getElementById("revoke-btn");
+  button.disabled = true;
+  setStatus("revoke-status", "", "Esperando la firma en Freighter...");
+
+  try {
+    var signed = await freighterApi.signTransaction(prepared.xdr, {
+      address: walletAddress,
+      networkPassphrase: "Test SDF Network ; September 2015",
+    });
+    if (signed && signed.error) throw new Error(signed.error);
+
+    setStatus("revoke-status", "", "Enviando la revocacion a la red...");
+    var result = await api(apiPath + "/submit", {
+      method: "POST",
+      body: JSON.stringify({ requestId: prepared.requestId, signedXdr: signed.signedTxXdr || signed }),
+    });
+    if (!result.body.ok) throw { body: result.body };
+
+    var facts = document.getElementById("done-facts");
+    facts.innerHTML = "";
+    facts.append(row("Mandate hash", result.body.mandateHash));
+    facts.append(row("Transaccion", result.body.revokeTx));
+
+    document.getElementById("wallet-panel").hidden = true;
+    document.getElementById("detail-panel").hidden = true;
+    document.getElementById("revoke-panel").hidden = true;
+    document.getElementById("state-panel").hidden = true;
+    document.getElementById("done-panel").hidden = false;
+
+    var back = new URLSearchParams(location.search).get("volver");
+    // Only a same-origin-relative path is honoured. An absolute URL from the
+    // query string is exactly the open redirect the return allowlist exists to
+    // prevent (T81), and this page will not reintroduce it through a back link.
+    if (back && back.charAt(0) === "/" && back.charAt(1) !== "/") {
+      var link = document.getElementById("return-link");
+      link.href = back;
+      document.getElementById("return-row").hidden = false;
+    }
+  } catch (error) {
+    setStatus("revoke-status", "error", errorMessage(error, "No se pudo revocar."));
+    button.disabled = false;
+  }
+}
+
+(async function start() {
+  try {
+    var part = location.pathname.split("/").filter(Boolean).pop();
+    if (!part) throw new Error("Falta el identificador del permiso.");
+    mandateId = decodeURIComponent(part);
+    apiPath = "/api/revoke/" + encodeURIComponent(mandateId);
+    document.getElementById("session-id").textContent = mandateId;
+
+    var state = await api(apiPath);
+    if (!state.body.ok) throw { body: state.body };
+
+    document.getElementById("valid-until").textContent = formatDate(state.body.validUntil);
+    document.getElementById("state-panel").hidden = false;
+
+    if (state.body.status === "revoked") {
+      document.getElementById("state-lead").textContent = "Este permiso ya estaba revocado. No hay nada que hacer.";
+      setPageNotice("ok", "Ya estaba revocado.");
+      return;
+    }
+    if (state.body.status === "expired") {
+      document.getElementById("state-lead").textContent =
+        "Este permiso ya vencio, asi que no autoriza nada. Revocarlo no cambiaria nada.";
+      setPageNotice("", "Vencido.");
+      return;
+    }
+
+    document.getElementById("state-lead").textContent =
+      "Este permiso esta activo. Para ver que autoriza y poder revocarlo, conecta la wallet que lo firmo.";
+    document.getElementById("wallet-panel").hidden = false;
+  } catch (error) {
+    setPageNotice("error", errorMessage(error, "No se pudo cargar el permiso."));
+  }
+})();
+
+document.getElementById("wallet-btn").addEventListener("click", connectWallet);
+document.getElementById("revoke-btn").addEventListener("click", revoke);
+</script>
+</body>
+</html>

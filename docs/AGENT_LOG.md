@@ -4781,3 +4781,68 @@ suite de los diez casos. Del lado del usuario sigue todo lo anotado en la
 entrada anterior (crear el partner de RealOps, su key en Render, **registrar su
 origen de retorno**, comprar `agentpey.com`, instancia Starter de
 `agentpey-web`).
+
+---
+
+## 2026-09-12 (20) — main / cc/t83-hosted-revocation
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t82-purchase-flow` a `main` (fast-forward) con
+confirmación del usuario. Misma sesión, **T83**: la revocación hospedada.
+Sin delegar nada a Codex.
+
+**Por qué es una página y no una ruta de `/v1`:** `mandates:revoke` está fuera
+de la lista de scopes desde T45 porque revocar es un acto firmado por la wallet
+que el principal hace él mismo (`C-100`). Eso se respetó, así que revocar
+necesitaba su propia superficie: `GET /revocar/{mandateId}` más tres rutas de
+API.
+
+**Dónde vive la autoridad, y dónde no** (`C-101`): el contrato del registry
+rechaza una transacción de revocación que no venga firmada por la dirección que
+ancló el Mandato. `apps/web/src/revocation.ts` **no** es el enforcement — es un
+rechazo mejor: comprueba la wallet contra el principal guardado antes de
+preparar nada, así alguien en la cuenta equivocada lee una frase en castellano
+en vez de un error de Soroban.
+
+Cuatro decisiones de diseño que valen más que el cableado:
+
+1. **Divulgación mínima antes de la prueba.** Un id de Mandato se comparte con
+   el partner, así que es un secreto más débil que un id de consent session.
+   Antes de la prueba la página sabe solo si está activo y hasta cuándo; el
+   grant aparece después. Prueba que lo fija: el JSON público no contiene ni el
+   monto ni el nombre del comercio.
+2. **"Wallet desconocida" y "wallet equivocada" dan el mismo código**, a
+   propósito: distinguirlas le diría a un extraño si una dirección es conocida
+   por el sistema.
+3. **El desafío se consume antes de mirar la firma** — uno que sobreviviera a
+   un chequeo fallido podría reusarse contra otro Mandato. Hay prueba.
+4. **Prueba y preparación en una sola llamada**, así no hay estado entre pasos;
+   y el submit no vuelve a pedir prueba porque lo que se envía ya está firmado
+   por el principal y el contrato lo verifica.
+
+Además: un Mandato ya revocado o vencido se refuza en vez de reescribirse, y el
+`?volver=` de la página **solo acepta una ruta relativa** — una URL absoluta
+desde el query string sería justo la redirección abierta que `C-95` cerró.
+
+Verificado: **1225 tests** (eran 1210), `typecheck` y `build` limpios, y la
+página abierta en el navegador (renderiza y muestra su estado de error con un
+id inexistente; el 404 en consola es esa misma llamada, el caso bajo prueba).
+
+`revocar.html` reusa el bloque de estilos de `consent.html` en vez de uno nuevo,
+así las dos páginas que una persona ve en el dominio de AgentPey se ven como el
+mismo sitio.
+
+Documentación tocada: `DECISIONES.md` (`C-101`), `BITACORA.md` (hito T83 +
+tabla + estado actual), `evidencia/T83.md` (nuevo). Archivos de código:
+`apps/web/src/revocation.ts` (nuevo, + test), `apps/web/src/server.ts` (tres
+rutas + la estática), `apps/web/public/revocar.html` (nuevo),
+`apps/realops/src/{pages,app,server}.ts` y sus tests.
+
+Pendiente: **mergear `cc/t83-hosted-revocation`** (espera confirmación).
+Siguiente: el **despliegue público de los tres servicios** y la **suite de los
+diez casos de aceptación**. Con T83 cierra el caso 6 del lado del mecanismo;
+falta ejercitarlo de punta a punta contra testnet. Del lado del usuario sigue
+todo lo anotado: crear el partner de RealOps, su key en Render, **registrar su
+origen de retorno**, comprar `agentpey.com`, instancia Starter de
+`agentpey-web`.

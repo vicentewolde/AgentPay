@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T82 (la compra, de punta a punta) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T83 (revocación hospedada) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -121,7 +121,11 @@ instrucción, RealOps la interpreta —y de esa frase sale **solo** qué product
 cuántos; ni el comercio, ni el precio, ni la cuenta que cobra—, AgentPey
 decide, y "Mis servicios" muestra lo comprado con su recibo y su enlace al pago
 en Stellar, o el rechazo traducido a una frase que dice qué pasó y qué hacer
-ahora (T82, `C-97` a `C-100`).
+ahora (T82, `C-97` a `C-100`). Y el círculo cierra: se puede **revocar**, desde
+una página del dominio de AgentPey y firmando con la propia wallet. RealOps no
+puede revocar por nadie, ni aunque quisiera, y lo dice — la autoridad para
+cortar un permiso está en el contrato de Stellar, que rechaza una revocación
+que no venga firmada por quien lo firmó (T83, `C-101`).
 
 ### Progreso
 
@@ -173,6 +177,7 @@ ahora (T82, `C-97` a `C-100`).
 | T80 | F9: RealOps, la plataforma de agentes — enlace mágico, permisos, las cinco pantallas, y el grant literal con quién hace cumplir cada permiso | ✅ cerrado 2026-09-12 |
 | T81 | F9: lista blanca de URLs de retorno por partner (la última brecha de seguridad del plan) + RealOps ↔ `/v1` hasta el Mandato firmado | ✅ cerrado 2026-09-12 |
 | T82 | F9: la compra desde RealOps y "Mis servicios" — entregas con recibo y enlace al pago, y rechazos traducidos a castellano sin inventar | ✅ cerrado 2026-09-12 |
+| T83 | F9: revocación hospedada en `/revocar/{id}`, firmada con la wallet del principal — divulgación mínima antes de la prueba | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -3361,3 +3366,56 @@ instrucción elige el producto y nada más), `C-99` (traducir sin inventar),
 **Qué sigue.** **T83**: la página de revocación hospedada en AgentPey, firmada
 con la wallet. Después el despliegue público de los tres servicios y la suite
 de los diez casos de aceptación.
+
+---
+
+## T83 · La revocación, hospedada y firmada por quien corresponde — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras simples.**
+
+Se puede **cortar un permiso**. Desde la pantalla de tu agente en RealOps hay un
+botón que te lleva a una página de AgentPey, conectás la wallet con la que
+firmaste, y revocás. A partir de ahí el agente no puede pagar nada, no importa
+qué le digan.
+
+**RealOps no puede revocar por vos, ni aunque quisiera, y lo dice.** Esa es la
+parte que importa: la autorización se corta *desde afuera del agente* y desde
+afuera de la plataforma. Quien manda acá es el contrato en Stellar, que rechaza
+una revocación que no venga firmada por la misma wallet que firmó el permiso.
+Nada del código de esta página puede ablandar eso.
+
+**Antes de probar quién sos, la página casi no te dice nada.** Solo si el
+permiso sigue activo y hasta cuándo. Los límites, el comercio, el producto: eso
+aparece recién después de que la wallet demuestre que es la que firmó. El
+motivo es concreto: el identificador de un permiso se comparte con la
+plataforma que lo creó, así que es un secreto más débil que otros, y alguien
+que tenga uno suelto no tiene por qué enterarse de cuánto podía gastar nadie.
+
+**Y si te equivocaste de wallet, te lo dice así**, en vez de dejarte firmar una
+transacción que falla con un error incomprensible de la cadena.
+
+**Evidencia técnica.**
+
+- La autoridad es el contrato; `apps/web/src/revocation.ts` agrega un **mejor
+  rechazo**, no el enforcement (`C-101`).
+- **"Wallet desconocida" y "wallet equivocada" dan el mismo código** a
+  propósito: distinguirlas le diría a un extraño si una dirección es conocida
+  por el sistema.
+- **El desafío se consume antes de mirar la firma** — uno que sobreviviera a un
+  chequeo fallido podría reusarse contra otro Mandato.
+- **Probar la wallet y preparar la transacción es una sola llamada**, así no hay
+  estado que guardar entre pasos. El envío no vuelve a pedir prueba: lo que se
+  manda ya está firmado por el principal y el contrato lo verifica.
+- **Un permiso ya revocado o vencido se refuza**: reescribir cuesta un fee y no
+  cambia nada, y pedir una firma que no compra nada es hacer perder el tiempo.
+- **El link de vuelta solo acepta una ruta relativa**, para no reintroducir por
+  la puerta de atrás la redirección abierta que `C-95` cerró.
+- **1225 tests verdes** (eran 1210), `typecheck` y `build` limpios, y la página
+  abierta en el navegador.
+
+**Decisión nueva:** `C-101`.
+
+**Qué sigue.** El **despliegue público de los tres servicios** y la **suite de
+los diez casos de aceptación**. Con T83 cierra el caso 6 (mandato vencido,
+revocado y credencial revocada) del lado del mecanismo; falta ejercitarlo de
+punta a punta contra testnet.

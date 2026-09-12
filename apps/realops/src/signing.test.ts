@@ -76,6 +76,7 @@ const server = createRealOpsServer({
   agentpey: agentpey.client,
   targets: TARGETS,
   signalDeskUrl: "https://signaldesk.example",
+  agentpeyBaseUrl: "https://agentpey.example",
   baseUrl: "http://127.0.0.1",
   delivery: { mode: "email", send: async (email, link) => void sent.push({ email, link }) },
   secureCookies: false,
@@ -218,6 +219,23 @@ describe("coming back from signing", () => {
     expect(after).toContain('name="instruction"');
   });
 
+  /**
+   * RealOps cannot revoke, by design (`mandates:revoke` is not a scope). What
+   * it can do is send the person to the page where they revoke it themselves,
+   * with their own wallet, and say so.
+   */
+  it("links to AgentPey's revocation page, and is honest that it cannot revoke", async () => {
+    const cookie = await signIn("revocar@ejemplo.cl");
+    const agentId = await configureAgent(cookie);
+    await fetch(`${baseUrl}/agentes/${agentId}/firmar`, form({}, cookie));
+    await fetch(`${baseUrl}/agentes/${agentId}/volver`, { headers: { cookie }, redirect: "manual" });
+
+    const html = await (await fetch(`${baseUrl}/agentes/${agentId}`, { headers: { cookie } })).text();
+
+    expect(html).toContain("https://agentpey.example/revocar/mnd_01J7QW8VQEJPAXEPAYREALOPS09");
+    expect(html).toContain("RealOps no puede revocar por vos");
+  });
+
   it("404s a return for an agent that never started signing", async () => {
     const cookie = await signIn("nunca@ejemplo.cl");
     const agentId = await configureAgent(cookie);
@@ -236,6 +254,7 @@ describe("with no AgentPey configured", () => {
       store: soloStore,
       targets: TARGETS,
       signalDeskUrl: "https://signaldesk.example",
+      agentpeyBaseUrl: "https://agentpey.example",
       baseUrl: "http://127.0.0.1",
       delivery: { mode: "email", send: async (email, link) => void soloSent.push({ email, link }) },
       secureCookies: false,

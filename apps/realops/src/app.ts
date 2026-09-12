@@ -82,6 +82,11 @@ export interface RealOpsConfig {
    * a missing client produces a clear message, not a crash.
    */
   readonly agentpey?: AgentPeyClient;
+  /**
+   * Where AgentPey is, for the links RealOps sends a person to — signing and
+   * revoking both happen there, never here.
+   */
+  readonly agentpeyBaseUrl: string;
   readonly targets: PilotTargets;
   readonly signalDeskUrl: string;
   /** This service's own origin, for building magic links. */
@@ -296,7 +301,7 @@ export function createRealOpsServer(config: RealOpsConfig): Server {
         return;
       }
       const translated = translatePermissions(agent.kind, agent.permissions, config.targets, now());
-      sendHtml(response, 200, reviewPage(agent, translated.grant, translated.controls));
+      sendHtml(response, 200, reviewPage(agent, translated.grant, translated.controls, config.agentpeyBaseUrl));
       return;
     }
 

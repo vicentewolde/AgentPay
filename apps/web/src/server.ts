@@ -84,6 +84,12 @@ import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js"
 import { log, logError } from "./logging.js";
 import { routePartnerRequest } from "./partner-routes.js";
 import { createPostgresPendingWriteStore, type PostgresPendingWriteStore } from "./pending-write-store.js";
+import {
+  proveOwnership,
+  readPublicView,
+  requireRevocable,
+  toPrivateView,
+} from "./revocation.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
 import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
@@ -1081,7 +1087,11 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<void>
         ? "/landing.html"
         : pathname.startsWith("/consent/")
           ? "/consent.html"
-          : pathname;
+          : // T83: hosted revocation, same single-page shape as consent — the
+            // mandate id is read client-side from the path.
+            pathname.startsWith("/revocar/")
+            ? "/revocar.html"
+            : pathname;
   const filePath = join(PUBLIC_DIR, relative);
   // No user input reaches this join beyond the URL pathname of a same-origin
   // GET, and every route below is fixed — but refuse a path that escapes
@@ -1723,6 +1733,112 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       sendJson(res, 200, { ok: true, mandateHash: current.mandate.hash, revokeTx, credentialStatus });
     } catch (error) {
       sendJson(res, 200, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  // ---- Hosted revocation (T83) ---------------------------------------------
+  // Public, like the consent flow, and for the same reason: the person doing
+  // this is not a partner and has no API key. What authorises the act is the
+  // wallet signature on the transaction, which only the principal can produce
+  // and which the registry contract checks — these routes add a clearer
+  // refusal, not the authority.
+
+  const revokeReadMatch = /^\/api\/revoke\/([^/]+)$/.exec(pathname);
+  if (req.method === "GET" && revokeReadMatch?.[1] !== undefined) {
+    const mandateId = decodeURIComponent(revokeReadMatch[1]);
+    try {
+      const directory = await getDirectory(await readEnv());
+      sendJson(res, 200, { ok: true, ...(await readPublicView(directory, mandateId, new Date())) });
+    } catch (error) {
+      logError("revocation read failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
+      sendJson(res, isAgentPassError(error) && error.code === "MandateNotFound" ? 404 : 400, {
+        ok: false,
+        ...errorBody(error),
+      });
+    }
+    return;
+  }
+
+  const revokePrepareMatch = /^\/api\/revoke\/([^/]+)\/prepare$/.exec(pathname);
+  if (req.method === "POST" && revokePrepareMatch?.[1] !== undefined) {
+    const mandateId = decodeURIComponent(revokePrepareMatch[1]);
+    const body = await readJsonBody(req);
+    const address = typeof body.address === "string" ? body.address : undefined;
+    const nonce = typeof body.nonce === "string" ? body.nonce : undefined;
+    const signature = typeof body.signature === "string" ? body.signature : undefined;
+    if (address === undefined || nonce === undefined || signature === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta address, nonce o signature" });
+      return;
+    }
+
+    try {
+      const env = await readEnv();
+      const directory = await getDirectory(env);
+      const walletSessionStore = await getWalletSessionStore(env);
+
+      // The wallet proof and the transaction are prepared in one call, so no
+      // state has to be kept between them: the only thing that could be
+      // replayed is a challenge, and that is consumed here, once.
+      const mandate = await proveOwnership(
+        directory,
+        { takeChallenge: (value) => walletSessionStore.takeChallenge(value), challengeMessage },
+        mandateId,
+        { address, nonce, signature },
+      );
+      requireRevocable(mandate, new Date());
+
+      const agentpass = await createWalletAgentPass(env);
+      const prepared = await prepareWalletRevoke(agentpass, {
+        mandateHash: mandate.mandateHash,
+        principalAddress: address,
+      });
+      sendJson(res, 200, {
+        ok: true,
+        requestId: prepared.requestId,
+        xdr: prepared.xdr,
+        mandate: toPrivateView(mandate, new Date()),
+      });
+    } catch (error) {
+      logError("revocation prepare failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
+    }
+    return;
+  }
+
+  const revokeSubmitMatch = /^\/api\/revoke\/([^/]+)\/submit$/.exec(pathname);
+  if (req.method === "POST" && revokeSubmitMatch?.[1] !== undefined) {
+    const mandateId = decodeURIComponent(revokeSubmitMatch[1]);
+    const body = await readJsonBody(req);
+    const requestId = typeof body.requestId === "string" ? body.requestId : undefined;
+    const signedXdr = typeof body.signedXdr === "string" ? body.signedXdr : undefined;
+    if (requestId === undefined || signedXdr === undefined) {
+      sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta requestId o signedXdr" });
+      return;
+    }
+
+    try {
+      const env = await readEnv();
+      const directory = await getDirectory(env);
+      const mandate = await directory.findMandateById(mandateId);
+      if (mandate === undefined) {
+        sendJson(res, 404, { ok: false, code: "MandateNotFound", message: "no existe ese permiso" });
+        return;
+      }
+
+      // No wallet proof is re-checked here, and none is needed: what is being
+      // submitted is a transaction signed by the principal, and the registry
+      // contract refuses it otherwise. Asking for a second proof would add a
+      // step without adding a guarantee.
+      const agentpass = await createWalletAgentPass(env);
+      const revokeTx = await agentpass.submitSigned(requestId, signedXdr);
+      // Mirror it, so a later rehydration finds no active mandate and issues a
+      // fresh one instead of reusing one the chain no longer honours (T39).
+      await directory.revokeMandate(mandate.mandateHash, revokeTx);
+      sendJson(res, 200, { ok: true, mandateId: mandate.id, mandateHash: mandate.mandateHash, revokeTx });
+    } catch (error) {
+      logError("revocation submit failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
+      sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
   }

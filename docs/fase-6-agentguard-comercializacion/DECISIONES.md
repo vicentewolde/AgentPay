@@ -3829,3 +3829,54 @@ un botón que se pueda agregar acá.
 Se registra como decisión y no como pendiente suelto porque la tentación
 —darle a RealOps un scope de revocación para simplificar— es exactamente el
 tipo de atajo que haría que el piloto dejara de probar lo que dice probar.
+
+---
+
+### C-101 · T83: la revocación es una página hospedada, y la autoridad está en el contrato · `Vigente`
+**Fecha:** 2026-09-12
+
+`GET /revocar/{mandateId}` en el dominio de AgentPey, con la wallet del
+principal. No es una ruta de `/v1` y no puede serlo: `mandates:revoke` está
+fuera de la lista de scopes desde T45, y `C-100` explicó por qué.
+
+**Dónde vive la autoridad, dicho sin adornos: no en este código.** El contrato
+del registry rechaza una transacción de revocación que no venga firmada por la
+dirección que ancló el Mandato. Eso es el enforcement, on-chain, y nada de
+`apps/web/src/revocation.ts` puede debilitarlo. Lo que el módulo agrega es un
+**rechazo mejor**: comprueba la wallet conectada contra el principal guardado
+*antes* de preparar nada, así alguien que abre el link equivocado lee "esa no es
+la wallet" en vez de firmar una transacción que falla con un error de Soroban.
+
+**Divulgación mínima antes de la prueba.** Un id de Mandato se comparte con el
+partner que lo creó, así que es un secreto más débil que un id de consent
+session. Antes de que la wallet se pruebe, la página sabe **solo** si el permiso
+sigue activo y hasta cuándo. El grant —los límites, el comercio, el producto— se
+muestra después. Quien tenga un id suelto no aprende cuánto podía gastar nadie.
+Hay una prueba que lo fija comprobando que el JSON público no contiene ni el
+monto ni el nombre del comercio.
+
+**Los tres rechazos de la prueba de wallet se mantienen distintos**: desafío ya
+usado (un tropiezo operativo), firma que no corresponde (un cliente roto), y
+wallet equivocada (una persona en la cuenta equivocada) — y solo el último tiene
+una acción asociada. Pero **"wallet desconocida" y "wallet equivocada" se
+colapsan a propósito** en el mismo código: distinguirlas le diría a un extraño
+si una dirección es conocida por el sistema, que no es suyo de saber.
+
+**Prueba y preparación en una sola llamada.** Verificar la wallet y preparar la
+transacción pasan juntos, así no hay estado que guardar entre los dos pasos; lo
+único replayable sería el desafío, y se consume una vez, **antes** de mirar la
+firma — un desafío que sobreviviera a un chequeo fallido podría reusarse contra
+otro Mandato.
+
+**El submit no vuelve a pedir prueba de wallet, y no hace falta.** Lo que se
+envía es una transacción firmada por el principal, y el contrato la rechaza si
+no lo es. Pedir una segunda prueba agregaría un paso sin agregar una garantía.
+
+**Un Mandato ya revocado o vencido se refuza en vez de revocarse otra vez.**
+Reescribir cuesta un fee y no cambia nada; y pedirle a alguien que firme una
+transacción que no le compra nada es hacerle perder el tiempo.
+
+**El link de vuelta de esta página solo acepta una ruta relativa.** Una URL
+absoluta desde el query string sería exactamente la redirección abierta que
+`C-95` existe para prevenir, y esta página no la reintroduce por la puerta de
+atrás.
