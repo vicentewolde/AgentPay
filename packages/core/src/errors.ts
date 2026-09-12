@@ -100,6 +100,8 @@ export type AgentPassErrorCode =
   | "MandateProductNotAllowed"
   /** The venue this purchase names is not in the payable venue registry. */
   | "VenueNotRegistered"
+  /** No discovery catalogue could answer — not "nothing is for sale", but "nobody replied". */
+  | "CatalogUnavailable"
   /** The total exceeds the ceiling the partner itself declared for this purchase. */
   | "PurchaseCeilingExceeded"
   /** The paid route needs an input this purchase did not supply. */

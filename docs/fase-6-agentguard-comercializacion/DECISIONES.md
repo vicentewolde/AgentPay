@@ -3241,3 +3241,136 @@ operador equivalente.
 USDC que SignalDesk acumule. El dinero que un tenant gasta no se pierde —va a
 un comercio que también construye el proyecto— pero recuperarlo necesita que
 SignalDesk exista primero.
+
+---
+
+### C-84 · T78: Periplo necesita su propio adaptador, y un candidato no lleva precio · `Vigente`
+**Fecha:** 2026-09-12
+
+**Por qué un adaptador nuevo y no un parámetro.** `createX402Catalog`
+(F7) lee el feed propio de un comercio: `{ ok, results: [{ resource: { id,
+name, payment: { asset, amount, destination }, routeTemplate } }] }` — un
+vendedor describiendo *sus* productos, con ids y rutas pagas. Periplo
+contesta la forma Bazaar de x402: `{ x402Version, items | resources: [{
+resource, accepts: [{ asset, payTo, amount, scheme, network }],
+description, extensions }] }` — un índice de **URLs** de muchos comercios,
+sin id de producto y sin nombre en ninguna parte. No hay bandera que
+convierta una en la otra; fingir que sí habría dado un parser que entiende
+la mitad de cada una. Son dos protocolos, y son dos módulos:
+`periplo-catalog.ts` junto a `x402-catalog.ts`.
+
+**Un candidato no lleva precio. Ni `payTo`, ni `asset`.** No "precio
+estimado", no un campo con nombre prudente: no existe el campo. `C-77` ya
+decía que el precio del catálogo se descarta y que el único que vale es el
+de la factura 402 pedida por AgentPey. La diferencia es que ahora eso no
+depende de que alguien se acuerde: un valor que nunca se carga no puede
+ser comparado contra un Mandato por un refactor bienintencionado dos
+meses después. Verificado por prueba, no por lectura: el JSON de un
+candidato construido sobre la fila real de Periplo no contiene el monto,
+ni la cuenta cobradora, ni el contrato del activo.
+
+**Lo único para lo que se leen los `accepts` es para descartar.** Una fila
+sin oferta en `stellar:testnet` bajo el esquema `exact` no es candidata.
+Esa sola regla descarta `periplo-phase2-test.example` —la fila de prueba
+de integración con `accepts: []` que está viva en el catálogo público hoy—
+sin ningún caso especial escrito para ella. Y cada fila se parsea sola: una
+malformada se saltea, no voltea la búsqueda. La basura en un índice público
+no es hipótesis y su forma no se puede prever.
+
+**Alternativa descartada:** agregarle a `createX402Catalog` un modo
+`"bazaar"`. Habría metido dos protocolos en un archivo que hoy está en el
+camino de pago (`tenant-purchase.ts` lo usa para pedir la factura), y
+tocar ese archivo para una función de descubrimiento es exactamente el
+tipo de cambio indirecto que `CLAUDE.md` § 5 del protocolo con Codex
+manda mirar con lupa. Se prefirió un módulo nuevo que el camino de pago no
+importa.
+
+---
+
+### C-85 · T78: que un candidato sea pagable lo decide el registro, y lo hace cumplir el tipo · `Vigente`
+**Fecha:** 2026-09-12
+
+`ServiceCandidate` es una unión discriminada, no un objeto con una
+bandera: un `UnregisteredCandidate` **no tiene campo `venueId` para leer**.
+Código que quiera comprar algo no puede llegar a un venue sin antes
+estrechar por `registered === true`, y ese `true` lo pone un solo lugar
+—`toCandidate`— comparando el **origen** de la URL del candidato contra el
+`baseUrl` de una fila de `venues.json`. No hay chequeo que olvidar, porque
+no hay nada que olvidar: el valor que se necesita no existe hasta que el
+chequeo corrió.
+
+**Origen, no prefijo.** Un comercio registrado en
+`https://shop.example/api` no puede ser matcheado por
+`https://shop.example.attacker.test/api`. Comparar prefijos de strings es
+la forma habitual de cometer ese error; hay prueba dedicada, más otras para
+esquema distinto, puerto distinto, URL relativa, `data:` y credenciales
+embebidas en el host.
+
+**Los candidatos no registrados se muestran, no se ocultan.** Filtrarlos en
+silencio habría sido más simple y peor: que el catálogo público liste
+comercios que AgentPey no paga es el hecho central del diseño, y una
+persona que lo ve entiende dónde está la frontera. La corrida real contra
+Periplo lo deja a la vista — sus dos filas vivas y válidas salen las dos
+como `unregistered → not payable`.
+
+**Periplo indexa URLs, así que el comercio dice cuál es el producto.**
+`resolvePayableService` toma un candidato registrado y le pregunta al
+comercio —no al catálogo— qué producto vive en esa URL, matcheando contra
+sus propias rutas pagas. Un candidato que ya trae un `productId` igual se
+verifica contra ese feed en vez de creerle. Y la ambigüedad refuza: dos
+rutas del mismo comercio resolviendo a una URL es un comercio que este
+código no puede leer sin adivinar, y adivinar es contra lo que `ids.ts`
+argumenta en todo su docstring.
+
+**Alternativa descartada:** una sola forma de candidato con
+`registered: boolean`. Es lo mismo hasta el día en que alguien lee
+`candidate.venueId!` y el compilador no tiene nada que objetar.
+
+---
+
+### C-86 · T78: el índice propio nombra el venue, y "nadie contestó" no es "no hay nada" · `Vigente`
+**Fecha:** 2026-09-12
+
+**Una desviación deliberada del plan.** `PILOTO-F9.md` § 4.3 proponía que
+`GET /discovery/search` sirviera la forma `ServiceCard`, "que
+`createX402Catalog` ya sabe leer". Implementarlo mostró por qué está mal:
+una `ServiceCard` **no tiene campo que nombre el venue**, porque el feed de
+un comercio no lo necesita —es todo el mismo comercio—. Este índice cruza
+todos los venues registrados, así que en esa forma un consumidor no podría
+saber de quién es el producto que está mirando, y el venue es justamente lo
+único que un candidato tiene que llevar. Sirve la forma de candidato, con
+`venue` en cada fila y `registered` dicho en vez de implicado. La decisión
+de § 4.3 queda superada en ese punto y solo en ese punto: la regla que la
+rodea —el catálogo no es fuente de permiso— no cambia.
+
+**Una lista vacía y "nadie contestó" son hechos distintos, y se reportan
+distinto.** Si todos los venues registrados fallan, el índice tira
+`CatalogUnavailable` y la ruta responde `503`; una búsqueda que corrió bien
+y no encontró nada responde `200` con cero resultados. Colapsarlos habría
+sido cómodo y habría hecho que una caída se le muestre a una persona como
+"no hay nada a la venta", que es la frase que la lleva a la acción
+equivocada. Es el caso de aceptación 9 del brief: catálogo caído, **sin
+intento de pago**, y con un mensaje que se entiende.
+
+**Un venue caído no tapa a los demás.** `Promise.allSettled` por venue, el
+que falla se saltea y se loguea; solo el fracaso de todos es fatal.
+
+**Dicho en voz alta: un índice propio no prueba descubrimiento abierto.**
+Prueba el mecanismo —una instrucción se vuelve consulta, una consulta se
+vuelve candidatos, y un candidato se vuelve compra solo después de que el
+registro, la credencial y el Mandato opinaron—. Lo abierto lo aporta
+Periplo; esto aporta que la prueba externa sobreviva a que Periplo se
+caiga. Decirlo vale más que la apariencia de lo contrario.
+
+**La ruta pública es de solo lectura y no es superficie nueva de ataque.**
+No escribe, no guarda secreto, y todo lo que puede emitir ya es público:
+`venues.json` está en el repositorio. Lo que sí hace es llamar hacia
+afuera, así que eso está acotado: timeout duro por venue
+(`fetchWithTimeout`, 5 s), caché corta compartida entre llamadas (30 s),
+tope de resultados, y una consulta validada en largo y en caracteres de
+control **antes** de entrar en ninguna URL.
+
+**Anotado, sin construir:** `createX402Catalog` sigue sin timeout, y está
+en el camino de pago. Cambiar cuándo se rinde una llamada ahí cambia
+comportamiento de pago, y este hito no tenía por qué hacerlo. Queda como
+deuda con nombre.

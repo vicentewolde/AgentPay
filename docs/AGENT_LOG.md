@@ -4404,3 +4404,75 @@ instancia de `agentpey-web`. Anotado y sin construir: un barrido que devuelva
 a la reserva el USDC que SignalDesk acumule — necesita que SignalDesk exista
 primero. Siguiente hito **T78**: índice de descubrimiento público y adaptador
 de catálogo sobre Periplo, con su fallback.
+
+---
+
+## 2026-09-12 (15) — cc/t78-public-discovery
+
+Agente: Claude Code
+
+Qué: **T78**, el descubrimiento público de F9. Tres piezas y una desviación
+del plan que vale registrar.
+
+1. **Adaptador propio sobre Periplo** (`apps/agent/src/catalog/periplo-catalog.ts`),
+   porque su forma de respuesta no es la que `createX402Catalog` lee. Se
+   confirmó leyendo el servicio vivo: Periplo contesta la forma Bazaar
+   (`items|resources` con `accepts[]`), un índice de **URLs** sin id de
+   producto ni nombre; el adaptador existente lee `ServiceCard` (el feed
+   propio de un comercio, con `id`/`name`/`routeTemplate`). Son dos
+   protocolos, no un parámetro (`C-84`). El camino de pago no importa el
+   módulo nuevo — deliberado.
+2. **La frontera, en `discovery.ts`.** `ServiceCandidate` es una unión
+   discriminada: un candidato no registrado **no tiene `venueId` para
+   leer**, así que no hay chequeo que olvidar. La resolución es por
+   **origen** de URL, no por prefijo (`C-85`). Y un candidato **no lleva
+   precio, ni `payTo`, ni `asset`** — el campo no existe, verificado por
+   prueba sobre el JSON serializado de la fila real de Periplo.
+3. **Índice propio + fallback**: `createAgentPeyDiscovery` sobre
+   `venues.json` y `GET /discovery/search` público en `apps/web`; si Periplo
+   falla, `withCatalogFallback` usa el índice propio, y si fallan los dos
+   tira `CatalogUnavailable` → `503`. Nunca una lista vacía: "nadie
+   contestó" y "no hay nada a la venta" son hechos distintos (`C-86`).
+
+**Desviación del plan, registrada:** `PILOTO-F9.md` § 4.3 pedía servir la
+forma `ServiceCard`. No se puede — una `ServiceCard` no tiene campo que
+nombre el venue (el feed de un comercio no lo necesita) y este índice cruza
+todos los venues registrados. Sirve la forma de candidato, con `venue` en
+cada fila. La regla que rodea a esa decisión no cambia.
+
+Verificado: **1065 tests** (eran 1010), `typecheck` y `build` limpios. Y
+—esto no es con fakes— `pnpm run check:discovery` (script nuevo) corrido
+contra Periplo y el bazaar registrado: de las tres filas vivas del catálogo
+público, la de prueba (`accepts: []`) se descarta sola y las otras dos salen
+`unregistered → not payable`. `GET /discovery/search` probado contra el
+servidor real: `200` con el venue nombrado y sin ningún precio, `400` ante
+una consulta con caracteres de control sin llegar a buscar, y `404` intacto
+para un archivo inexistente (la ruta se reclama antes del fallback estático
+sin romperlo). El servidor de prueba se levantó en el puerto 8899 porque el
+8787 estaba ocupado por otra instancia del usuario, y se apagó al terminar.
+
+Por qué: era el hito que faltaba para que "descubrir" sea algo real y
+verificable en vez de una llamada oculta a un comercio conocido — y para que
+la basura de un catálogo público, que ya existe y no es hipótesis, no pueda
+convertirse nunca en un pago.
+
+Documentación tocada: `DECISIONES.md` (`C-84`, `C-85`, `C-86`),
+`BITACORA.md` (hito T78 + tabla + estado actual), `evidencia/T78.md`
+(nuevo, con las salidas crudas). Archivos de código:
+`apps/agent/src/catalog/{discovery,periplo-catalog,agentpey-discovery}.ts`
+(nuevos, + tests), `apps/agent/src/catalog/catalog.ts` (exporta los dos
+esquemas de texto de terceros, para no duplicar la sanitización),
+`apps/agent/src/catalog/x402-catalog.ts` (`listX402ServiceRoutes`, aditivo),
+`apps/agent/src/index.ts`, `apps/web/src/discovery-route.ts` (+ test),
+`apps/web/src/server.ts`, `packages/core/src/errors.ts`
+(`CatalogUnavailable`), `scripts/check-discovery.ts` (nuevo), `package.json`.
+
+Pendiente: **mergear `cc/t78-public-discovery`** (espera confirmación del
+usuario). Deuda anotada, sin construir: `createX402Catalog` sigue sin
+timeout y está en el camino de pago — cambiar cuándo se rinde una llamada
+ahí cambia comportamiento de pago, y este hito no tenía por qué hacerlo.
+Siguiente hito **T79**: SignalDesk, el comercio del piloto, a partir de
+`examples/reference-merchant/` — **delegable a Codex** (servicio aparte, no
+toca autorización). Del lado del usuario sigue pendiente, sin bloquear:
+`RESERVE_ADDRESS` en Render, pagar la instancia Starter de `agentpey-web`, y
+comprar `agentpey.com`.

@@ -77,9 +77,45 @@ export { DEFAULT_VENUE_REGISTRY } from "./catalog/default-registry.js";
 export {
   createX402Catalog,
   getX402ServiceRoute,
+  listX402ServiceRoutes,
   type X402CatalogOptions,
   type X402ServiceRoute,
 } from "./catalog/x402-catalog.js";
+
+export {
+  DEFAULT_DISCOVERY_TIMEOUT_MS,
+  MAX_CANDIDATES,
+  MAX_QUERY_LENGTH,
+  fetchWithTimeout,
+  matchesQuery,
+  parseQuery,
+  registeredOnly,
+  resolveCandidateVenue,
+  toCandidate,
+  withCatalogFallback,
+  type CandidateDraft,
+  type CatalogSource,
+  type CatalogSourceId,
+  type FallbackOptions,
+  type RegisteredCandidate,
+  type ServiceCandidate,
+  type UnregisteredCandidate,
+} from "./catalog/discovery.js";
+
+export {
+  PERIPLO_BASE_URL,
+  PERIPLO_NETWORK,
+  createPeriploCatalog,
+  type PeriploCatalogOptions,
+} from "./catalog/periplo-catalog.js";
+
+export {
+  DEFAULT_INDEX_TTL_MS,
+  createAgentPeyDiscovery,
+  resolvePayableService,
+  type AgentPeyDiscoveryOptions,
+  type PayableService,
+} from "./catalog/agentpey-discovery.js";
 
 export {
   TOOL_NAMES,

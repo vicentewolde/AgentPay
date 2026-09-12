@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T77 (controles del crédito patrocinado) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T78 (descubrimiento público) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -81,7 +81,17 @@ ticket desde el alcance original de F8: T71 lo agrega al
 `status-dashboard` (T59) ya existente — cuánto de su límite diario
 lleva gastado cada tenant hoy, sus rechazos más recientes, y el saldo
 USDC de su `policy_rail` si tiene uno — todo de solo lectura, sin
-ninguna ruta nueva capaz de escribir.
+ninguna ruta nueva capaz de escribir. Y F9 llegó al descubrimiento: el
+agente ya busca en un catálogo x402 público real (Periplo) y trae
+candidatos, sin que encontrarlos los vuelva pagables — de las tres filas
+vivas de ese catálogo, la de prueba se descarta sola y las otras dos, que
+son servicios reales, salen marcadas "no pagable" porque `venues.json` no
+las conoce. Un candidato tampoco lleva precio: el campo no existe, así que
+no hay forma de que el precio de un tercero entre en una decisión de pago.
+Y AgentPey publica su propio índice en `GET /discovery/search` como plan B
+para cuando el catálogo público no responda, con su límite dicho en voz
+alta: un índice propio prueba el mecanismo, no el descubrimiento abierto
+(T78, `C-84` a `C-86`).
 
 ### Progreso
 
@@ -128,6 +138,7 @@ ninguna ruta nueva capaz de escribir.
 | T75 | F9: `POST /v1/purchases` y `GET /v1/purchases/{id}` cableados y persistidos — los rechazos se guardan igual que las compras | ✅ cerrado 2026-09-12 |
 | T76 | F9: `GET /v1/tenants/{id}/activity` — nace `@agentpey/activity`, y el panel interno y la vista del usuario comparten el mismo cálculo | ✅ cerrado 2026-09-12 |
 | T77 | F9: controles del crédito patrocinado — arreglo del doble fondeo, pre-chequeo tipado de la reserva, y los números de `C-80` en el rail | ✅ cerrado 2026-09-12 |
+| T78 | F9: descubrimiento público — adaptador sobre Periplo, índice propio sobre `venues.json` en `GET /discovery/search`, y fallback entre los dos | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2927,3 +2938,88 @@ vez) y `C-83` (pre-chequeo tipado, y los números donde se decide).
 **Qué sigue.** Con la plataforma lista de este lado, **T78**: el índice de
 descubrimiento público y el adaptador de catálogo sobre Periplo, con su
 fallback. Después SignalDesk (T79) y RealOps (T80–T81).
+
+---
+
+## T78 · El descubrimiento público, y la frontera que no habilita · cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras simples.**
+
+El agente ya puede **buscar servicios en un catálogo público de verdad** —
+Periplo, el índice x402 del ecosistema Stellar— y traerse candidatos. Y lo
+importante es lo que *no* pasa con esos candidatos: encontrarlos no los
+vuelve pagables.
+
+Hoy el catálogo público tiene tres entradas. Una es una fila de prueba vacía
+de sus propios desarrolladores, y las otras dos son servicios reales de
+terceros que cobran en el mismo USDC de testnet que usa este proyecto. Al
+correr la búsqueda contra el servicio vivo: la fila de prueba **desaparece
+sola** —no ofrece nada en esta red, así que no es candidata, sin ninguna
+regla escrita especialmente para ella— y las otras dos salen marcadas
+**"no pagable"**, porque el registro de comercios de AgentPey no las conoce.
+Son servicios legítimos y aun así AgentPey no les pagaría. Esa es la
+frontera entera, y ahora se ve.
+
+**Además, un candidato no lleva precio.** Ni el que declaró el catálogo, ni
+uno "estimado". No es que se ignore: el campo no existe. Un precio que nunca
+se carga no puede colarse en una decisión de pago más adelante, por más
+buenas intenciones que tenga el refactor que lo intente.
+
+**Y hay un índice propio, que es el plan B.** AgentPey publica su propia
+lista de servicios en `GET /discovery/search`, armada con los comercios que
+ya tiene registrados. Si Periplo se cae el día de la prueba externa, la
+búsqueda sigue funcionando con esta. Dicho con todas las letras, porque
+importa: **un índice propio no prueba descubrimiento abierto, prueba el
+mecanismo.** Lo abierto lo aporta Periplo; esto aporta que la prueba no se
+caiga con él.
+
+Y una distinción que parece menor y no lo es: si **nadie contesta**, el
+sistema no dice "no hay nada a la venta". Dice que no pudo preguntar. Son
+dos hechos distintos y llevan a la persona a dos acciones distintas.
+
+**Evidencia técnica.**
+
+- **Adaptador nuevo, no un parámetro** (`C-84`). Periplo habla la forma
+  Bazaar de x402 (`items|resources` con `accepts[]`, un índice de URLs sin
+  id de producto ni nombre); `createX402Catalog` lee `ServiceCard` (el feed
+  propio de un comercio, con `id`, `name` y `routeTemplate`). Son dos
+  protocolos. El camino de pago no importa el módulo nuevo.
+- **El tipo hace cumplir el registro** (`C-85`). `ServiceCandidate` es una
+  unión discriminada: un candidato no registrado **no tiene `venueId` para
+  leer**, así que no hay chequeo que olvidar. La resolución es por **origen**
+  de URL, no por prefijo — con pruebas para host parecido
+  (`signaldesk.example.attacker.test`), esquema y puerto distintos, URL
+  relativa, `data:` y credenciales embebidas.
+- **Periplo indexa URLs, así que el producto lo dice el comercio.**
+  `resolvePayableService` le pregunta al comercio qué producto vive en esa
+  URL; un `productId` que venga en el candidato igual se verifica contra su
+  feed, y dos rutas que reclamen la misma URL **refuzan** en vez de adivinar.
+- **La ruta pública no publica precios ni es superficie de escritura**
+  (`C-86`). Solo lee, no guarda secretos, y lo que emite ya es público
+  (`venues.json` está en el repo). Las llamadas salientes están acotadas:
+  timeout duro por venue (5 s), caché corta compartida (30 s), tope de
+  resultados, y la consulta validada en largo y caracteres de control antes
+  de entrar en ninguna URL.
+- **Desviación del plan, registrada:** `PILOTO-F9.md` § 4.3 pedía servir la
+  forma `ServiceCard`. No se puede: una `ServiceCard` no tiene campo que
+  nombre el venue, y este índice cruza varios. Sirve la forma de candidato,
+  con `venue` en cada fila.
+- **1065 tests verdes** (eran 1010), `typecheck` y `build` limpios.
+- **Verificación contra servicios vivos**, no solo con fakes:
+  `pnpm run check:discovery` corrido contra Periplo y el bazaar registrado
+  —tres filas entran, dos salen, las dos como `unregistered → not payable`—
+  y `GET /discovery/search` probado contra el servidor real (`200` con el
+  venue nombrado, `400` ante una consulta con caracteres de control, `404`
+  intacto para un archivo inexistente).
+
+**Deuda anotada, sin construir:** `createX402Catalog` sigue sin timeout y
+está en el camino de pago. Cambiar cuándo se rinde una llamada ahí cambia
+comportamiento de pago, y este hito no tenía por qué hacerlo.
+
+**Decisiones nuevas:** `C-84` (adaptador propio, candidato sin precio),
+`C-85` (el registro decide y el tipo lo hace cumplir), `C-86` (el índice
+nombra el venue, y "nadie contestó" ≠ "no hay nada").
+
+**Qué sigue.** **T79**: SignalDesk, el comercio del piloto, a partir de
+`examples/reference-merchant/` — delegable a Codex. Después RealOps, el
+despliegue público y la suite de los diez casos de aceptación.

@@ -79,6 +79,7 @@ import {
   readRailUsdcBalance,} from "@agentpey/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
+import { createPublicDiscovery, handleDiscoverySearch } from "./discovery-route.js";
 import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
 import { log, logError } from "./logging.js";
 import { routePartnerRequest } from "./partner-routes.js";
@@ -1099,6 +1100,18 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<void>
   createReadStream(filePath).pipe(res);
 }
 
+/**
+ * The public discovery index (T78), built once: it holds a short-lived cache
+ * of the registered venues' catalogues, so one per process is the point.
+ * A venue that fails is logged and skipped — one merchant being down must not
+ * hide the others, and must not be silent either.
+ */
+const publicDiscovery = createPublicDiscovery({
+  onVenueError: (venueId, error) => {
+    logError("[discovery] a registered venue did not answer its catalogue", error, { venueId });
+  },
+});
+
 const server = createServer((req, res) => {
   void handle(req, res).catch((error: unknown) => {
     logError("unhandled web request error", error, { method: req.method ?? "unknown", path: req.url ?? "", status: 500 });
@@ -1109,6 +1122,14 @@ const server = createServer((req, res) => {
 async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const { pathname } = url;
+
+  // Before the static fallback: every GET that is not `/api/` or `/v1/` is
+  // served as a file, so a public route has to be claimed ahead of it.
+  if (req.method === "GET" && pathname === "/discovery/search") {
+    const result = await handleDiscoverySearch(publicDiscovery, url.searchParams.get("query"));
+    sendJson(res, result.status, result.body);
+    return;
+  }
 
   if (req.method === "GET" && !pathname.startsWith("/api/") && !pathname.startsWith("/v1/")) {
     await serveStatic(pathname, res);

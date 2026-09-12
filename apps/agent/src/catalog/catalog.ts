@@ -27,15 +27,22 @@ export const productIdSchema = z
   .max(128)
   .regex(/^[A-Za-z0-9._:@/-]+$/, "expected an id of letters, digits and . _ : @ / -");
 
-/** One line of third-party text. No control characters, newlines included. */
-const productNameSchema = z
+/**
+ * One line of third-party text. No control characters, newlines included.
+ *
+ * Exported as {@link thirdPartyNameSchema} because a public catalogue's rows
+ * (`discovery.ts`, T78) are the same kind of text arriving from the same kind
+ * of source: a second copy of this rule that drifted from this one would be a
+ * hole exactly where the first copy is a wall.
+ */
+export const thirdPartyNameSchema = z
   .string()
   .min(1)
   .max(200)
   .regex(/^[^\u0000-\u001F\u007F]+$/, "a product name may not contain control characters");
 
 /** Free-form third-party text. Tabs and newlines allowed, other controls not. */
-const productDescriptionSchema = z
+export const thirdPartyTextSchema = z
   .string()
   .max(2000)
   .regex(
@@ -52,9 +59,9 @@ export const priceSchema = z.strictObject({
 export const productSchema = z.strictObject({
   id: productIdSchema,
   /** Third-party text. Displayed, never interpreted. */
-  name: productNameSchema,
+  name: thirdPartyNameSchema,
   /** Third-party text. Displayed, never interpreted. */
-  description: productDescriptionSchema,
+  description: thirdPartyTextSchema,
   price: priceSchema,
   available: z.boolean(),
 });

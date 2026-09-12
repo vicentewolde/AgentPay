@@ -184,6 +184,28 @@ export interface X402ServiceRoute {
 }
 
 /**
+ * Every paid route a venue offers.
+ *
+ * Discovery (T78) needs the whole set, not one by id: a public catalogue
+ * indexes URLs, so answering "which of this merchant's products lives at that
+ * URL?" means looking at all of them. Cards with no paid route are simply not
+ * routes, and are left out rather than refused — a venue is allowed to list
+ * something that is not bought over x402.
+ *
+ * @throws AgentPassError `NetworkError` when the venue's discovery API cannot
+ * be read.
+ */
+export async function listX402ServiceRoutes(
+  options: X402CatalogOptions,
+): Promise<readonly X402ServiceRoute[]> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const cards = await fetchServiceCards(requireBaseUrl(options), fetchImpl);
+  return cards
+    .filter((card) => card.routeTemplate !== undefined)
+    .map((card) => ({ id: card.id, routeTemplate: card.routeTemplate!, input: card.input ?? [] }));
+}
+
+/**
  * The paid route for one product on any registered x402 venue — what an
  * `executeBazaarPayment`-style caller needs to actually hit the `402`
  * challenge, and that `CatalogAdapter` has no field for (T9's `Product` is

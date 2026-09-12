@@ -25,7 +25,8 @@
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "check": "pnpm typecheck && pnpm test",
     "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo",
-    "check:sponsored-credit": "tsx --tsconfig tsconfig.scripts.json scripts/check-sponsored-credit.ts"
+    "check:sponsored-credit": "tsx --tsconfig tsconfig.scripts.json scripts/check-sponsored-credit.ts",
+    "check:discovery": "tsx --tsconfig tsconfig.scripts.json scripts/check-discovery.ts"
   },
   "devDependencies": {
     "@stellar/stellar-sdk": "^17.0.1",
