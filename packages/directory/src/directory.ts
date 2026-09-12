@@ -95,7 +95,7 @@ export interface DirectoryOptions {
    * so that tightening it — brecha `G11`, deferred to the hardening milestone
    * — is a change at one call site and not a change in this file.
    */
-  readonly ssl?: false | { readonly rejectUnauthorized: boolean };
+  readonly ssl?: false | { readonly ca?: string; readonly rejectUnauthorized: boolean };
   /**
    * How many Postgres connections this directory may hold open. Defaults to
    * `pg`'s own default of 10.
@@ -422,9 +422,14 @@ export interface Directory {
  * empty.
  */
 export async function createDirectory(options: DirectoryOptions): Promise<Directory> {
+  const postgresCa = process.env.POSTGRES_CA_CERT;
   const pool = new Pool({
     connectionString: options.connectionString,
-    ssl: options.ssl ?? { rejectUnauthorized: false },
+    ssl:
+      options.ssl ??
+      (postgresCa === undefined || postgresCa === ""
+        ? { rejectUnauthorized: false }
+        : { ca: postgresCa, rejectUnauthorized: true }),
     max: options.maxConnections ?? 10,
   });
 

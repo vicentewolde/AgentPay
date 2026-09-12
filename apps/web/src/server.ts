@@ -79,6 +79,7 @@ import {
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
 import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
+import { logError } from "./logging.js";
 import { routePartnerRequest } from "./partner-routes.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
@@ -1124,6 +1125,7 @@ async function serveStatic(pathname: string, res: ServerResponse): Promise<void>
 
 const server = createServer((req, res) => {
   void handle(req, res).catch((error: unknown) => {
+    logError("unhandled web request error", error, { method: req.method ?? "unknown", path: req.url ?? "", status: 500 });
     sendJson(res, 500, { ok: false, ...errorBody(error) });
   });
 });
@@ -1222,6 +1224,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       withSessionCookie(res, tenant.id);
       sendJson(res, 200, { ok: true, address });
     } catch (error) {
+      logError("wallet verification request failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1257,6 +1260,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         walletAddress: walletAddressBySession.get(sessionId) ?? null,
       });
     } catch (error) {
+      logError("session start request failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1393,6 +1397,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         walletAddress: session.walletAddress ?? null,
       });
     } catch (error) {
+      logError("wallet session anchor failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1425,6 +1430,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         expiresAt: session.expiresAt.toISOString(),
       });
     } catch (error) {
+      logError("consent session read failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1477,6 +1483,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       walletAddressByConsentSession.set(consentSessionId, address);
       sendJson(res, 200, { ok: true, address });
     } catch (error) {
+      logError("consent wallet verification failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1489,6 +1496,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const result = await startConsentSession(consentSessionId);
       sendJson(res, 200, { ok: true, ...result });
     } catch (error) {
+      logError("consent session start failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1590,6 +1598,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         transactionHash,
       });
     } catch (error) {
+      logError("consent wallet anchor failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;
@@ -1625,6 +1634,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const report = await vaultReport(current);
       sendJson(res, 200, { ok: true, ...report });
     } catch (error) {
+      logError("vault report request failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
       sendJson(res, 400, { ok: false, ...errorBody(error) });
     }
     return;

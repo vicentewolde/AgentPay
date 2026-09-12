@@ -62,11 +62,17 @@ export async function createPostgresMandateVault(options: PostgresMandateVaultOp
   const { connectionString, tenantId } = options;
   // Supabase (this project's documented choice, .env.example) requires TLS
   // for external connections; `pg` does not negotiate it on its own from a
-  // plain `postgresql://` string. `rejectUnauthorized: false` skips CA
-  // verification, not encryption itself — the same trade-off every popular
-  // guide for connecting to Supabase from Render/Vercel/Heroku makes,
-  // because Node's default CA bundle does not ship Supabase's chain.
-  const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
+  // plain `postgresql://` string. A supplied provider CA makes TLS verify the
+  // server certificate. Without one, retain the pilot's existing encrypted
+  // but unverified connection for providers whose chain Node does not ship.
+  const postgresCa = process.env.POSTGRES_CA_CERT;
+  const pool = new Pool({
+    connectionString,
+    ssl:
+      postgresCa === undefined || postgresCa === ""
+        ? { rejectUnauthorized: false }
+        : { ca: postgresCa, rejectUnauthorized: true },
+  });
 
   try {
     await pool.query(CREATE_TABLE_SQL);

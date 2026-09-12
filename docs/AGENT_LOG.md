@@ -3664,3 +3664,25 @@ Pendiente: T62 (CA de Postgres), T63 (logging estructurado), T64
 (prueba de carga que reproduce la condición de carrera — ahora con algo
 real que medir), T65 (revisión final de F8) — delegables a Codex salvo
 T65. Comprar `agentpey.com` sigue pendiente, sin apuro.
+
+---
+
+## 2026-09-12 — codex/t62-t63-hardening
+
+Agente: Codex
+
+Qué: T62 y T63 de F8. Los pools de Postgres ahora aceptan
+`POSTGRES_CA_CERT`: si contiene la CA PEM del proveedor, activan
+`rejectUnauthorized: true`; si no está, preservan el TLS cifrado sin
+verificación que ya usaba el piloto. Se agregó logging JSON estructurado
+en los errores de infraestructura del servidor web, usando únicamente
+`error.message`.
+
+Por qué: cerrar G11 sin cortar la conectividad actual con Supabase y dar
+visibilidad operativa sin exponer la contraseña que un error de `pg`
+lleva en `connectionParameters` (C-32).
+
+Pendiente: revisión de seguridad del diff por Claude Code; T64 (harness
+de carga) y T65 (revisión final de F8). Antes del deploy, configurar
+`POSTGRES_CA_CERT` en el entorno del host si se quiere habilitar la
+verificación de CA.
