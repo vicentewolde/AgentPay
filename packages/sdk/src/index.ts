@@ -17,9 +17,11 @@ import type { Keypair } from "@stellar/stellar-sdk";
 
 import type { AgentPassConfig } from "./config.js";
 import { parseConfig } from "./config.js";
-import type { CredRecord, CredStatus, PreparedRegistryWrite } from "./registry.js";
+import type { CredRecord, CredStatus, PendingWriteStore, PreparedRegistryWrite } from "./registry.js";
 import { assertTrustedRegistry } from "./guards.js";
 import { Registry } from "./registry.js";
+
+export type { PendingWrite, PendingWriteStore } from "./registry.js";
 
 export interface IssueParams {
   readonly credential: AgentPassCredential;
@@ -127,9 +129,20 @@ function addressOf(did: StellarDid): string {
   return didToStellarAddress(did);
 }
 
-export async function createAgentPass(config: unknown): Promise<AgentPass> {
+export interface CreateAgentPassOptions {
+  /**
+   * Where a `prepareAnchor`/`prepareRevoke` call is remembered until
+   * `submitSigned` finishes it (T35). Defaults to an in-process store — fine
+   * for a CLI or a single-instance server, not for one where those two
+   * requests could land on different processes (G12); pass a store backed by
+   * shared storage there instead.
+   */
+  readonly pendingWriteStore?: PendingWriteStore;
+}
+
+export async function createAgentPass(config: unknown, options: CreateAgentPassOptions = {}): Promise<AgentPass> {
   const parsed = parseConfig(config);
-  const registry = await Registry.connect(parsed);
+  const registry = await Registry.connect(parsed, options.pendingWriteStore);
 
   return {
     config: parsed,

@@ -112,21 +112,72 @@ export interface PreparedRegistryWrite {
   readonly xdr: string;
 }
 
-/** How long an unsigned transaction waits for its signature before this
- * registry instance forgets it — long enough for a human to approve it in
- * their wallet, short enough that an abandoned one does not leak forever. */
+/**
+ * What a `prepareAnchor`/`prepareRevoke` call needs to be redone, once a
+ * wallet's signature comes back — G12. Deliberately just the public call
+ * parameters, not the assembled-and-simulated transaction itself: those are
+ * small, JSON-safe, and enough to re-simulate the exact same call in
+ * `submitSigned`, which is all `signAndSend` ends up needing (it replaces
+ * whatever it simulated with the wallet's own signed XDR before sending —
+ * see `submitSigned`'s own comment).
+ */
+export type PendingWrite =
+  | { readonly kind: "anchor"; readonly issuerAddress: string; readonly credentialHash: string; readonly subject: string; readonly expiresAt: string }
+  | { readonly kind: "revoke"; readonly issuerAddress: string; readonly credentialHash: string };
+
+/**
+ * Where a `Registry` keeps a `PendingWrite` between `prepareAnchor`/
+ * `prepareRevoke` and `submitSigned` — the two-phase wallet write's whole
+ * reason to exist (T35). The default, in-memory implementation below only
+ * ever survives within one process; a caller whose wallet-anchor flow must
+ * survive more than one process (`apps/web`, G12) supplies its own backed by
+ * shared storage instead — `Registry` never has to know the difference.
+ */
+export interface PendingWriteStore {
+  save(requestId: string, write: PendingWrite, ttlMs: number): Promise<void>;
+  /** Reads and consumes — a `requestId` cannot be replayed. `undefined` if absent or expired. */
+  take(requestId: string): Promise<PendingWrite | undefined>;
+}
+
+/** How long an unsigned transaction waits for its signature before it is
+ * forgotten — long enough for a human to approve it in their wallet, short
+ * enough that an abandoned one does not leak forever. */
 const PENDING_WRITE_TTL_MS = 10 * 60_000;
 
-export class Registry {
-  private readonly pendingWrites = new Map<string, { readonly call: AssembledCall; readonly expiresAt: number }>();
+/** `PendingWriteStore`'s original shape, before G12 — a `Map` scoped to one process. */
+function createInMemoryPendingWriteStore(): PendingWriteStore {
+  const entries = new Map<string, { readonly write: PendingWrite; readonly expiresAt: number }>();
 
+  function pruneExpired(): void {
+    const now = Date.now();
+    for (const [id, entry] of entries) {
+      if (entry.expiresAt < now) entries.delete(id);
+    }
+  }
+
+  return {
+    async save(requestId, write, ttlMs) {
+      pruneExpired();
+      entries.set(requestId, { write, expiresAt: Date.now() + ttlMs });
+    },
+    async take(requestId) {
+      pruneExpired();
+      const entry = entries.get(requestId);
+      entries.delete(requestId);
+      return entry?.write;
+    },
+  };
+}
+
+export class Registry {
   private constructor(
     private readonly config: AgentPassConfig,
     private readonly reader: RegistryMethods,
+    private readonly pendingWrites: PendingWriteStore,
   ) {}
 
-  /** Fetches the contract's interface spec once and reuses it. */
-  static async connect(config: AgentPassConfig): Promise<Registry> {
+  /** Fetches the contract's interface spec once and reuses it. `store` defaults to an in-process `Map` — see `PendingWriteStore`. */
+  static async connect(config: AgentPassConfig, store: PendingWriteStore = createInMemoryPendingWriteStore()): Promise<Registry> {
     try {
       const client = await Client.from({
         contractId: config.contractId,
@@ -134,7 +185,7 @@ export class Registry {
         rpcUrl: config.rpcUrl,
         publicKey: undefined,
       });
-      return new Registry(config, client as unknown as RegistryMethods);
+      return new Registry(config, client as unknown as RegistryMethods, store);
     } catch (error) {
       throw new AgentPassError("NetworkError", "could not reach the registry contract", {
         cause: error,
@@ -278,43 +329,47 @@ export class Registry {
     subject: string;
     expiresAt: Date;
   }): Promise<PreparedRegistryWrite> {
-    const assembled = await this.call(() =>
-      this.reader.anchor(
-        {
-          issuer: params.issuerAddress,
-          cred_hash: hex(params.credentialHash),
-          subject: params.subject,
-          expires_at: BigInt(Math.floor(params.expiresAt.getTime() / 1000)),
-        },
-        { publicKey: params.issuerAddress },
-      ),
-    );
-    return this.stashForSigning(assembled);
+    const assembled = await this.call(() => this.simulateAnchor(params));
+    return this.stashForSigning({
+      kind: "anchor",
+      issuerAddress: params.issuerAddress,
+      credentialHash: params.credentialHash,
+      subject: params.subject,
+      expiresAt: params.expiresAt.toISOString(),
+    }, assembled);
   }
 
   /** `revoke`'s two-phase twin — see {@link prepareAnchor} for why one is needed at all. */
   async prepareRevoke(params: { issuerAddress: string; credentialHash: string }): Promise<PreparedRegistryWrite> {
-    const assembled = await this.call(() =>
-      this.reader.revoke(
-        { issuer: params.issuerAddress, cred_hash: hex(params.credentialHash) },
-        { publicKey: params.issuerAddress },
-      ),
+    const assembled = await this.call(() => this.simulateRevoke(params));
+    return this.stashForSigning({ kind: "revoke", issuerAddress: params.issuerAddress, credentialHash: params.credentialHash }, assembled);
+  }
+
+  /** The exact simulate-only call `prepareAnchor` makes, factored out so `submitSigned` can redo it from a stored `PendingWrite` — G12. */
+  private simulateAnchor(params: { issuerAddress: string; credentialHash: string; subject: string; expiresAt: Date }): Promise<AssembledCall> {
+    return this.reader.anchor(
+      {
+        issuer: params.issuerAddress,
+        cred_hash: hex(params.credentialHash),
+        subject: params.subject,
+        expires_at: BigInt(Math.floor(params.expiresAt.getTime() / 1000)),
+      },
+      { publicKey: params.issuerAddress },
     );
-    return this.stashForSigning(assembled);
   }
 
-  private stashForSigning(assembled: AssembledCall): PreparedRegistryWrite {
-    this.pruneExpiredWrites();
+  /** The exact simulate-only call `prepareRevoke` makes — see {@link simulateAnchor}. */
+  private simulateRevoke(params: { issuerAddress: string; credentialHash: string }): Promise<AssembledCall> {
+    return this.reader.revoke(
+      { issuer: params.issuerAddress, cred_hash: hex(params.credentialHash) },
+      { publicKey: params.issuerAddress },
+    );
+  }
+
+  private async stashForSigning(write: PendingWrite, assembled: AssembledCall): Promise<PreparedRegistryWrite> {
     const requestId = randomUUID();
-    this.pendingWrites.set(requestId, { call: assembled, expiresAt: Date.now() + PENDING_WRITE_TTL_MS });
+    await this.pendingWrites.save(requestId, write, PENDING_WRITE_TTL_MS);
     return { requestId, xdr: assembled.toXdr() };
-  }
-
-  private pruneExpiredWrites(): void {
-    const now = Date.now();
-    for (const [id, entry] of this.pendingWrites) {
-      if (entry.expiresAt < now) this.pendingWrites.delete(id);
-    }
   }
 
   /**
@@ -324,21 +379,36 @@ export class Registry {
    * re-checks whose key produced it; the network is the one that accepts or
    * refuses the signature, the same way it always has for `anchor`/`revoke`.
    *
+   * G12: does not reuse the `AssembledCall` `prepareAnchor`/`prepareRevoke`
+   * built — that object lives only in this process's memory, and cannot
+   * survive `pendingWrites` being backed by shared storage. Instead it
+   * re-simulates the exact same call from the stored `PendingWrite`'s public
+   * parameters. This is safe because `AssembledTransaction.sign()` (the
+   * underlying SDK) discards whatever it just simulated the moment a
+   * `signTransaction` callback returns its own `signedTxXdr` — as this one
+   * does — and rebuilds the transaction to send entirely from that string.
+   * The simulation only ever existed to produce the unsigned XDR a wallet
+   * signs; a fresh one produces an equivalent transaction to sign onto.
+   *
    * @throws AgentPassError `ConfigError` if `requestId` names no pending
    * transaction — already submitted, or its TTL passed.
    */
   async submitSigned(requestId: string, signedTxXdr: string): Promise<string> {
-    this.pruneExpiredWrites();
-    const entry = this.pendingWrites.get(requestId);
-    if (entry === undefined) {
+    const write = await this.pendingWrites.take(requestId);
+    if (write === undefined) {
       throw new AgentPassError("ConfigError", "no pending transaction for this requestId — it may have expired", {
         details: { requestId },
       });
     }
-    this.pendingWrites.delete(requestId);
+
+    const assembled = await this.call(() =>
+      write.kind === "anchor"
+        ? this.simulateAnchor({ ...write, expiresAt: new Date(write.expiresAt) })
+        : this.simulateRevoke(write),
+    );
 
     try {
-      const sent = await entry.call.signAndSend({ signTransaction: async () => ({ signedTxXdr }) });
+      const sent = await assembled.signAndSend({ signTransaction: async () => ({ signedTxXdr }) });
       return sent.sendTransactionResponse?.hash ?? "";
     } catch (error) {
       throw new AgentPassError("NetworkError", "the wallet-signed transaction was rejected by the network", {

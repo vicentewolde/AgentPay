@@ -3775,3 +3775,52 @@ Pendiente: nada de F8. Sigue pendiente comprar `agentpey.com` y
 Custom Domains en Render (sin apuro), y decidir qué sigue en F9 —
 incluida la conversación sobre `G12`/métricas/alertas/retención de
 arriba.
+
+---
+
+## 2026-09-12 (4) — cc/t67-registry-pending-store
+
+Agente: Claude Code
+
+Qué: el usuario pidió abrir una ronda de hardening para `G12`
+(estado de wallet-connect en memoria). Antes de escribir código,
+investigué a fondo (con `EnterPlanMode`) y encontré que el plan
+original aprobado — Postgres + cifrar los campos "secretos" de
+`PendingWalletSession` — sobrestimaba una parte y subestimaba otra:
+`issuerSecret`/`paymentSecret`/`agentKeypair` no son secretos
+por-sesión (son env vars estáticas o una clave re-derivable), así que
+no hace falta cifrar nada; pero `Registry` (`packages/sdk`, Fase 1)
+guarda la transacción Soroban ya armada en un `Map` interno de la
+instancia entre `prepareAnchor`/`prepareRevoke` y `submitSigned` — eso
+sí es el bloqueante real, y no se resuelve sin tocar Fase 1. Se lo
+mostré al usuario con evidencia antes de seguir; confirmó tocar Fase 1
+si hacía falta.
+
+T67 (primer hito de tres, plan completo en
+`/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`):
+`Registry` gana un puerto opcional `PendingWriteStore`
+(`save`/`take`), con una implementación en memoria idéntica a la de
+antes por defecto — cero cambio de comportamiento para
+`apps/agent`/`packages/cli`/scripts. `prepareAnchor`/`prepareRevoke`
+guardan los parámetros de la llamada, no el objeto armado;
+`submitSigned` vuelve a simular la misma llamada antes de firmar y
+enviar — confirmado seguro leyendo el propio `@stellar/stellar-sdk`.
+
+Verificado contra testnet real (no alcanza con tests unitarios en
+Fase 1): dos tests nuevos preparan un anclaje/revocación en una
+instancia de `AgentPass` y lo terminan en **otra instancia distinta**
+compartiendo solo el store — funciona de punta a punta, transacciones
+reales asentadas. Dos mutaciones deliberadas: una ni compiló (el tipo
+discriminado de `PendingWrite` la hace imposible), la otra compiló
+pero la corrida real contra testnet la atrapó. Suite completa del
+monorepo sin regresiones.
+
+Por qué: G12 es el mismo tipo de hueco que G4 tenía (F8), aplicado al
+flujo de wallet — y toca custodia/firma de wallet, así que se queda en
+Claude Code por regla explícita de `CLAUDE.md`, no delegable.
+
+Pendiente: mergear `cc/t67-registry-pending-store` a `main` y
+pushear. T68 (`apps/web`: `PendingWriteStore` sobre Postgres,
+`agentpass` reconstruido por request) y T69 (los otros stores del
+flujo de wallet a Postgres) siguen, uno por uno, con su propia
+revisión antes de cada uno.

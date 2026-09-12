@@ -2138,3 +2138,66 @@ con la nota de qué queda fuera), `BITACORA.md` (este cierre).
 Pendiente: decidir con el usuario si `G12`/métricas/alertas/retención
 abren una ronda nueva de hardening o esperan a F9. Fuera de esto, sin
 nada pendiente de F8.
+
+---
+
+## T67 · `Registry` deja de necesitar la misma instancia — `G12`, primer hito — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** El usuario pidió abrir
+una ronda nueva de hardening para `G12`: hoy, si el piloto corriera
+más de una instancia de `apps/web`, conectar una wallet podría fallar
+de forma intermitente porque el "desafío" que el servidor le pide
+firmar solo vive en la memoria de la instancia que lo generó. Antes de
+escribir código encontré que el plan aprobado originalmente (guardar
+todo en Postgres, cifrando lo que parecía secreto) sobrestimaba el
+problema en una cosa y lo subestimaba en otra: nada de lo que parecía
+secreto necesita cifrarse (son o bien las mismas claves de siempre
+leídas de variables de entorno, o una clave que ya se puede volver a
+calcular), pero hay una pieza más profunda —dentro del propio kit de
+herramientas de Fase 1— que sí impedía que el anclaje de una wallet
+sobreviviera a más de un proceso. Con el visto bueno explícito del
+usuario para tocar esa pieza, este primer hito la arregla: el paquete
+que habla con el contrato ya no necesita ser literalmente el mismo
+objeto en memoria entre el momento en que arma una transacción para
+que la wallet la firme y el momento en que la envía firmada.
+
+**Evidencia técnica** (`C-69`):
+
+- `packages/sdk/src/registry.ts`: `Registry` gana un puerto opcional
+  (`PendingWriteStore`) con una implementación en memoria **idéntica a
+  la de antes** por defecto — ningún llamador existente
+  (`apps/agent`, `packages/cli`, scripts) cambia de comportamiento.
+  `prepareAnchor`/`prepareRevoke` ahora guardan los parámetros de la
+  llamada, no el objeto armado; `submitSigned` vuelve a simular la
+  misma llamada a partir de esos parámetros antes de firmar y enviar
+  — verificado leyendo el propio `@stellar/stellar-sdk` que eso es
+  seguro (la librería descarta la simulación original de todos modos
+  en cuanto recibe la firma ya hecha de la wallet).
+- Dos tests nuevos contra **testnet real** (no simulados): preparar un
+  anclaje o una revocación en una instancia de `AgentPass` y terminarlo
+  en otra instancia completamente distinta, compartiendo solo el
+  almacén de datos — ambos casos funcionan de punta a punta, con
+  transacciones reales asentadas.
+- Dos mutaciones deliberadas para confirmar que los tests atrapan un
+  error real: una la rechazó directamente el chequeo de tipos de
+  TypeScript (ni compiló); la otra compiló pero la corrida contra
+  testnet real falló exactamente como debía, confirmando que el test
+  no estaba de adorno.
+- Suite completa del monorepo, sin regresiones.
+
+Por qué: el usuario pidió expresamente encarar `G12` incluyendo tocar
+Fase 1 si hacía falta, después de que le mostrara por qué el plan de
+"solo cifrar" no alcanzaba. Detalle completo de la investigación (qué
+campos resultaron no ser secretos, y cómo se confirmó que la instancia
+original no hacía falta) en `DECISIONES.md` → `C-69`.
+
+Documentación tocada: `DECISIONES.md` (`C-69`), este archivo. Archivos
+tocados: `packages/sdk/src/registry.ts`, `packages/sdk/src/index.ts`,
+`packages/sdk/src/pending-write.integration.test.ts` (nuevo).
+
+Pendiente: T68 (`apps/web` conecta esto a Postgres de verdad, y
+reconstruye `agentpass` en cada request en vez de mantener la misma
+instancia viva entre pasos), T69 (los otros stores en memoria del
+flujo de wallet — desafíos, sesiones pendientes — también a Postgres).
+Plan completo de los tres hitos en
+`/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.

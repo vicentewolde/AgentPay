@@ -2280,3 +2280,112 @@ corrida real, fila `T66` nueva), `BITACORA.md`. Archivos tocados:
 `waitForExit`).
 
 ---
+
+### C-69 · T67: `Registry` deja de necesitar la misma instancia entre `prepare*` y `submitSigned` — `G12`, primer hito · `Vigente`
+**Fecha:** 2026-09-12
+
+`G12` (mencionado en el alcance de F8, nunca desglosado en un ticket)
+es el mismo problema que `G4` tenía, aplicado al flujo de conexión de
+wallet: si el piloto corre más de una instancia de `apps/web`, un
+visitante puede empezar `/api/wallet/challenge` en una y que
+`/api/wallet/verify` caiga en otra que nunca vio el nonce.
+
+**Investigado antes de escribir nada, con el visto bueno explícito del
+usuario para tocar Fase 1 si hacía falta.** El plan original que el
+usuario aprobó era "Postgres + cifrado" para los campos que parecían
+secretos en `PendingWalletSession`. Rastreando de dónde salen esos
+campos (`server.ts`, función `startSession`), encontré que ninguno es
+en realidad un secreto por-sesión:
+
+- `issuerSecret`/`paymentSecret` son literalmente
+  `ISSUER_SECRET_KEY`/`AGENT_SECRET_KEY` leídos de `env` — los mismos
+  siempre, no algo que la sesión posea.
+- `agentKeypair` se re-deriva de forma determinística vía
+  `ensureTenantAgent(masterMnemonic, sessionId)` — el propio código ya
+  lo re-deriva así en la rama "rehydrate" de `startSession`.
+
+Ninguno necesita cifrado ni persistencia: se pueden volver a
+leer/derivar en cada request. Se lo mostré al usuario antes de seguir
+(no se cambió el plan aprobado en silencio) y confirmó ampliar el
+alcance a lo que de verdad bloqueaba G12.
+
+**El bloqueante real, encontrado leyendo `Registry` (`packages/sdk`,
+Fase 1) a fondo.** `prepareAnchor`/`prepareRevoke` guardaban la
+transacción Soroban ya armada y simulada (`AssembledCall`) en un `Map`
+interno de la instancia (`pendingWrites`), para que `submitSigned` la
+usara dos requests HTTP después. Ese objeto no es serializable a una
+fila de Postgres sin reescribir buena parte del SDK de Stellar. Leyendo
+`AssembledTransaction.sign()` del propio `@stellar/stellar-sdk`
+(`assembled_transaction.js:515-535`), confirmé que esa instancia
+original **no hace falta** para firmar y enviar: el método descarta
+todo lo que acaba de simular en el momento en que el callback de firma
+devuelve su propio `signedTxXdr` (exactamente lo que este código ya
+hace), y reconstruye la transacción a enviar enteramente desde ese
+string. Alcanza con volver a simular la misma llamada (`anchor`/
+`revoke` con los mismos parámetros — datos públicos, chicos) para
+obtener un `AssembledCall` fresco sobre el que llamar `signAndSend`
+exactamente igual que antes.
+
+**El cambio.** `Registry` gana un puerto opcional,
+`PendingWriteStore` (`save`/`take`), con una implementación en memoria
+por defecto **idéntica a la de antes** — todo llamador que no pase
+nada (`apps/agent`, scripts, `packages/cli`) sigue funcionando exacto
+igual, cero cambio de comportamiento. `prepareAnchor`/`prepareRevoke`
+ahora guardan los parámetros de la llamada (`PendingWrite`, un tipo
+discriminado por `kind: "anchor" | "revoke"`), no el objeto armado.
+`submitSigned` lee esos parámetros, vuelve a simular la llamada exacta,
+y llama `signAndSend` sobre el resultado fresco — la misma línea que
+antes, solo que sobre una instancia recién construida. `createAgentPass`
+gana un segundo parámetro opcional, `{ pendingWriteStore }`, para que
+`apps/web` pueda inyectar una implementación compartida (Postgres,
+T68) sin que ningún llamador existente note el cambio.
+
+**Verificado contra testnet real, no solo con tests unitarios — esto
+toca Fase 1.** Suite completa de `packages/sdk`/`packages/mandate`
+(la que usa `RegistryAccess` a través de su propio fake, sin cambios)
+sin regresiones. Dos tests nuevos contra testnet real
+(`pending-write.integration.test.ts`): `prepareRevoke` en una
+instancia de `AgentPass`, `submitSigned` en **otra instancia distinta**
+que comparte solo el `PendingWriteStore` — funciona, revoca de verdad;
+lo mismo para `prepareAnchor` (el camino que el flujo real de wallet
+usa). Un tercer test confirma que un `requestId` que nadie preparó se
+rechaza igual que antes.
+
+**Dos mutaciones deliberadas, no solo argumentadas:**
+1. Invertir qué rama de `submitSigned` re-simula (`anchor` vs
+   `revoke`) — el propio *type-checker* la rechaza: el tipo
+   discriminado de `PendingWrite` hace que esa rama ni siquiera
+   compile con los campos equivocados. Una garantía más fuerte que un
+   test en tiempo de ejecución.
+2. Intercambiar `subject`/`credentialHash` al guardar el `PendingWrite`
+   de un `anchor` — compila (los dos son strings), pero la corrida
+   real contra testnet la atrapó: `credentialHashToBytes` rechaza la
+   dirección Stellar que terminó en el campo equivocado
+   (`ConfigError`, "a credential hash must be 64 lowercase hex
+   characters"). Revertida después de confirmar la falla.
+
+**Qué NO cambió, a propósito:** `anchor()`/`revoke()`/`issue()`/
+`verify()` normales (el camino sin wallet, con un `Keypair` real) —
+solo el camino de dos fases. `checkMandate`/`checkScope`/
+`checkDailyLimit`/`PolicyRail` — nada de esto se tocó. El contrato
+`policy_rail` (Soroban) no depende de nada de esto.
+
+**Alternativa descartada:** cifrar `issuerSecret`/`paymentSecret`/
+`agentKeypair` para poder persistirlos tal cual, siguiendo el plan
+original aprobado. Descartada con evidencia (de dónde sale cada campo,
+mostrado arriba) antes de escribir ninguna primitiva de cifrado nueva
+— habría sido una complejidad real para guardar datos que ni siquiera
+son secretos por-sesión.
+
+Documentación tocada: `BITACORA.md` (nuevo hito T67). Archivos
+tocados: `packages/sdk/src/registry.ts`, `packages/sdk/src/index.ts`,
+`packages/sdk/src/pending-write.integration.test.ts` (nuevo, 3 tests).
+
+Pendiente: T68 (`apps/web`: `PendingWriteStore` sobre Postgres +
+`agentpass` reconstruido por request), T69 (los otros tres stores en
+memoria — `walletChallenges`/`pendingWalletSessions`/
+`pendingConsentSessions`/`walletAddressBySession` — a Postgres, ya sin
+nada secreto que perder). Plan completo en
+`/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.
+
+---
