@@ -25,7 +25,7 @@ async function readEnv(): Promise<z.output<typeof envSchema>> {
 
 const HORIZON_URL = "https://horizon-testnet.stellar.org";
 const FRIEND_BOT_URL = "https://friendbot.stellar.org";
-/** Circle's actual USDC issuer on Stellar testnet (the same identity AgentPay uses). */
+/** Circle's actual USDC issuer on Stellar testnet (the same identity AgentPey uses). */
 const USDC_ISSUER = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 const USDC = new Asset("USDC", USDC_ISSUER);
 

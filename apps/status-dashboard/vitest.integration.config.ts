@@ -7,8 +7,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@agentpass/core": fileURLToPath(new URL("../../packages/core/src/index.ts", import.meta.url)),
-      "@agentpay/directory": fileURLToPath(new URL("../../packages/directory/src/index.ts", import.meta.url)),
-      "@agentpay/vault": fileURLToPath(new URL("../../packages/vault/src/index.ts", import.meta.url)),
+      "@agentpey/directory": fileURLToPath(new URL("../../packages/directory/src/index.ts", import.meta.url)),
+      "@agentpey/vault": fileURLToPath(new URL("../../packages/vault/src/index.ts", import.meta.url)),
     },
   },
   test: {

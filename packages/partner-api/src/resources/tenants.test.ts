@@ -1,4 +1,4 @@
-import { newId, newTenantId, type Tenant } from "@agentpay/directory";
+import { newId, newTenantId, type Tenant } from "@agentpey/directory";
 import { describe, expect, it } from "vitest";
 
 import { createTenantRequestSchema, toTenantResource } from "./tenants.js";

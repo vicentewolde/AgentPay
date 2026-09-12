@@ -1,4 +1,4 @@
-/** A thin, validated native-fetch client for AgentPay's partner `/v1` API. */
+/** A thin, validated native-fetch client for AgentPey's partner `/v1` API. */
 import { AgentPassError, type AgentPassErrorCode } from "@agentpass/core";
 import {
   agentResourceSchema,
@@ -14,7 +14,7 @@ import {
   type CreateTenantRequest,
   type MandateResource,
   type TenantResource,
-} from "@agentpay/partner-api";
+} from "@agentpey/partner-api";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 

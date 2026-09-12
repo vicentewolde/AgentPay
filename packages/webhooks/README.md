@@ -1,11 +1,11 @@
-# `@agentpay/webhooks`
+# `@agentpey/webhooks`
 
 A delivery worker for a webhook event that has already been created by the
 calling application. It does not decide whether an event should exist or be
 emitted; it only POSTs the supplied event to a partner endpoint.
 
 `deliverWebhook` serializes the event once, signs that exact body with
-`signWebhookPayload` from `@agentpay/partner-api`, and sends the result in
+`signWebhookPayload` from `@agentpey/partner-api`, and sends the result in
 the `agentpay-signature` header.
 
 ## Retries

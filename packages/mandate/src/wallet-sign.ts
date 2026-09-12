@@ -63,7 +63,7 @@ export function walletMandateHash(mandate: AgentPayMandate): string {
 export function mandateChallengeMessage(mandate: AgentPayMandate): string {
   const { grant } = mandate.credentialSubject;
   return [
-    "AgentPay Mandate",
+    "AgentPey Mandate",
     `Agent: ${mandate.credentialSubject.id}`,
     `Limit: ${grant.limits.perTx} per purchase, ${grant.limits.perDay} per day, ${grant.limits.currency}`,
     `Valid until: ${mandate.validUntil}`,

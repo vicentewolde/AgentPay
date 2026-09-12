@@ -1,5 +1,5 @@
 /**
- * The `/v1` partner API, wired for real against `@agentpay/directory` — T49.
+ * The `/v1` partner API, wired for real against `@agentpey/directory` — T49.
  *
  * `routePartnerRequest` is pure apart from the `Directory` calls it makes
  * through an injected, narrowly-typed dependency (same seam
@@ -15,7 +15,7 @@
  * it" rule `InvalidApiKey` already applies to a revoked key.
  */
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
-import type { AgentInstance, ConsentSessionRecord, Directory, MandateRecord, Tenant } from "@agentpay/directory";
+import type { AgentInstance, ConsentSessionRecord, Directory, MandateRecord, Tenant } from "@agentpey/directory";
 import {
   authorizeRequest,
   createConsentSessionRequestSchema,
@@ -29,7 +29,7 @@ import {
   toMandateResource,
   toTenantResource,
   type ApiScope,
-} from "@agentpay/partner-api";
+} from "@agentpey/partner-api";
 import { z } from "zod";
 
 export type PartnerRoutesDirectory = Pick<

@@ -19,7 +19,7 @@
  * only one that can take it back out or rotate `owner` (T57, `C-61`). Required
  * and without a default on purpose: there is no wallet this script could
  * reasonably invent, and picking the wrong one is exactly the failure `G9`
- * described — funds no one but AgentPay can move.
+ * described — funds no one but AgentPey can move.
  *
  * Secrets reach the Stellar CLI through the environment, never argv, so they
  * cannot be read out of the process list.
@@ -32,7 +32,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
-import { BAZAAR_USDC_ISSUER, fromScaledAmount, toScaledAmount } from "@agentpay/agent";
+import { BAZAAR_USDC_ISSUER, fromScaledAmount, toScaledAmount } from "@agentpey/agent";
 import { Keypair, StrKey } from "@stellar/stellar-sdk";
 
 import { readEnvFile, upsertEnvValue, writeEnvFile } from "./lib/env-file.js";
@@ -235,7 +235,7 @@ async function main(): Promise<void> {
     readDeployment(DEPLOYMENT_PATH),
   ]);
 
-  process.stdout.write("\nAgentPay deploy:policy-rail · Stellar testnet\n\n");
+  process.stdout.write("\nAgentPey deploy:policy-rail · Stellar testnet\n\n");
   process.stdout.write(`  protocol     ${version.protocolVersion}\n`);
   process.stdout.write(`  deployer     ${admin.publicKey()}\n`);
   process.stdout.write(`  owner        ${agent.publicKey()} (the agent — spends)\n`);

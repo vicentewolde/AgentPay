@@ -1,5 +1,5 @@
 import { stellarAddressToDid } from "@agentpass/core";
-import type { AgentInstance, Partner, Tenant } from "@agentpay/directory";
+import type { AgentInstance, Partner, Tenant } from "@agentpey/directory";
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
 

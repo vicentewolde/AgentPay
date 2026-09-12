@@ -57,10 +57,10 @@ decisión de la Fase 2 —es el primer código que lee el campo— y el registro
 una fase cerrada no se reescribe hacia atrás. El documento de la Fase 1 lleva
 un puntero a esta entrada.
 
-### B-2 · Scope de paquete `@agentpay/*` para lo que no es AgentPass · `Vigente`
+### B-2 · Scope de paquete `@agentpey/*` para lo que no es AgentPass · `Vigente`
 **Fecha:** 2026-09-02 (T9)
 
-El agente vive en `apps/agent` como **`@agentpay/agent`**, no `@agentpass/agent`.
+El agente vive en `apps/agent` como **`@agentpey/agent`**, no `@agentpass/agent`.
 Los tres paquetes de la Fase 1 (`@agentpass/core|sdk|cli`) conservan su scope.
 
 **Motivo.** El agente *consume* AgentPass, no lo extiende: importa

@@ -9,13 +9,13 @@
  * half-finished wallet session must not outlive its window — can be tested
  * directly instead of only through a live browser.
  */
-import { ID_PREFIXES, ULID_LENGTH } from "@agentpay/directory";
+import { ID_PREFIXES, ULID_LENGTH } from "@agentpey/directory";
 
 const SESSION_COOKIE = "agentpay_sid";
 
 /**
  * Session ids are only ever minted by this server — `randomUUID()` for the
- * classic (platform-signed) path, or a real `@agentpay/directory` tenant id
+ * classic (platform-signed) path, or a real `@agentpey/directory` tenant id
  * (`ptn_<ULID>:<ULID>`) for the wallet path since T39 — validated on the way
  * back in so a forged cookie cannot be used as another visitor's identity
  * when reading, writing or rehydrating their rows.
@@ -55,7 +55,7 @@ export function parseCookies(header: string | undefined): Map<string, string> {
 
 /** The message a wallet is asked to sign to prove it controls its address. */
 export function challengeMessage(nonce: string): string {
-  return `VynGent quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
+  return `AgentPey quiere confirmar que controlás esta wallet.\nNonce: ${nonce}`;
 }
 
 export const WALLET_CHALLENGE_TTL_MS = 5 * 60_000;

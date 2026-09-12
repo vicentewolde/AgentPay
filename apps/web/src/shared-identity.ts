@@ -1,6 +1,6 @@
 /**
  * Bootstraps the shared payer — `AGENT_SECRET_KEY` — as a row in
- * `@agentpay/directory`, and finds or creates each visitor's own tenant
+ * `@agentpey/directory`, and finds or creates each visitor's own tenant
  * under the partner that row anchors.
  *
  * **Renamed in F4 (T40), on purpose.** Through T39 this module's main export
@@ -22,7 +22,7 @@
  * live database.
  */
 import { AgentPassError, stellarAddressToDid } from "@agentpass/core";
-import type { AgentInstance, Directory, Tenant } from "@agentpay/directory";
+import type { AgentInstance, Directory, Tenant } from "@agentpey/directory";
 
 export interface SharedPayerIdentity {
   readonly partnerId: string;
@@ -43,7 +43,7 @@ export type SharedPayerDirectory = Pick<
   "findAgentByAddress" | "createPartner" | "createTenant" | "findTenant" | "createAgent" | "setAgentOnchainState"
 >;
 
-const BOOTSTRAP_PARTNER_NAME = "AgentPay web — pagador compartido";
+const BOOTSTRAP_PARTNER_NAME = "AgentPey web — pagador compartido";
 const BOOTSTRAP_EXTERNAL_REF = "shared-payer";
 const BOOTSTRAP_PAYER_LABEL =
   "Cuenta pagadora compartida de apps/web (AGENT_SECRET_KEY) — cada tenant tiene su propia identidad desde F4; paga esta hasta que F6 le dé a cada tenant su propio policy_rail fondeado";
@@ -115,7 +115,7 @@ async function requireTenantsPartner(directory: SharedPayerDirectory, payer: Age
  * an appropriate `externalRef` here: it is a public, pseudonymous
  * identifier, and `apps/web` visiting itself is the direct pilot, not a
  * third party's user being minimised into an opaque reference — the case
- * `assertOpaqueExternalRef` (`@agentpay/directory`) guards against. `D6`
+ * `assertOpaqueExternalRef` (`@agentpey/directory`) guards against. `D6`
  * already accepted, for testnet, that the same wallet is correlatable
  * across partners; this is the same wallet correlatable with itself, which
  * is not a new exposure.

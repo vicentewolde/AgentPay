@@ -1,4 +1,4 @@
-# AgentPay — Plan maestro del proyecto
+# AgentPey — Plan maestro del proyecto
 
 > Vista de conjunto de **todo** el proyecto, de la Fase 0 a la Fase 6. Los demás
 > documentos (`docs/fase-1-agentpass/CONTEXTO.md`, `docs/fase-1-agentpass/ARQUITECTURA.md`, `docs/fase-1-agentpass/BITACORA.md`,
@@ -14,7 +14,7 @@
 
 ---
 
-## 1. Qué es AgentPay, en una frase
+## 1. Qué es AgentPey, en una frase
 
 > Un agente de IA debe poder probar criptográficamente quién lo opera y qué
 > está autorizado a hacer, y esa autorización debe poder cortarse desde fuera
@@ -55,7 +55,7 @@ en su propia carpeta bajo `docs/`.
 | `README.md` | Fase 1 (AgentPass) | Cómo instalar, desplegar y correr el ciclo completo de AgentPass. En inglés — es la puerta de entrada técnica, puede llegar a ojos externos | Cerrado, T1–T8 |
 | `docs/fase-1-agentpass/CONTEXTO.md` | Fase 1 (AgentPass) | Qué es AgentPass, la tesis de identidad verificable, qué NO es | Cerrado |
 | `docs/fase-1-agentpass/ARQUITECTURA.md` | Fase 1 (AgentPass) | Mapa técnico denso: modelo de identidad, esquema de credencial, superficie del contrato, decisiones de seguridad | Cerrado, pensado para copiarse entero en un chat nuevo |
-| `docs/fase-1-agentpass/BITACORA.md` | Fase 1 (AgentPass) | Bitácora hito a hito (T1–T8), en lenguaje llano, con evidencia | Cerrado — "Estado actual: piloto completo" se refiere a **AgentPass**, no al proyecto AgentPay entero |
+| `docs/fase-1-agentpass/BITACORA.md` | Fase 1 (AgentPass) | Bitácora hito a hito (T1–T8), en lenguaje llano, con evidencia | Cerrado — "Estado actual: piloto completo" se refiere a **AgentPass**, no al proyecto AgentPey entero |
 | `docs/fase-1-agentpass/DECISIONES.md` | Fase 1 (AgentPass) | Las 7 decisiones del brief original (A-1 a A-7) + 41 decisiones de implementación (I-1 a I-41), cada una con motivo y alternativa descartada | Cerrado, 0 pendientes |
 | `docs/fase-2-agente-compra/ARQUITECTURA.md` | Fase 2 (agente de compra) | Mapa técnico denso: catálogo, herramientas, verificación de credencial, chequeo de scope, forma exacta del `PurchaseIntent` | Cerrado, T9–T15 — pensado para copiarse entero en un chat nuevo |
 | `docs/fase-2-agente-compra/BITACORA.md` | Fase 2 (agente de compra) | Bitácora hito a hito (T9–T15), en lenguaje llano, con evidencia | Cerrado, T9–T15 |
@@ -68,7 +68,7 @@ en su propia carpeta bajo `docs/`.
 | `docs/fase-4-mandategate/BITACORA.md` | Fase 4 (MandateGate) | Bitácora hito a hito (T24–T26), en lenguaje llano, con evidencia | Cerrado, T24–T26 |
 | `docs/fase-4-mandategate/DECISIONES.md` | Fase 4 (MandateGate) | Decisiones de esta fase (`G-1` a `G-12`), cada una con motivo y alternativa descartada | Cerrado, T24–T26 |
 | `docs/fase-5-mandatevault/CONTEXTO.md` | Fase 5 (MandateVault) | Qué prueba, qué NO es, qué cambió respecto al alcance documentado | Vigente, en curso |
-| `docs/fase-5-mandatevault/ARQUITECTURA.md` | Fase 5 (MandateVault) | Mapa técnico denso: el paquete `@agentpay/vault`, la cadena de hashes, el seam de `policyRail?` | Vigente, en curso |
+| `docs/fase-5-mandatevault/ARQUITECTURA.md` | Fase 5 (MandateVault) | Mapa técnico denso: el paquete `@agentpey/vault`, la cadena de hashes, el seam de `policyRail?` | Vigente, en curso |
 | `docs/fase-5-mandatevault/BITACORA.md` | Fase 5 (MandateVault) | Bitácora hito a hito (T27–T30), en lenguaje llano, con evidencia | T27–T30 cerrados |
 | `docs/fase-5-mandatevault/DECISIONES.md` | Fase 5 (MandateVault) | Decisiones de esta fase (`V-1` a `V-7`), cada una con motivo y alternativa descartada | En curso |
 
@@ -78,7 +78,7 @@ propia carpeta `docs/fase-N-nombre/` con su `CONTEXTO`, `ARQUITECTURA`,
 numeración original intacta (`A-1`…`A-7`, `I-1`…`I-41`).
 
 Se decidió al revés de lo que este archivo recomendaba antes —extender los
-mismos cuatro archivos a todo AgentPay— porque una sola `BITACORA.md` cubriendo
+mismos cuatro archivos a todo AgentPey— porque una sola `BITACORA.md` cubriendo
 siete fases se vuelve ilegible mucho antes de terminar, y porque el corte por
 fase deja obvio de un vistazo qué documentación está cerrada y cuál está viva.
 
@@ -167,7 +167,7 @@ necesita saber sin ir a leer esos tres archivos:
 | SDK disponible | `issue()`, `verify()`, `revoke()`, `status()`, `registerIssuer()`, `deactivateIssuer()` en `@agentpass/sdk` |
 | CLI disponible | `agentpass issue \| verify \| revoke \| status` |
 | Errores | una clase `AgentPassError` con `code` de unión literal — ver la lista completa en `docs/fase-1-agentpass/ARQUITECTURA.md §9` |
-| Repo | `github.com/vicentewolde/AgentPay`, **público** desde el 2026-09-02 (`P-1`) |
+| Repo | `github.com/vicentewolde/AgentPey`, **público** desde el 2026-09-02 (`P-1`) |
 
 **Lo único que quedó abierto de esta fase — cerrado el 2026-09-02, en T9.**
 El schema acepta `scope.venues` y `scope.assets` como arrays vacíos, y durante
@@ -475,7 +475,7 @@ de `PolicyRail.authorise()` (aprobada o rechazada) quedaba en ningún lado
 durable, ni había vínculo criptográfico entre un pago real y el intent/
 mandato que lo autorizó (`@x402/stellar` no expone memo — bloqueante real,
 detalle en `docs/fase-5-mandatevault/DECISIONES.md` → `V-3`). T27 cierra el
-primero: `@agentpay/vault`, una bitácora durable y encadenada por hash de
+primero: `@agentpey/vault`, una bitácora durable y encadenada por hash de
 cada decisión, cableada en `apps/web`. T28 cerró el segundo: cada pago real
 ancla `sha256(record.hash + ":" + paymentTx)` contra `agent_registry`,
 verificado de forma independiente contra testnet real. T29 le dio a esa
@@ -494,7 +494,7 @@ Tellus.
 
 | Hito | Qué construye | Estado |
 |---|---|---|
-| T27 | `@agentpay/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` (aprobada o rechazada) | ✅ cerrado 2026-09-04 |
+| T27 | `@agentpey/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` (aprobada o rechazada) | ✅ cerrado 2026-09-04 |
 | T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry`, tras cada pago real | ✅ cerrado 2026-09-04 |
 | T29 | Superficie de consulta: sección "Bitácora" en `apps/web`, estado on-chain de cada anclaje en vivo | ✅ cerrado 2026-09-04 |
 | T30 | `AgentPass.getRecord()`: credencial y Mandato, con su estado on-chain, en la misma bitácora | ✅ cerrado 2026-09-04 |
@@ -535,7 +535,7 @@ convertir el piloto en un producto que terceros puedan integrar, con
 partners reales en testnet. Ver `P-6` en
 [docs/DECISIONES.md](docs/DECISIONES.md) y el detalle completo (panorama
 competitivo, mercado, hoja de ruta técnica, plan financiero) en el plan de
-trabajo "AgentPay: De Piloto a Producto" (2026-09-09).
+trabajo "AgentPey: De Piloto a Producto" (2026-09-09).
 
 **Desde T37 (2026-09-10) la mitad de "comercialización" tiene un plano
 detallado y decisiones tomadas.** Ver
@@ -618,11 +618,11 @@ arriba — para no tener que reconstruirlo leyendo las siete otra vez.
 ## 6. Principios estructurales del proyecto completo
 
 Cuatro decisiones tomadas antes de escribir código, que aplican a las siete
-fases sin excepción — no son de AgentPass, son de AgentPay:
+fases sin excepción — no son de AgentPass, son de AgentPey:
 
 1. **Monorepo público único desde el día uno**, para construir historial de
    commits visible de cara a SCF. *Cumplido el 2026-09-02 (`P-1`):
-   `vicentewolde/AgentPay` es público, y AgentPass entró fusionado con sus diez
+   `vicentewolde/AgentPey` es público, y AgentPass entró fusionado con sus diez
    commits como ancestros reales, no copiado. Supersede a I-13.*
 2. **Versiones fijadas del toolchain**, resueltas contra la red viva en cada
    corrida, nunca asumidas. *Cumplido en la Fase 1 (`soroban-sdk` 27.0.6 pese

@@ -11,7 +11,7 @@
  * decision itself is not re-litigated there, only transported.
  */
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
-import type { ApiKey } from "@agentpay/directory";
+import type { ApiKey } from "@agentpey/directory";
 
 import { type ApiScope, apiScopeCovers } from "./scopes.js";
 
@@ -32,7 +32,7 @@ export interface AuthorizedRequest {
   readonly scopes: readonly string[];
 }
 
-/** The one call this contract needs from `@agentpay/directory` — injected so this package never opens a connection of its own. */
+/** The one call this contract needs from `@agentpey/directory` — injected so this package never opens a connection of its own. */
 export type AuthenticateApiKey = (secret: string) => Promise<ApiKey | undefined>;
 
 function extractBearerSecret(authorizationHeader: string | undefined): string {

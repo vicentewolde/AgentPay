@@ -1,5 +1,5 @@
 import { stellarAddressToDid } from "@agentpass/core";
-import type { CredentialRecord, MandateRecord } from "@agentpay/directory";
+import type { CredentialRecord, MandateRecord } from "@agentpey/directory";
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 

@@ -1,5 +1,5 @@
 {
-  "name": "@agentpay/status-dashboard",
+  "name": "@agentpey/status-dashboard",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
   },
   "dependencies": {
     "@agentpass/core": "workspace:*",
-    "@agentpay/directory": "workspace:*",
-    "@agentpay/vault": "workspace:*",
+    "@agentpey/directory": "workspace:*",
+    "@agentpey/vault": "workspace:*",
     "zod": "^4.5.4"
   },
   "devDependencies": {

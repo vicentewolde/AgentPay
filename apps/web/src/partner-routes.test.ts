@@ -10,7 +10,7 @@ import {
   type IdempotencyRecord,
   type MandateRecord,
   type Tenant,
-} from "@agentpay/directory";
+} from "@agentpey/directory";
 import { Keypair } from "@stellar/stellar-sdk";
 import { beforeEach, describe, expect, it } from "vitest";
 

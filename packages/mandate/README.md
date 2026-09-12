@@ -1,9 +1,9 @@
-# `@agentpay/mandate`
+# `@agentpey/mandate`
 
 The principal's signed consent. Phase 3, milestone T16.
 
 A credential (`@agentpass/core`) says *who this agent is and what its issuer
-believes it may do*. A purchase intent (`@agentpay/agent`) says *what this agent
+believes it may do*. A purchase intent (`@agentpey/agent`) says *what this agent
 wants to do right now*. A **Mandate** is the third statement, and the one that
 was missing: **"I authorise this agent to spend up to this much, at these
 venues, in these assets, until this date"** — signed by the principal, and by
@@ -14,7 +14,7 @@ own `issuer` fails with `SignerMismatch` before a document is produced.
 
 ## Install
 
-Part of the AgentPay workspace; nothing to install separately.
+Part of the AgentPey workspace; nothing to install separately.
 
 ```bash
 pnpm install
@@ -25,7 +25,7 @@ pnpm install
 ```ts
 import { Keypair } from "@stellar/stellar-sdk/base";
 import { stellarAddressToDid } from "@agentpass/core";
-import { createMandate, signMandate, verifyMandate } from "@agentpay/mandate";
+import { createMandate, signMandate, verifyMandate } from "@agentpey/mandate";
 
 const mandate = createMandate({
   principal: stellarAddressToDid(principalKeypair.publicKey(), "testnet"),
@@ -75,7 +75,7 @@ Typed `AgentPassError` with a `code`, never a bare `Error`:
 ## Test
 
 ```bash
-pnpm --filter @agentpay/mandate test
+pnpm --filter @agentpey/mandate test
 ```
 
 ## Design notes

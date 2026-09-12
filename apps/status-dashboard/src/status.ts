@@ -1,6 +1,6 @@
 import { AgentPassError } from "@agentpass/core";
-import type { MandateRecord, Tenant } from "@agentpay/directory";
-import type { VaultRecord, VaultVerification } from "@agentpay/vault";
+import type { MandateRecord, Tenant } from "@agentpey/directory";
+import type { VaultRecord, VaultVerification } from "@agentpey/vault";
 
 /**
  * The dashboard's deliberately small read-only view of the directory. Keeping

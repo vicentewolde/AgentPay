@@ -42,9 +42,9 @@ import {
 import { createAgentPass } from "@agentpass/sdk";
 import { Keypair } from "@stellar/stellar-sdk";
 
-import { anchorMandate, createMandate } from "@agentpay/mandate";
+import { anchorMandate, createMandate } from "@agentpey/mandate";
 
-import type { CreatePurchaseIntentResult } from "@agentpay/agent";
+import type { CreatePurchaseIntentResult } from "@agentpey/agent";
 import {
   createAgent,
   createBazaarCatalog,
@@ -55,7 +55,7 @@ import {
   fillRouteTemplate,
   getBazaarServiceRoute,
   verifyIntent,
-} from "@agentpay/agent";
+} from "@agentpey/agent";
 
 import { readEnvFile } from "./lib/env-file.js";
 import { TESTNET } from "./lib/network.js";
@@ -114,7 +114,7 @@ async function main(): Promise<void> {
     ? { contractId: requireEnv(env, "POLICY_RAIL_CONTRACT_ID"), ownerSecret: agentKeypair.secret() }
     : undefined;
 
-  process.stdout.write("\nAgentPay · pago x402 real · Fase 4 (T24) · Stellar testnet\n");
+  process.stdout.write("\nAgentPey · pago x402 real · Fase 4 (T24) · Stellar testnet\n");
   line("producto", PRODUCT_ID);
   line("bazaar", baseUrl);
   line("pagador", payer === undefined ? `${agentKeypair.publicKey()} (cuenta clásica)` : `${payer.contractId} (policy_rail)`);

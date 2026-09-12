@@ -3,7 +3,7 @@
  * will contain an email address unless something refuses it.
  *
  * `external_ref` is how CloudOps says "this tenant is my user `usr_123`".
- * AgentPay never interprets it, never resolves it, and never needs to: it is
+ * AgentPey never interprets it, never resolves it, and never needs to: it is
  * an opaque key, scoped to one partner. The requirement it exists to satisfy
  * is that a partner can integrate **without sending personal data**
  * (`PLATAFORMA-PARTNERS.md` §2.4).
@@ -86,21 +86,21 @@ export function assertOpaqueExternalRef(externalRef: string): string {
     reject(
       "an external reference must not be an email address",
       externalRef,
-      "send your own user id, or a hash of the email — AgentPay never needs to resolve it",
+      "send your own user id, or a hash of the email — AgentPey never needs to resolve it",
     );
   }
   if (LOOKS_LIKE_RUT.test(externalRef)) {
     reject(
       "an external reference must not be a national identity number",
       externalRef,
-      "send your own user id, or a hash of it — AgentPay never needs to resolve it",
+      "send your own user id, or a hash of it — AgentPey never needs to resolve it",
     );
   }
   if (LOOKS_LIKE_PHONE.test(externalRef)) {
     reject(
       "an external reference must not be a phone number",
       externalRef,
-      "send your own user id, or a hash of it — AgentPay never needs to resolve it",
+      "send your own user id, or a hash of it — AgentPey never needs to resolve it",
     );
   }
   return externalRef;

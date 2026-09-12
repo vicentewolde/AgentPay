@@ -1,4 +1,4 @@
-import { newId, newTenantId, type MandateRecord } from "@agentpay/directory";
+import { newId, newTenantId, type MandateRecord } from "@agentpey/directory";
 import { describe, expect, it } from "vitest";
 
 import { computeMandateStatus, toMandateResource } from "./mandates.js";

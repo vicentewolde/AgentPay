@@ -5,8 +5,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
-import { createDirectory, type Directory } from "@agentpay/directory";
-import { createPostgresMandateVault, type VaultRecord } from "@agentpay/vault";
+import { createDirectory, type Directory } from "@agentpey/directory";
+import { createPostgresMandateVault, type VaultRecord } from "@agentpey/vault";
 import { z } from "zod";
 
 import {
@@ -81,9 +81,9 @@ function renderPage(tenantId: string | undefined, mandates: Awaited<ReturnType<t
   const tenant = tenantId === undefined ? "" : escapeHtml(tenantId);
 
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AgentPay status</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AgentPey status</title>
 <style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#18212f}input,button{font:inherit;padding:.5rem}table{border-collapse:collapse;width:100%;margin:1rem 0 2rem}th,td{border:1px solid #c9d2dc;padding:.55rem;text-align:left;vertical-align:top;word-break:break-word}th{background:#edf2f7}.ok{color:#08783f;font-weight:700}</style>
-</head><body><h1>AgentPay internal status</h1><p>Read-only operational view. It cannot start payments, revoke mandates, or write records.</p>
+</head><body><h1>AgentPey internal status</h1><p>Read-only operational view. It cannot start payments, revoke mandates, or write records.</p>
 <form method="get"><label for="tenantId">Tenant ID</label> <input id="tenantId" name="tenantId" value="${tenant}" required> <button type="submit">Load status</button></form>
 ${tenantId === undefined ? "<p>Enter a tenant ID to inspect its mandate history and vault chain.</p>" : `<h2>Tenant ${tenant}</h2><h3>Vault chain: <span class="${vault?.verification.ok ? "ok" : ""}">${escapeHtml(health)}</span></h3><h3>Recent mandates</h3><table><thead><tr><th>Created</th><th>ID</th><th>Hash</th><th>Status</th></tr></thead><tbody>${mandateRows || "<tr><td colspan=\"4\">No mandates.</td></tr>"}</tbody></table><h3>Recent vault records</h3><table><thead><tr><th>Seq</th><th>At</th><th>Kind</th><th>Amount</th><th>Detail</th></tr></thead><tbody>${vaultRows || "<tr><td colspan=\"5\">No vault records.</td></tr>"}</tbody></table>`}
 </body></html>`;

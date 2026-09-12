@@ -38,10 +38,10 @@ importers:
       '@agentpass/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@agentpay/mandate':
+      '@agentpey/mandate':
         specifier: workspace:*
         version: link:../../packages/mandate
-      '@agentpay/vault':
+      '@agentpey/vault':
         specifier: workspace:*
         version: link:../../packages/vault
       '@stellar/stellar-sdk':
@@ -65,10 +65,10 @@ importers:
       '@agentpass/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@agentpay/directory':
+      '@agentpey/directory':
         specifier: workspace:*
         version: link:../../packages/directory
-      '@agentpay/vault':
+      '@agentpey/vault':
         specifier: workspace:*
         version: link:../../packages/vault
       zod:
@@ -93,22 +93,22 @@ importers:
       '@agentpass/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
-      '@agentpay/agent':
+      '@agentpey/agent':
         specifier: workspace:*
         version: link:../agent
-      '@agentpay/directory':
+      '@agentpey/directory':
         specifier: workspace:*
         version: link:../../packages/directory
-      '@agentpay/mandate':
+      '@agentpey/mandate':
         specifier: workspace:*
         version: link:../../packages/mandate
-      '@agentpay/partner-api':
+      '@agentpey/partner-api':
         specifier: workspace:*
         version: link:../../packages/partner-api
-      '@agentpay/tenancy':
+      '@agentpey/tenancy':
         specifier: workspace:*
         version: link:../../packages/tenancy
-      '@agentpay/vault':
+      '@agentpey/vault':
         specifier: workspace:*
         version: link:../../packages/vault
       '@stellar/stellar-sdk':
@@ -158,7 +158,7 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
     devDependencies:
-      '@agentpay/tenancy':
+      '@agentpey/tenancy':
         specifier: workspace:*
         version: link:../tenancy
       '@types/pg':
@@ -189,10 +189,10 @@ importers:
       '@agentpass/core':
         specifier: workspace:*
         version: link:../core
-      '@agentpay/directory':
+      '@agentpey/directory':
         specifier: workspace:*
         version: link:../directory
-      '@agentpay/mandate':
+      '@agentpey/mandate':
         specifier: workspace:*
         version: link:../mandate
       zod:
@@ -208,7 +208,7 @@ importers:
       '@agentpass/core':
         specifier: workspace:*
         version: link:../core
-      '@agentpay/partner-api':
+      '@agentpey/partner-api':
         specifier: workspace:*
         version: link:../partner-api
       zod:
@@ -254,7 +254,7 @@ importers:
       '@agentpass/core':
         specifier: workspace:*
         version: link:../core
-      '@agentpay/partner-api':
+      '@agentpey/partner-api':
         specifier: workspace:*
         version: link:../partner-api
 

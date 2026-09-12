@@ -35,8 +35,8 @@
  * never checks back.
  */
 import { AgentPassError } from "@agentpass/core";
-import { BAZAAR_USDC_ISSUER, fromScaledAmount, toScaledAmount } from "@agentpay/agent";
-import type { Directory } from "@agentpay/directory";
+import { BAZAAR_USDC_ISSUER, fromScaledAmount, toScaledAmount } from "@agentpey/agent";
+import type { Directory } from "@agentpey/directory";
 import { Keypair, Networks, StrKey, contract } from "@stellar/stellar-sdk";
 
 import type { TenantAgent } from "./tenant-agent.js";

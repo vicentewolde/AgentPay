@@ -14,7 +14,7 @@ import {
   VC_CONTEXT_V2,
   stellarAddressToDid,
 } from "@agentpass/core";
-import { createMandate, type AgentPayMandate, type MandateGrant } from "@agentpay/mandate";
+import { createMandate, type AgentPayMandate, type MandateGrant } from "@agentpey/mandate";
 
 export interface SessionDocumentsParams {
   /** The platform key that issues (and signs) the credential. */

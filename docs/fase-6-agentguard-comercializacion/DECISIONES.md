@@ -9,7 +9,7 @@
 ### C-1 · Un seed maestro derivado, no un secreto por tenant · `Vigente`
 **Fecha:** 2026-09-09 (T32)
 
-`@agentpay/tenancy` deriva las llaves de cada tenant desde un único seed
+`@agentpey/tenancy` deriva las llaves de cada tenant desde un único seed
 BIP-39 vía SEP-0005/BIP-44, en vez de generar y guardar un secreto Stellar
 independiente por cada uno.
 
@@ -48,7 +48,7 @@ sub-árboles de derivación) para separar agente e issuer. Se descartó por
 innecesaria — la paridad resuelve la separación con la misma garantía
 criptográfica y una sola frase semilla que proteger.
 
-### C-3 · `@agentpay/tenancy` no lee `.env.local` ni ninguna variable de entorno · `Vigente`
+### C-3 · `@agentpey/tenancy` no lee `.env.local` ni ninguna variable de entorno · `Vigente`
 **Fecha:** 2026-09-09 (T32)
 
 El paquete recibe el seed maestro como parámetro de función; no tiene
@@ -123,7 +123,7 @@ toca nada ya cerrado.
 `createPostgresMandateVault` se cableó en `apps/web` usando el mismo
 `sessionId` que ya identificaba cada visitante (antes, la clave de un
 archivo JSONL; ahora, la columna `tenant_id`). Ninguna cuenta Stellar nueva
-se deriva todavía con `@agentpay/tenancy` (T32) dentro de `apps/web` — todos
+se deriva todavía con `@agentpey/tenancy` (T32) dentro de `apps/web` — todos
 los visitantes siguen firmando con `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY`
 compartidos.
 
@@ -140,7 +140,7 @@ en una decisión de producto que merece su propia conversación, siguiendo el
 mismo criterio que ya usó `G-8` en la Fase 4 (documentar un hueco conocido
 en vez de resolverlo apurado).
 
-**Alternativa descartada:** cablear `@agentpay/tenancy` en el mismo hito,
+**Alternativa descartada:** cablear `@agentpey/tenancy` en el mismo hito,
 asumiendo un fondeo automático vía Friendbot para cada tenant nuevo. Se
 descartó porque es una decisión de producto (qué cuenta como "tenant", cómo
 se fondea, qué pasa si el fondeo falla a mitad de un flujo) que el usuario
@@ -254,7 +254,7 @@ un problema que `isConnected()` ya resuelve gratis y sin inventar nada.
 ### C-11 · Deferred, sin construir todavía: una cuenta Stellar propia y fondeada por tenant · `Vigente`
 **Fecha:** 2026-09-09 (T34)
 
-`@agentpay/tenancy` (T32) sigue sin cablearse dentro de `apps/web` — cada
+`@agentpey/tenancy` (T32) sigue sin cablearse dentro de `apps/web` — cada
 tenant, wallet conectada o no, sigue gastando desde la cuenta compartida
 `AGENT_SECRET_KEY`.
 
@@ -416,7 +416,7 @@ en cada demo.
 **Fecha:** 2026-09-09 (T35)
 
 Con la wallet ahora firmando de verdad su propio Mandato, el agente sigue
-gastando desde la cuenta compartida `AGENT_SECRET_KEY` — `@agentpay/tenancy`
+gastando desde la cuenta compartida `AGENT_SECRET_KEY` — `@agentpey/tenancy`
 (T32) sigue sin cablearse dentro de `apps/web`. El usuario ya removió el
 bloqueante de fondeo de `C-11` (asumiendo que quien conecta su wallet ya
 tiene USDC de testnet cargado de antes), pero eso resuelve la mitad del
@@ -429,7 +429,7 @@ no "dale con todo lo de tenancy". Sumarlo de pasada habría sido expandir el
 alcance sin que el usuario lo pidiera, la misma razón que ya justificó
 `C-6` en T33.
 
-**Alternativa descartada:** cablear `@agentpay/tenancy` en el mismo hito ya
+**Alternativa descartada:** cablear `@agentpey/tenancy` en el mismo hito ya
 que la precondición de USDC lo desbloquea. Se descartó por alcance — sigue
 faltando decidir cómo y cuándo se deriva el índice de tenant de cada
 wallet nueva, una conversación de producto que no se tuvo todavía.
@@ -559,7 +559,7 @@ casual pueda probar sin fondear nada. Lo que cambia es que deja de ser el
 
 **Precondición registrada, no construida.** `contracts/policy-rail/src/lib.rs`
 no tiene retiro, ni rotación de owner, ni revocación: quien fondee un rail
-cuyo owner tenga AgentPay **no puede recuperar su saldo**. En testnet con
+cuyo owner tenga AgentPey **no puede recuperar su saldo**. En testnet con
 montos simbólicos es tolerable y así queda. Antes de cualquier fondo real es
 bloqueante. Es un cambio de contrato — área restringida por `CLAUDE.md` — y
 **no se construye sin pedido explícito del usuario**.
@@ -607,7 +607,7 @@ on-chain es exactamente el momento en que consiente y fondea, no antes.
 ### C-22 · La integración es híbrida: API hospedada para lo que debe ser hospedado, SDK local para lo que debe ser verificable · `Vigente`
 **Fecha:** 2026-09-10 (T37)
 
-Confirmado por el usuario. **Hospedado por AgentPay:** alta de tenants y
+Confirmado por el usuario. **Hospedado por AgentPey:** alta de tenants y
 agentes, flujo de consentimiento, custodia de las llaves derivadas, la
 decisión de autorización que necesita estado (`perDay`), la bitácora y los
 webhooks. **Biblioteca local en el partner:** verificar la credencial,
@@ -615,7 +615,7 @@ verificar el Mandato, `checkScope`, `checkMandate`, armar el
 `PurchaseIntent`, hablar x402.
 
 **Motivo.** El proyecto ya está construido así y la tesis depende de ello:
-`@agentpass/core`, `@agentpass/sdk`, `@agentpay/mandate` y el motor de
+`@agentpass/core`, `@agentpass/sdk`, `@agentpey/mandate` y el motor de
 `apps/agent` son bibliotecas puras, verificables sin red. Obligar a un
 partner a preguntarle a una API si un Mandato es válido, cuando puede
 verificar la firma él mismo, destruye la propiedad que hace al producto
@@ -712,7 +712,7 @@ bloquea el trabajo inmediato.
 
 ---
 
-### C-26 · El paquete se llama `@agentpay/directory`, no `registry` · `Vigente`
+### C-26 · El paquete se llama `@agentpey/directory`, no `registry` · `Vigente`
 **Fecha:** 2026-09-10 (T38)
 
 El paquete que guarda partners, tenants, principals, agentes, credenciales y
@@ -726,7 +726,7 @@ obligaría, para siempre, a preguntar cuál de los tres es en cada conversación
 —y la confusión caería justo sobre la palabra que nombra el punto de
 revocación—.
 
-**Alternativa descartada:** meterlo dentro de `@agentpay/tenancy`. Se descartó
+**Alternativa descartada:** meterlo dentro de `@agentpey/tenancy`. Se descartó
 porque ese paquete es deliberadamente puro: no lee entorno, no hace I/O, no
 tiene dependencias fuera de la derivación (`C-3`). Agregarle un `Pool` de
 Postgres rompería exactamente la propiedad que lo hace testeable sin nada
@@ -751,7 +751,7 @@ después descartó.
 **Qué cambia y qué no.** El esquema de derivación de T32 no se toca: sigue
 siendo `m/44'/148'/<índice>'` con paridad par/impar para el rol, y sigue
 siendo cierto que dos índices distintos nunca colisionan. Lo único que cambia
-es quién recibe un índice. `@agentpay/tenancy` no se modificó en este hito;
+es quién recibe un índice. `@agentpey/tenancy` no se modificó en este hito;
 cuando F4 lo cablee habrá que decidir si el parámetro se renombra o se
 documenta el mapeo — anotado, no resuelto.
 
@@ -808,8 +808,8 @@ corresponde a su propio índice, y esa fila mentiría de forma indetectable
 hasta que alguien intente firmar con ella. Con un callback, no hay forma de
 expresar esa combinación.
 
-**Alternativa descartada:** que el paquete importe `@agentpay/tenancy` y
-derive él mismo. Se descartó por lo anterior; `@agentpay/tenancy` sí aparece
+**Alternativa descartada:** que el paquete importe `@agentpey/tenancy` y
+derive él mismo. Se descartó por lo anterior; `@agentpey/tenancy` sí aparece
 como **devDependency**, usado solo en el test de integración, porque la
 afirmación que hay que sostener no es "guarda un número" sino "dos tenants
 terminan con identidades Stellar distintas", y eso solo lo muestra la
@@ -888,7 +888,7 @@ estructurado serializa un error crudo**. No se cambia nada ahora.
 ### C-33 · Antes de F4, todo tenant comparte un único agente — modelado como una fila real, no como una ficción · `Vigente`
 **Fecha:** 2026-09-10 (T39)
 
-`@agentpay/directory` (T38) asume el mundo de F4: una identidad Stellar por
+`@agentpey/directory` (T38) asume el mundo de F4: una identidad Stellar por
 tenant, `directory_agents.address` único. Eso todavía no es cierto — todo
 visitante sigue firmando con el único `AGENT_SECRET_KEY` compartido
 (`C-16`/`C-20`, diferido a F4 a propósito). En vez de aflojar la unicidad que
@@ -906,7 +906,7 @@ en `schema-sql.ts`. Post-F4, cuando cada tenant tenga su propio agente, la
 columna sigue siendo correcta — deja de ser la única forma de resolver la
 ambigüedad, no una que sobra.
 
-**Por qué no reusar el `tenantIndex` de `@agentpay/tenancy` para esto.**
+**Por qué no reusar el `tenantIndex` de `@agentpey/tenancy` para esto.**
 `deriveTenantKeypair` sigue sin cablearse (`C-16`); cablearlo es,
 explícitamente, el trabajo de F4, no de F3. Bootstrapear una fila que ya
 existe on-chain (`AGENT_SECRET_KEY` ya está anclado, ya tiene mandatos
@@ -1183,12 +1183,12 @@ localmente antes de tocar el sitio real, no en el mismo movimiento.
 
 ---
 
-### C-43 · Paquete nuevo `@agentpay/partner-api` para el contrato congelado de `/v1` (T45) · `Vigente`
+### C-43 · Paquete nuevo `@agentpey/partner-api` para el contrato congelado de `/v1` (T45) · `Vigente`
 **Fecha:** 2026-09-10 (T45)
 
 `PLATAFORMA-PARTNERS.md` § F5 pedía "esquemas zod nuevos (paquete a
 definir)" antes de abrir T46-T50. Se decidió un paquete propio —no sumar
-esto a `@agentpay/directory`— porque son responsabilidades distintas:
+esto a `@agentpey/directory`— porque son responsabilidades distintas:
 `directory` persiste, este paquete decide la forma de lo que cruza la red y
 quién puede llamarlo. Ninguna de las dos cosas necesita saber de la otra
 salvo por los tipos que ya expone (`Tenant`, `AgentInstance`, `MandateRecord`,
@@ -1197,7 +1197,7 @@ salvo por los tipos que ya expone (`Tenant`, `AgentInstance`, `MandateRecord`,
 **Qué contiene, exactamente lo que T45 pedía y nada más:** los DTOs
 snake_case de `/v1` (tenants, agentes, mandatos de solo lectura,
 `consent_sessions`) con sus funciones de mapeo desde los tipos internos de
-`@agentpay/directory`; el contrato de autenticación (`Authorization: Bearer
+`@agentpey/directory`; el contrato de autenticación (`Authorization: Bearer
 ap_test_...`, reutilizando `Directory.authenticate()` que T38 ya construyó);
 el enum de permisos de API key; la semántica exacta de idempotencia; y el
 envelope de error/éxito. Cero rutas HTTP, cero cambios a `apps/web`.
@@ -1208,7 +1208,7 @@ devuelve nada — ningún punto de autorización tocado. 42 tests nuevos (de
 limpios.
 
 **Alternativa descartada:** escribir los esquemas directamente dentro de
-`apps/web` o de `@agentpay/directory`. Se descartó porque F5's tickets de
+`apps/web` o de `@agentpey/directory`. Se descartó porque F5's tickets de
 Codex (T46 OpenAPI, T47 SDK, T48 webhooks) necesitan importar estas formas
 sin arrastrar ni un servidor HTTP ni una conexión a Postgres.
 
@@ -1226,7 +1226,7 @@ una API key ("puede este key llamar esta ruta"), lo cual habría dejado dos
 en el mismo proyecto.
 
 **La corrección.** Renombrado a `ApiScope`/`apiScopeSchema`/`API_SCOPES` en
-`@agentpay/partner-api`, con un comentario en el propio archivo explicando
+`@agentpey/partner-api`, con un comentario en el propio archivo explicando
 por qué. Ninguna colisión de imports es posible ahora — un lector que ve
 `Scope` sabe que es gasto; uno que ve `ApiScope` sabe que es acceso a la API.
 
@@ -1295,17 +1295,17 @@ no de este paquete.
 ### C-47 · `consent_sessions` es solo esquema en T45 — sin persistencia, con un prefijo de id provisional · `Vigente`
 **Fecha:** 2026-09-10 (T45)
 
-`@agentpay/directory` no tiene tabla de `consent_sessions` — T38 no la
+`@agentpey/directory` no tiene tabla de `consent_sessions` — T38 no la
 construyó porque F3 resolvió el consentimiento con el flujo de wallet
 conectada que ya existe, no con el flujo hospedado que F5 describe para
 partners. T45 solo define la forma de la petición (`tenant_id`, un `grant`
-que reutiliza `mandateGrantSchema` de `@agentpay/mandate` sin
+que reutiliza `mandateGrantSchema` de `@agentpey/mandate` sin
 redescribirlo) y de la respuesta (`id`, `status`, `consent_url`,
 `mandate_id`, con los dos últimos nulos hasta que la sesión se completa).
 
 **El prefijo `cns_`** se fijó en `consent-sessions.ts` replicando el
 formato ULID-detrás-de-prefijo de `ids.ts` (mismo largo, mismo alfabeto
-Crockford) sin que `@agentpay/directory` sepa nada de `consent_sessions`
+Crockford) sin que `@agentpey/directory` sepa nada de `consent_sessions`
 todavía — es una convención documentada para que quien construya la
 persistencia no tenga que decidir el formato del id además de todo lo
 demás, no una tabla real.
@@ -1317,7 +1317,7 @@ wallet firma, etc.) — T49 solo describe el middleware de autenticación
 ("una api key revocada deja de poder llamar cualquier ruta"), y T50 asume
 que para entonces "la API responde de verdad". Falta un ticket, o una
 ampliación explícita del alcance de T49, que conecte este contrato con
-`@agentpay/directory` y con el flujo hospedado de wallet-connect. Anotado
+`@agentpey/directory` y con el flujo hospedado de wallet-connect. Anotado
 para el usuario antes de abrir T49 — no resuelto en este hito porque no era
 su alcance.
 
@@ -1328,7 +1328,7 @@ su alcance.
 
 T48 (webhooks, tabla de F5) dependía explícitamente de "la forma del evento
 de webhook publicada por Claude" — sin eso, no había nada que delegar
-todavía. Se agregó `webhooks.ts` a `@agentpay/partner-api`: los siete
+todavía. Se agregó `webhooks.ts` a `@agentpey/partner-api`: los siete
 nombres de evento de `PLATAFORMA-PARTNERS.md` §2.7, el sobre
 (`id`/`type`/`created_at`/`data`), y el esquema de firma
 (`AgentPay-Signature: t=<ms>,v1=<hmac>`, ventana de replay de cinco
@@ -1394,9 +1394,9 @@ de wallet.
 **Fecha:** 2026-09-10 (T49)
 
 `C-46` (T45) congeló la semántica exacta de idempotencia como una función
-pura (`resolveIdempotency`, en `@agentpay/partner-api`) sin decidir dónde
+pura (`resolveIdempotency`, en `@agentpey/partner-api`) sin decidir dónde
 vive `(partner_id, key) → respuesta`. T49 lo resuelve: tabla nueva
-`directory_idempotency` en `@agentpay/directory` (clave primaria
+`directory_idempotency` en `@agentpey/directory` (clave primaria
 `(partner_id, key)`, `response_body` en `json` — mismo criterio que
 `directory_mandates.document`, no hay hash calculado sobre el valor pero
 tampoco hay motivo para que Postgres reordene claves de algo que solo se
@@ -1404,8 +1404,8 @@ reproduce tal cual), con dos métodos nuevos en el puerto
 (`findIdempotentResponse`, `recordIdempotentResponse`). `apps/web`'s
 `partner-routes.ts` pasa `directory.findIdempotentResponse` directo como
 el `lookup` que `resolveIdempotency` pide — sin conversión, porque el
-esquema de `IdempotencyRecord` en `@agentpay/directory` replica el de
-`@agentpay/partner-api` campo por campo a propósito (`directory` no puede
+esquema de `IdempotencyRecord` en `@agentpey/directory` replica el de
+`@agentpey/partner-api` campo por campo a propósito (`directory` no puede
 depender de `partner-api` — la dependencia va al revés).
 
 **`recordIdempotentResponse` es un upsert (`on conflict do update`), no un
@@ -1418,13 +1418,13 @@ respuesta.
 
 **Alternativa descartada:** guardar la idempotencia en el propio proceso
 de `apps/web` (un `Map`, como el resto de las sesiones hoy). Descartada
-por la misma razón que motivó `@agentpay/directory` entero (`G7`): un
+por la misma razón que motivó `@agentpey/directory` entero (`G7`): un
 restart pierde el registro, y una API key reintentando después de un
 deploy volvería a crear el tenant.
 
 ---
 
-### C-51 · `findMandateById` y `listMandates`, nuevos en `@agentpay/directory` · `Vigente`
+### C-51 · `findMandateById` y `listMandates`, nuevos en `@agentpey/directory` · `Vigente`
 **Fecha:** 2026-09-10 (T49)
 
 `/v1/mandates/{id}` identifica un mandato por su `id` (`mdt_...`), no por
@@ -1541,7 +1541,7 @@ diseño:
 
 `buildSessionDocuments` (T36, protege el invariante `C-17`) pasaba
 siempre `scope.scope` como el `grant` del Mandato — nunca soportó
-`payTo`, aunque `@agentpay/mandate` lo tiene desde `M-14`. Un
+`payTo`, aunque `@agentpey/mandate` lo tiene desde `M-14`. Un
 `consent_session` necesita que el partner pueda proponer `payTo`.
 
 **La corrección.** `SessionDocumentsParams` gana `grant?: MandateGrant`,
@@ -1570,7 +1570,7 @@ siempre.
 `Authorization`. Quien las llama es el **principal** (Vinny), no el
 partner — no tiene, ni debería tener, una API key de `/v1`. El id del
 `consent_session` (un ULID de 128 bits, la misma familia de ids que
-`@agentpay/directory` ya usa para todo) es la capacidad que autoriza:
+`@agentpey/directory` ya usa para todo) es la capacidad que autoriza:
 mismo modelo de confianza que un link de sobre de DocuSign, o el link de
 recuperación de contraseña de cualquier producto — quien tiene el link
 puede actuar, y el link es indistinguible de un ULID al azar. `apps/web`
@@ -1681,7 +1681,7 @@ referencias de proyecto no descubrió el JSON con el `include` original
 sí lo hacía — hizo falta agregar `"src/**/*.json"` explícito al `include`.
 
 **Alternativa descartada:** un registro en Postgres (como
-`@agentpay/directory`), para que el script de alta de comercio (T55)
+`@agentpey/directory`), para que el script de alta de comercio (T55)
 escribiera contra una base real en vez de un archivo. Descartada porque
 `apps/agent` es el agente CLI original (Fase 2–4), sin conexión a Postgres
 —esa es la superficie de `apps/web`/Fase 6— y montar una dependencia nueva
@@ -1706,7 +1706,7 @@ compatibilidad; `bazaar.test.ts` sin cambios, 16/16 en verde. Código nuevo:
 `G9` decía que `policy_rail` no tenía ninguna forma de sacar fondos ni de
 cambiar quién autoriza pagos. Solo existían lectores de configuración y
 `__check_auth`, que aprueba un pago con la firma de un único `owner` — en
-el piloto, una llave de AgentPay. Si un cliente real fondeaba ese contrato,
+el piloto, una llave de AgentPey. Si un cliente real fondeaba ese contrato,
 no podía recuperar su plata: la única salida era un pago firmado por una
 llave que no es suya. Bloqueante duro para F6 (cuenta pagadora por tenant)
 y para cualquier conversación de mainnet.
@@ -1721,7 +1721,7 @@ de quién tiene la última palabra sobre el contrato (la wallet del cliente,
 Soroban, el mismo que ya usa cada firma de wallet en este proyecto).
 Consecuencia buscada: el agente nunca necesita ni ve la llave de la
 wallet, y el cliente puede retirar su saldo o cortar la llave de gasto en
-cualquier momento sin que AgentPay coopere.
+cualquier momento sin que AgentPey coopere.
 
 **Dos funciones nuevas, y `__check_auth` no se tocó.** `withdraw(to,
 amount)` exige `principal.require_auth()`, rechaza `amount <= 0` con

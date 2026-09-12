@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createFileMandateVault } from "@agentpay/vault";
+import { createFileMandateVault } from "@agentpey/vault";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { AuthorisationDecision, AuthorisationRequest, PolicyRail } from "./policy-rail.js";

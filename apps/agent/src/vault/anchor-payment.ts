@@ -21,7 +21,7 @@ import type { CredStatus } from "@agentpass/sdk";
 import type { Keypair } from "@stellar/stellar-sdk/base";
 import { createHash } from "node:crypto";
 
-import type { VaultRecord } from "@agentpay/vault";
+import type { VaultRecord } from "@agentpey/vault";
 
 /** The one capability this module needs — `AgentPass.anchor()`'s own shape (T20's `RegistryAccess` pattern). */
 export interface RegistryAnchor {

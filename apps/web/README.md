@@ -1,4 +1,4 @@
-# @agentpay/web
+# @agentpey/web
 
 The simple frontend from T25 (Phase 4, MandateGate): a Node server
 (`node:http`, no framework) plus a build-step-free static page that drives
@@ -31,7 +31,7 @@ free web-service tier fits.
 - `render.yaml` at the repo root — a Render Blueprint. Build command
   (`corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm
   install --frozen-lockfile && pnpm build`) and start command (`pnpm
-  --filter @agentpay/web run start`) are both verified locally against the
+  --filter @agentpey/web run start`) are both verified locally against the
   exact commands Render will run.
 - `apps/web/package.json`'s `start` script (identical to `dev` — this app
   has no separate production build; `tsx` runs the TypeScript directly).

@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
 import { Keypair } from "@stellar/stellar-sdk";
 
-import { USDC_TESTNET, parseAssetId } from "@agentpay/agent";
+import { USDC_TESTNET, parseAssetId } from "@agentpey/agent";
 
 import { readEnvFile } from "./lib/env-file.js";
 import { TESTNET, getTrustline, openTrustline } from "./lib/network.js";

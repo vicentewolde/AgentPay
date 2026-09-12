@@ -1,6 +1,6 @@
 import { stellarAddressToDid } from "@agentpass/core";
-import type { AgentInstance } from "@agentpay/directory";
-import { generateMasterMnemonic } from "@agentpay/tenancy";
+import type { AgentInstance } from "@agentpey/directory";
+import { generateMasterMnemonic } from "@agentpey/tenancy";
 import { Keypair } from "@stellar/stellar-sdk";
 import { describe, expect, it, vi } from "vitest";
 

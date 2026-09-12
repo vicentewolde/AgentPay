@@ -1,4 +1,4 @@
-import { newId, newTenantId, type ConsentSessionRecord } from "@agentpay/directory";
+import { newId, newTenantId, type ConsentSessionRecord } from "@agentpey/directory";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -19,7 +19,7 @@ const validGrant = {
 };
 
 describe("createConsentSessionRequestSchema", () => {
-  it("accepts a tenant, a grant reusing @agentpay/mandate's shape, and a validUntil", () => {
+  it("accepts a tenant, a grant reusing @agentpey/mandate's shape, and a validUntil", () => {
     const result = createConsentSessionRequestSchema.safeParse({
       tenant_id: tenantId,
       grant: validGrant,
@@ -44,7 +44,7 @@ describe("createConsentSessionRequestSchema", () => {
 });
 
 describe("consentSessionIdSchema", () => {
-  it("accepts the cns_ prefix in the same ULID shape @agentpay/directory uses for its own ids", () => {
+  it("accepts the cns_ prefix in the same ULID shape @agentpey/directory uses for its own ids", () => {
     expect(consentSessionIdSchema.safeParse(`cns_${newId("agent").slice(4)}`).success).toBe(true);
   });
 

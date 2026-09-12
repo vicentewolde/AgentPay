@@ -10,7 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@agentpass/core": fileURLToPath(new URL("../core/src/index.ts", import.meta.url)),
-      "@agentpay/tenancy": fileURLToPath(new URL("../tenancy/src/index.ts", import.meta.url)),
+      "@agentpey/tenancy": fileURLToPath(new URL("../tenancy/src/index.ts", import.meta.url)),
     },
   },
   test: {

@@ -17,7 +17,7 @@
  */
 import type { AgentPassErrorCode } from "@agentpass/core";
 import { AgentPassError } from "@agentpass/core";
-import type { AgentPayMandate } from "@agentpay/mandate";
+import type { AgentPayMandate } from "@agentpey/mandate";
 import type { Keypair } from "@stellar/stellar-sdk/base";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";

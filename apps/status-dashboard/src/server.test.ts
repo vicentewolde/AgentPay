@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net";
 
-import type { MandateRecord, Tenant } from "@agentpay/directory";
-import type { VaultRecord } from "@agentpay/vault";
+import type { MandateRecord, Tenant } from "@agentpey/directory";
+import type { VaultRecord } from "@agentpey/vault";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createStatusServer } from "./server.js";

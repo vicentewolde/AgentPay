@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { newId, newTenantId } from "@agentpay/directory";
+import { newId, newTenantId } from "@agentpey/directory";
 import { describe, expect, it } from "vitest";
 
 import { SESSION_COOKIE, challengeMessage, createExpiringStore, isValidSessionId, parseCookies } from "./wallet-session.js";
@@ -33,7 +33,7 @@ describe("isValidSessionId", () => {
     expect(isValidSessionId(randomUUID())).toBe(true);
   });
 
-  it("accepts a wallet-path id — a real @agentpay/directory tenant id, since T39 (`C-25`/`D4`)", () => {
+  it("accepts a wallet-path id — a real @agentpey/directory tenant id, since T39 (`C-25`/`D4`)", () => {
     expect(isValidSessionId(newTenantId(newId("partner")))).toBe(true);
   });
 
@@ -61,7 +61,7 @@ describe("challengeMessage", () => {
   });
 
   it("is the brand the user reads inside their wallet", () => {
-    expect(challengeMessage("n")).toContain("VynGent");
+    expect(challengeMessage("n")).toContain("AgentPey");
   });
 });
 

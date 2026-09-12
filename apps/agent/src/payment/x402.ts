@@ -32,7 +32,7 @@
  */
 import { AgentPassError } from "@agentpass/core";
 import type { Scope } from "@agentpass/core";
-import type { AgentPayMandate } from "@agentpay/mandate";
+import type { AgentPayMandate } from "@agentpey/mandate";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import type { PaymentRequired, PaymentRequirements, SettleResponse } from "@x402/core/types";
 import { ExactStellarScheme, STELLAR_TESTNET_CAIP2, createEd25519Signer } from "@x402/stellar";

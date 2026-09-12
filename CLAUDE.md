@@ -1,4 +1,4 @@
-# AgentPay — instrucciones de trabajo
+# AgentPey — instrucciones de trabajo
 
 Pila de pagos agénticos sobre **Stellar testnet**, en siete fases. La Fase 1
 (**AgentPass**) está cerrada: un agente prueba criptográficamente quién lo opera
@@ -27,7 +27,7 @@ imposible de saltar por prompt injection.
 | [docs/fase-4-mandategate/BITACORA.md](docs/fase-4-mandategate/BITACORA.md) | **T24–T26 cerrados.** Estado actual y qué sigue |
 | [docs/fase-4-mandategate/DECISIONES.md](docs/fase-4-mandategate/DECISIONES.md) | Decisiones de la Fase 4 (prefijo `G-`) |
 | [docs/fase-5-mandatevault/CONTEXTO.md](docs/fase-5-mandatevault/CONTEXTO.md) | **Cerrada.** Qué prueba, qué no es, qué cambió del alcance documentado y por qué |
-| [docs/fase-5-mandatevault/ARQUITECTURA.md](docs/fase-5-mandatevault/ARQUITECTURA.md) | Mapa técnico de la Fase 5: el paquete `@agentpay/vault`, la cadena de hashes, el seam de `policyRail?` |
+| [docs/fase-5-mandatevault/ARQUITECTURA.md](docs/fase-5-mandatevault/ARQUITECTURA.md) | Mapa técnico de la Fase 5: el paquete `@agentpey/vault`, la cadena de hashes, el seam de `policyRail?` |
 | [docs/fase-5-mandatevault/BITACORA.md](docs/fase-5-mandatevault/BITACORA.md) | **Cerrada, T27–T31.** Estado actual y qué se hizo en cada hito |
 | [docs/fase-5-mandatevault/DECISIONES.md](docs/fase-5-mandatevault/DECISIONES.md) | Decisiones de la Fase 5 (prefijo `V-`) |
 | [docs/fase-6-agentguard-comercializacion/CONTEXTO.md](docs/fase-6-agentguard-comercializacion/CONTEXTO.md) | **Fase en curso, iniciada 2026-09-09.** Qué prueba la mitad de "comercialización", qué sigue sin alcance (AgentGuard) y por qué |

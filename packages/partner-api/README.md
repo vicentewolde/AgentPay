@@ -1,4 +1,4 @@
-# `@agentpay/partner-api`
+# `@agentpey/partner-api`
 
 The frozen contract for `/v1` — F5's T45. Zod schemas for what a partner
 sends and receives, the API-key authentication contract, the permission list,
@@ -16,7 +16,7 @@ build against what this package freezes, not against a moving target.
   `http` (T49, `apps/web` or a successor) calls these once per route; the
   decision itself is not re-implemented there.
 - **Not a store.** `IdempotencyRecord` is a shape, not a table.
-  `consent_sessions` has no persistence anywhere yet — `@agentpay/directory`
+  `consent_sessions` has no persistence anywhere yet — `@agentpey/directory`
   does not know about it. Whichever ticket builds `POST /v1/consent_sessions`
   decides where that state lives.
 - **Not `Scope`.** `@agentpass/core` already exports `Scope` for a
@@ -28,7 +28,7 @@ build against what this package freezes, not against a moving target.
 
 **Auth.** `Authorization: Bearer <secret>`, secret shaped
 `ap_test_<24 random bytes, base64url>` — the same string
-`@agentpay/directory`'s `issueApiKey` already mints. `authorizeRequest`
+`@agentpey/directory`'s `issueApiKey` already mints. `authorizeRequest`
 authenticates and checks scope in one call; unknown and revoked keys answer
 with the same `InvalidApiKey`, on purpose — telling the two apart would
 confirm a guessed secret once existed.
@@ -60,7 +60,7 @@ never existed.
 **Resources.** `tenants` (create + read), `agents` (read-only), `mandates`
 (read-only), `consent_sessions` (create + read, schema only — no store).
 Every wire shape is snake_case; every internal shape it maps from
-(`@agentpay/directory`'s `Tenant`, `AgentInstance`, `MandateRecord`) is
+(`@agentpey/directory`'s `Tenant`, `AgentInstance`, `MandateRecord`) is
 camelCase. The mapping functions (`toTenantResource`, `toAgentResource`,
 `toMandateResource`) exist precisely so a partner never sees a field that is
 only meaningful internally — `keyIndex`, the raw `document`/`jws` of a
@@ -77,7 +77,7 @@ response from this schema instead of a second, hand-written copy.
   `consent_sessions` actually persists, are T49's job (or a successor
   ticket) — not named as a separate ticket in F5's table, which is itself a
   gap worth the user's attention before T49 opens.
-- **No parsed `grant` on a mandate resource.** `@agentpay/directory` stores a
+- **No parsed `grant` on a mandate resource.** `@agentpey/directory` stores a
   mandate's `document` unvalidated; shaping a public `grant` field from it is
   a decision for whoever builds the read route, informed by what a real
   integration asks for — not guessed at here.
@@ -88,7 +88,7 @@ response from this schema instead of a second, hand-written copy.
 ## Run its tests
 
 ```bash
-pnpm --filter @agentpay/partner-api run test
+pnpm --filter @agentpey/partner-api run test
 ```
 
 No database, no network — every test here is pure.

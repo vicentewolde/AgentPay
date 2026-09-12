@@ -10,7 +10,7 @@
  * `Directory` writes anything, and every Stellar call is a SEP-41
  * `balance()` simulation, never a `transfer`.
  *
- * `AgentPay` never sees a customer's real bank account, so "fondos
+ * `AgentPey` never sees a customer's real bank account, so "fondos
  * atrapados" (`PLATAFORMA-PARTNERS.md` § F6, riesgos) means a rail's
  * spendable balance quietly running low or a deploy leaving it unfunded —
  * this is the check that catches that before a purchase fails on it.
@@ -27,8 +27,8 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { BAZAAR_USDC_ISSUER, fromScaledAmount } from "@agentpay/agent";
-import { createDirectory } from "@agentpay/directory";
+import { BAZAAR_USDC_ISSUER, fromScaledAmount } from "@agentpey/agent";
+import { createDirectory } from "@agentpey/directory";
 import { Networks, contract } from "@stellar/stellar-sdk";
 
 import { readEnvFile } from "./lib/env-file.js";

@@ -1,4 +1,4 @@
-# `@agentpay/directory`
+# `@agentpey/directory`
 
 The durable record of who exists on the platform: partners, their tenants,
 the wallets that consent inside those tenants, the agents that act, and the
@@ -13,7 +13,7 @@ Mandates instead of finding the ones already anchored on chain.
 
 - **It does not derive keys.** It allocates the index and asks the caller to
   derive from it, so the master seed never enters this package's scope. The
-  derivation itself is `@agentpay/tenancy`.
+  derivation itself is `@agentpey/tenancy`.
 - **It does not verify anything.** Storing a signed document and judging one
   are different jobs. `checkMandate`, `checkScope` and the credential
   verifier are untouched by this package and unaware of it.
@@ -28,14 +28,14 @@ pnpm install
 The fast suite needs no database and no network:
 
 ```bash
-pnpm --filter @agentpay/directory run test
+pnpm --filter @agentpey/directory run test
 ```
 
 The live suite needs `DATABASE_URL` in `.env.local` (any Postgres; Supabase in
 the pilot). It creates its own partners and deletes every row it wrote:
 
 ```bash
-pnpm --filter @agentpay/directory run test:integration
+pnpm --filter @agentpey/directory run test:integration
 ```
 
 ## Shape of the data
@@ -51,7 +51,7 @@ pnpm --filter @agentpay/directory run test:integration
 | `directory_credentials` | The AgentPass credential, by its anchored hash | `credential_hash` unique |
 | `directory_mandates` | The Mandate, verbatim, by its anchored hash | `document` is `json`, never `jsonb` |
 
-Tables are created on first use, the same way `@agentpay/vault` creates its
+Tables are created on first use, the same way `@agentpey/vault` creates its
 own — this pilot has no migration runner.
 
 ## Three decisions worth knowing before changing anything here

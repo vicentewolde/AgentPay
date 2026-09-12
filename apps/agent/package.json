@@ -1,5 +1,5 @@
 {
-  "name": "@agentpay/agent",
+  "name": "@agentpey/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -17,8 +17,8 @@
   "dependencies": {
     "@agentpass/core": "workspace:*",
     "@agentpass/sdk": "workspace:*",
-    "@agentpay/mandate": "workspace:*",
-    "@agentpay/vault": "workspace:*",
+    "@agentpey/mandate": "workspace:*",
+    "@agentpey/vault": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1",
     "@x402/core": "~2.24.0",
     "@x402/stellar": "^2.24.0",

@@ -23,7 +23,7 @@ flowchart TB
         core["@agentpass/core<br/>did:stellar, VC-JWT, errores"]
         sdk["@agentpass/sdk<br/>issue · verify · revoke, contra el registro"]
     end
-    subgraph "apps/agent — @agentpay/agent (Fase 2)"
+    subgraph "apps/agent — @agentpey/agent (Fase 2)"
         catalog["catalog/<br/>CatalogAdapter, MockCatalogAdapter"]
         credverify["credential/verifier.ts<br/>CredentialVerifier (1 método)"]
         scope["scope/<br/>amount.ts, scope.ts — checkScope()"]
@@ -80,13 +80,13 @@ apps/agent/
 │   ├── testing/
 │   │   └── credentials.ts  # makeTestCredential(), createStubVerifier() — firma real, red simulada
 │   └── index.ts             # superficie pública completa del paquete
-├── package.json             # nombre: @agentpay/agent (no @agentpass/*, ver B-2)
+├── package.json             # nombre: @agentpey/agent (no @agentpass/*, ver B-2)
 └── README.md
 ```
 
-`@agentpay/agent`, no `@agentpass/agent`: el agente **consume** AgentPass, no
+`@agentpey/agent`, no `@agentpass/agent`: el agente **consume** AgentPass, no
 lo extiende (`B-2`). Cuando la Fase 3 agregue PolicyRail y Mandato, es
-razonable que también vivan bajo el scope `@agentpay/*` en vez de `@agentpass/*`
+razonable que también vivan bajo el scope `@agentpey/*` en vez de `@agentpass/*`
 — son consumidores de la identidad de la Fase 1, igual que este paquete.
 
 ## 3. El catálogo

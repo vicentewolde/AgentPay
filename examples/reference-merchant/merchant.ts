@@ -74,7 +74,7 @@ function paymentRequired(config: z.output<typeof merchantConfigSchema>, resource
     error: "Payment required",
     resource: {
       url: resourceUrl,
-      description: "A deterministic account summary from the AgentPay reference merchant.",
+      description: "A deterministic account summary from the AgentPey reference merchant.",
       mimeType: "application/json",
     },
     accepts: [requirements(config)],

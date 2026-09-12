@@ -1,5 +1,5 @@
 /**
- * `@agentpay/vault` — durable, tamper-evident evidence of every PolicyRail
+ * `@agentpey/vault` — durable, tamper-evident evidence of every PolicyRail
  * decision. Phase 5, T27.
  */
 export {

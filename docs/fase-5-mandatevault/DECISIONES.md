@@ -6,7 +6,7 @@
 
 ---
 
-### V-1 · `@agentpay/vault` no depende de `apps/agent` — satisface `SpendLedger` estructuralmente · `Vigente`
+### V-1 · `@agentpey/vault` no depende de `apps/agent` — satisface `SpendLedger` estructuralmente · `Vigente`
 **Fecha:** 2026-09-04 (T27)
 
 `MandateVault` implementa las mismas tres firmas que `SpendLedger`
@@ -15,8 +15,8 @@ de `apps/agent`.
 
 **Motivo.** Ningún paquete de este repo depende de una app (`apps/agent`,
 `apps/web`) — la dirección siempre es al revés. Importar `SpendLedger` desde
-`@agentpay/vault` habría invertido esa capa por conveniencia de un solo tipo.
-El patrón ya existe en el proyecto: `RegistryAccess` en `@agentpay/mandate`
+`@agentpey/vault` habría invertido esa capa por conveniencia de un solo tipo.
+El patrón ya existe en el proyecto: `RegistryAccess` en `@agentpey/mandate`
 (T20) nombra estructuralmente los cuatro métodos que necesita de `AgentPass`
 sin importar su tipo real, "la misma forma que `CredentialVerifier` en
 `apps/agent` narrows `AgentPass`". Este paquete hace lo mismo en la dirección
@@ -39,7 +39,7 @@ usado en producción.
 (`toScaledAmount`/`fromScaledAmount`) — mismo escalado a 7 decimales, mismo
 uso de `decimalAmountSchema` de `@agentpass/core` para validar.
 
-**Motivo.** `@agentpay/vault` no puede importar de `apps/agent` (`V-1`), y
+**Motivo.** `@agentpey/vault` no puede importar de `apps/agent` (`V-1`), y
 `apps/agent/src/scope/amount.ts` es código de Fase 2 ya probado en
 producción con muchos call sites (`scope.ts`, `intent.ts`,
 `check-daily-limit.ts`, `terms.ts`). Promoverlo a `@agentpass/core` sería la
@@ -451,7 +451,7 @@ chequeos que el contrato no hace, a cambio de no repetir dos.
 `docs/fase-0-fundamentos/prompt-landing-inspirado-fabriq.md` (Cambio 1) pedía
 un widget de actividad reciente con eventos reales de MandateVault, "real pero
 congelado" antes que "en vivo pero simulado", y sugería como fuente
-`deployments/testnet.json` o el registro de `@agentpay/vault`.
+`deployments/testnet.json` o el registro de `@agentpey/vault`.
 
 El archivo `data/mandate-vault.jsonl` (gitignored, runtime) sí tiene entradas
 `granted`/`anchored` reales, pero solo cubre lo que `PolicyRail` decide —no la

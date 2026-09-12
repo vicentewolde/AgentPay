@@ -37,11 +37,11 @@ y fallando cerrado ante un asset que ese venue no nombra, igual que el
 `mapAsset` hardcodeado de antes pero ahora reutilizable por cualquier
 venue registrado. Y se destrabó F6: hasta T57, la plata que
 entraba a un `policy_rail` solo podía salir con la firma de la llave de
-AgentPay, así que un cliente que lo fondeara no podía recuperarla —
+AgentPey, así que un cliente que lo fondeara no podía recuperarla —
 `G9`, el bloqueante duro. Ahora el contrato distingue dos autoridades:
 la llave delegada del agente sigue gastando dentro de sus límites, y la
 wallet del cliente puede retirar todo o cambiar esa llave cuando
-quiera, sin que AgentPay coopere (`C-61`). Y F7 quedó completa: hay dos comercios en
+quiera, sin que AgentPey coopere (`C-61`). Y F7 quedó completa: hay dos comercios en
 el catálogo del agente — el bazaar del embajador y un segundo x402 real
 e independiente (`examples/reference-merchant/**`, T54) — y agregar
 cualquiera de los dos, o uno nuevo, es una fila en `venues.json`, no
@@ -60,20 +60,20 @@ sin fondos antes de que una compra falle contra él.
 
 | Hito | Qué es | Estado |
 |---|---|---|
-| T32 | `@agentpay/tenancy`: deriva un par de llaves Stellar (agente + issuer) por tenant desde un único seed maestro, vía SEP-0005/BIP-44 | ✅ cerrado 2026-09-09 |
+| T32 | `@agentpey/tenancy`: deriva un par de llaves Stellar (agente + issuer) por tenant desde un único seed maestro, vía SEP-0005/BIP-44 | ✅ cerrado 2026-09-09 |
 | T33 | `MandateVault` sobre Postgres, reemplaza el JSONL en disco efímero de Render; cableado en `apps/web` | ✅ cerrado 2026-09-09 |
 | T34 | Conectar wallet (Freighter) con verificación criptográfica real (SEP-0053); da a cada wallet un `tenant_id` estable en el vault | ✅ cerrado 2026-09-09 |
 | T35 | La wallet conectada firma de verdad el Mandato (SEP-0053) y ancla/revoca la transacción on-chain con su propia firma | ✅ cerrado 2026-09-09 |
 | T36 | Blindar `apps/web`: costuras testeables extraídas de `server.ts` y 49 tests donde antes no había ninguno | ✅ cerrado 2026-09-10 |
 | T37 | Diseño de la plataforma para partners: modelo de entidades, modelo de fondos, plan de diez fases — **sin una línea de código** | ✅ cerrado 2026-09-10 |
-| T38 | `@agentpay/directory`: el registro durable de partners, tenants, principals, agentes, credenciales y mandatos | ✅ cerrado 2026-09-10 |
+| T38 | `@agentpey/directory`: el registro durable de partners, tenants, principals, agentes, credenciales y mandatos | ✅ cerrado 2026-09-10 |
 | T39 | Persistencia de sesión: una wallet que vuelve encuentra su credencial y su Mandato ya firmados, en vez de que se emitan de nuevo | ✅ cerrado 2026-09-10 |
 | T40 | Identidad técnica por tenant: cada uno deriva y ancla su propia credencial y Mandato — el pago sigue compartido hasta F6 | ✅ cerrado 2026-09-10 |
-| T45 | `@agentpay/partner-api`: el contrato congelado de `/v1` — esquemas, autenticación, permisos, idempotencia — sin rutas todavía | ✅ cerrado 2026-09-10 |
+| T45 | `@agentpey/partner-api`: el contrato congelado de `/v1` — esquemas, autenticación, permisos, idempotencia — sin rutas todavía | ✅ cerrado 2026-09-10 |
 | T46 | OpenAPI 3.1 de `/v1` generado desde los esquemas zod de T45, sin librerías nuevas | ✅ cerrado 2026-09-10 (Codex, PR #6) |
-| T47 | `@agentpay/partner-sdk`: cliente tipado sobre `fetch` nativo para las siete rutas de `/v1` | ✅ cerrado 2026-09-10 (Codex, PR #7) |
-| T48 | `@agentpay/webhooks`: worker de entrega con reintentos y backoff, firma HMAC | ✅ cerrado 2026-09-10 (Codex, PR #8) |
-| T49 | `/v1` cableado de verdad contra `@agentpay/directory`: tenants, agentes, mandatos, idempotencia, aislamiento entre partners | ✅ cerrado 2026-09-10 |
+| T47 | `@agentpey/partner-sdk`: cliente tipado sobre `fetch` nativo para las siete rutas de `/v1` | ✅ cerrado 2026-09-10 (Codex, PR #7) |
+| T48 | `@agentpey/webhooks`: worker de entrega con reintentos y backoff, firma HMAC | ✅ cerrado 2026-09-10 (Codex, PR #8) |
+| T49 | `/v1` cableado de verdad contra `@agentpey/directory`: tenants, agentes, mandatos, idempotencia, aislamiento entre partners | ✅ cerrado 2026-09-10 |
 | T51 | `consent_sessions`: un partner propone un grant, un principal lo firma por wallet en un flujo hospedado, el Mandato queda anclado — backend completo, verificado sin la página | ✅ cerrado 2026-09-11 |
 | T52 | `consent.html`: la página que un principal realmente ve — muestra el grant completo, conecta wallet, firma el Mandato — sobre los endpoints que T51 dejó estables | ✅ cerrado 2026-09-11 (Codex, PR #13) |
 | T50 | `examples/cloudops-partner-integration.md`: la guía con `curl` exactos para que un partner externo integre `/v1` sin tocar el repo — cierra el "listo cuando" de F5 | ✅ cerrado 2026-09-11 (Codex, PR #15) |
@@ -86,7 +86,7 @@ sin fondos antes de que una compra falle contra él.
 
 ---
 
-## T32 · `@agentpay/tenancy` — derivación de llaves por tenant — cerrado 2026-09-09
+## T32 · `@agentpey/tenancy` — derivación de llaves por tenant — cerrado 2026-09-09
 
 **Qué quedó funcionando, en palabras llanas.** Hoy, cualquiera que visite
 `apps/web` firma con la misma identidad Stellar que todos los demás
@@ -104,7 +104,7 @@ investigación previa a este hito (`docs/DECISIONES.md → P-6`): sin esto,
 cualquier partner piloto nuevo compartiría fondos e identidad con todos los
 demás — un riesgo de integridad del piloto, no solo de escala.
 
-**Cómo quedó construido.** Paquete nuevo `@agentpay/tenancy`:
+**Cómo quedó construido.** Paquete nuevo `@agentpey/tenancy`:
 `deriveTenantKeypair(masterMnemonic, tenantIndex, role)` deriva un par
 público/secreto Stellar válido a partir del seed maestro y un índice de
 cuenta SEP-0005 (`m/44'/148'/<cuenta>'`) — par (par/impar) según el rol
@@ -145,7 +145,7 @@ alcance del punto 5), `ROADMAP.md` (§3, §4.5, §4.6), `docs/DECISIONES.md`
 raíz (referencia nueva).
 
 Pendiente: mergear `cc/multi-tenant-vault` a `main` y pushear (a confirmar
-con el usuario). Siguiente: cablear `@agentpay/tenancy` dentro de
+con el usuario). Siguiente: cablear `@agentpey/tenancy` dentro de
 `apps/web` (reemplazar los dos secretos fijos), lo cual necesita decidir
 antes dónde vive el seed maestro (gestor de secretos) y dónde persiste el
 índice de cada tenant — probablemente junto con la migración del vault de
@@ -195,7 +195,7 @@ Cambiar la columna a `json` (que sí preserva el texto exacto) lo resolvió.
 Detalle completo en `DECISIONES.md → C-5`.
 
 **Cómo quedó construido.** `createPostgresMandateVault` (paquete
-`@agentpay/vault`) implementa el mismo contrato `MandateVault` que
+`@agentpey/vault`) implementa el mismo contrato `MandateVault` que
 `createFileMandateVault` — mismos ocho métodos, misma bitácora encadenada
 por hash — reusando además sus mismas funciones puras de aritmética y
 hashing (`packages/vault/src/internal/amount.ts`, separadas del archivo
@@ -401,7 +401,7 @@ construyó un camino de verificación paralelo, nuevo, que nunca toca
 
 1. `packages/core/src/sep53.ts` — `verifyStellarMessage`/`signStellarMessage`,
    promovido desde `apps/web` (T34) a `@agentpass/core` porque ahora lo usa
-   también `@agentpay/mandate`.
+   también `@agentpey/mandate`.
 2. `packages/mandate/src/wallet-sign.ts` — `verifyWalletSignedMandate`: dado
    un documento de Mandato en JSON y una firma SEP-0053, verifica que la
    firma corresponda al `principal` que el documento declara, valida su
@@ -516,7 +516,7 @@ solo en local.
 
 Pendiente: mergear `cc/wallet-signs-mandate` a `main` y pushear (a
 confirmar con el usuario). Siguiente decisión, sin resolver todavía:
-cablear `@agentpay/tenancy` (T32) dentro de `apps/web` para que cada
+cablear `@agentpey/tenancy` (T32) dentro de `apps/web` para que cada
 tenant gaste desde su propia cuenta (`C-16`); y el rename completo a
 "TirevPay" (`P-8`) sigue congelado a pedido explícito del usuario, que va
 a traer nombres nuevos más adelante.
@@ -590,7 +590,7 @@ a 991 líneas, ahora cableado y rutas).
 Pendiente: es el primer hito que deja lista una superficie para delegarle
 trabajo a Codex — costuras acotadas, sin red, donde ampliar cobertura no
 toca ningún punto de autorización. Sigue sin resolver, a propósito:
-cablear `@agentpay/tenancy` (T32) para que cada tenant gaste desde su
+cablear `@agentpey/tenancy` (T32) para que cada tenant gaste desde su
 propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).
 
 ---
@@ -599,7 +599,7 @@ propia cuenta (`C-16`), y el rename completo a VynGent (`P-9`).
 
 **Qué quedó, en palabras llanas.** Nada que se pueda ejecutar: un plano y
 seis decisiones tomadas. El usuario pidió diseñar, antes de construir, cómo
-AgentPay deja de ser una demo de un visitante y pasa a ser algo que una
+AgentPey deja de ser una demo de un visitante y pasa a ser algo que una
 empresa como "CloudOps" pueda integrar para que los agentes de sus propios
 usuarios compren cosas. El resultado es
 [PLATAFORMA-PARTNERS.md](PLATAFORMA-PARTNERS.md) — modelo de entidades y su
@@ -617,7 +617,7 @@ partner y **un usuario final suyo**, no el partner entero (`C-19`).
 **Tres cosas que se encontraron leyendo el código y no la documentación, y
 que ninguna decisión previa registraba.**
 
-1. **`@agentpay/tenancy` (T32) no lo importa ningún archivo fuera de su
+1. **`@agentpey/tenancy` (T32) no lo importa ningún archivo fuera de su
    propio paquete.** `C-16` decía que faltaba cablearlo; lo que no decía es
    que estuviera literalmente huérfano. La derivación de llaves por tenant
    existe como biblioteca, no como capacidad del producto.
@@ -630,7 +630,7 @@ que ninguna decisión previa registraba.**
    Hoy está mitigado por correr una sola instancia, y eso ahora está escrito.
 3. **`policy_rail` no tiene retiro, ni rotación de owner, ni revocación**
    (`contracts/policy-rail/src/lib.rs`). Con el modelo de fondos recién
-   elegido, quien fondee un rail cuyo owner tenga AgentPay no puede recuperar
+   elegido, quien fondee un rail cuyo owner tenga AgentPey no puede recuperar
    su saldo. Tolerable en testnet con montos simbólicos; bloqueante para
    fondos reales. Es un cambio de contrato, área restringida — registrado en
    `C-20`, **no propuesto para construir**.
@@ -655,14 +655,14 @@ Documentación tocada: `docs/AGENT_LOG.md`, y en esta carpeta
 Pendiente: el siguiente hito propuesto es **F2 = T38**, el modelo de datos de
 partner y tenant como paquete nuevo — no toca ninguna área restringida y no
 depende de nada que quede sin decidir. Sigue pendiente de antes: cablear
-`@agentpay/tenancy` (`C-16`, ahora parte de F4) y el rename a VynGent
+`@agentpey/tenancy` (`C-16`, ahora parte de F4) y el rename a VynGent
 (`P-9`).
 
 ---
 
-## T38 · `@agentpay/directory` — el registro durable de quién existe — cerrado 2026-09-10
+## T38 · `@agentpey/directory` — el registro durable de quién existe — cerrado 2026-09-10
 
-**Qué quedó funcionando, en palabras llanas.** Hasta hoy, AgentPay no sabía
+**Qué quedó funcionando, en palabras llanas.** Hasta hoy, AgentPey no sabía
 quién era nadie. Todo lo que el piloto conoce de un visitante vive en la
 memoria del servidor y desaparece cuando el servidor se reinicia — por eso
 apretar "Iniciar sesión" una segunda vez emite una credencial nueva y un
@@ -744,7 +744,7 @@ Pendiente: el siguiente hito propuesto es **F3 = T39** — persistir credencial
 y mandato contra el tenant y rehidratar la sesión desde Postgres, para que
 volver desde otro navegador encuentre lo ya firmado en vez de emitir de nuevo.
 Es el primero que toca `apps/web`, así que conviene revisarlo con más cuidado
-que este. Sigue pendiente de antes: cablear `@agentpay/tenancy` (`C-16`, F4) y
+que este. Sigue pendiente de antes: cablear `@agentpey/tenancy` (`C-16`, F4) y
 el rename a VynGent (`P-9`).
 
 ---
@@ -813,7 +813,7 @@ decide si una compra se autoriza. Verificado con `git diff` contra
 `apps/agent/` y `contracts/`: cero cambios.
 
 **Una brecha del esquema, encontrada al construir y no al planificar.**
-`@agentpay/directory` (T38) asumía el mundo de F4 —una identidad Stellar por
+`@agentpey/directory` (T38) asumía el mundo de F4 —una identidad Stellar por
 tenant— pero ese mundo todavía no llegó: todos los visitantes siguen
 firmando con el mismo `AGENT_SECRET_KEY` (`C-16`, diferido a F4 a propósito).
 Con un solo agente compartido por todos los tenants, la columna que
@@ -828,7 +828,7 @@ se modela como una fila real y etiquetada como transicional
 nuevos —ocho sobre la decisión pura de rehidratar, ocho sobre el bootstrap
 idempotente del agente compartido y del tenant de cada visitante— menos dos
 que quedaron sin sentido al retirar `walletTenantId`). Total del monorepo:
-**773 tests offline en verde, de 759.** `@agentpay/directory` suma tres
+**773 tests offline en verde, de 759.** `@agentpey/directory` suma tres
 tests de integración para los métodos nuevos (`findAgentByAddress`,
 `findLatestCredential`, `findLatestMandate`), 19 en total ahí, todos en
 verde contra Postgres real. `pnpm typecheck` y `pnpm build` limpios. Las
@@ -846,7 +846,7 @@ código nuevos: `apps/web/src/session-rehydration.ts` (+test),
 `apps/agent/` o `contracts/` tocados.**
 
 Pendiente: el siguiente hito propuesto es **T40** (F4 del plan) — cablear
-`@agentpay/tenancy` para que cada tenant tenga su propia cuenta Stellar en
+`@agentpey/tenancy` para que cada tenant tenga su propia cuenta Stellar en
 vez de compartir `AGENT_SECRET_KEY`. Es área restringida (custodia y
 claves, `P-10`) y se queda enteramente en Claude Code. La tabla de
 delegación de F3 (`PLATAFORMA-PARTNERS.md` § 6.1) señala tres tickets para
@@ -920,7 +920,7 @@ alcance — `C-42`).
 
 ---
 
-## T45 · Contrato congelado de `/v1` — `@agentpay/partner-api` — cerrado 2026-09-10
+## T45 · Contrato congelado de `/v1` — `@agentpey/partner-api` — cerrado 2026-09-10
 
 **Qué quedó funcionando, en palabras llanas.** Antes de escribirse una sola
 ruta de la API para partners, quedó decidido y probado el acuerdo completo
@@ -951,7 +951,7 @@ Corregido antes de que ningún otro archivo dependiera del nombre viejo:
 
 **Lo que T45 deliberadamente no construye.** Ninguna ruta HTTP. Ninguna
 tabla nueva en Postgres — ni siquiera para `consent_sessions`, que hoy no
-existe en ningún lado de `@agentpay/directory`. Y se encontró, escribiendo
+existe en ningún lado de `@agentpey/directory`. Y se encontró, escribiendo
 esto, que **ningún ticket de la tabla de F5 nombra explícitamente
 "conectar este contrato con rutas reales"** — T49 describe el middleware de
 autenticación, T50 asume que la API "responde de verdad" para entonces, y
@@ -994,20 +994,20 @@ congelado T45. Diseñados, revisados (diff completo + build/typecheck/test
 en worktrees aislados) y mergeados por Claude Code — ninguno tocó un
 archivo prohibido por su propio ticket ni ningún punto de autorización.
 
-**T46** ([PR #6](https://github.com/vicentewolde/AgentPay/pull/6)):
+**T46** ([PR #6](https://github.com/vicentewolde/AgentPey/pull/6)):
 `scripts/generate-openapi.ts` genera `docs/api/openapi.yaml` (OpenAPI 3.1)
 usando `z.toJSONSchema` nativo de zod v4 — cero librerías nuevas de
 conversión. Regenerar el archivo en un worktree limpio produjo el mismo
 YAML, byte a byte, que el commiteado.
 
-**T47** ([PR #7](https://github.com/vicentewolde/AgentPay/pull/7)):
-`@agentpay/partner-sdk`, cliente delgado sobre `fetch` nativo, valida
-toda respuesta con los esquemas de `@agentpay/partner-api`, mapea errores
+**T47** ([PR #7](https://github.com/vicentewolde/AgentPey/pull/7)):
+`@agentpey/partner-sdk`, cliente delgado sobre `fetch` nativo, valida
+toda respuesta con los esquemas de `@agentpey/partner-api`, mapea errores
 a `AgentPassError` tipado. Sin `/v1` real todavía, se verificó contra un
 servidor `node:http` de prueba en vez del criterio original de la tabla.
 
-**T48** ([PR #8](https://github.com/vicentewolde/AgentPay/pull/8)):
-`@agentpay/webhooks`, worker de entrega con backoff exponencial (base 1s,
+**T48** ([PR #8](https://github.com/vicentewolde/AgentPey/pull/8)):
+`@agentpey/webhooks`, worker de entrega con backoff exponencial (base 1s,
 tope 30s, jitter 0-250ms), corta en 4xx, reintenta en 5xx/red/timeout. La
 cola de fallos no guarda el secreto del endpoint (verificado por test,
 detalle que Codex agregó sin que se lo pidieran).
@@ -1026,7 +1026,7 @@ Pendiente: T49, el trabajo que no se delega — cablear `/v1` de verdad.
 
 ---
 
-## T49 · `/v1` cableado de verdad contra `@agentpay/directory` — cerrado 2026-09-10
+## T49 · `/v1` cableado de verdad contra `@agentpey/directory` — cerrado 2026-09-10
 
 **Qué quedó funcionando, en palabras llanas.** Hasta este hito, `/v1`
 existía solo en el papel: esquemas, un spec, un SDK — pero ninguna llamada
@@ -1049,7 +1049,7 @@ este hito resuelve tenants/agentes/mandatos; `consent_sessions` queda
 para **T51**, un hito nuevo. `T50` (la guía de Codex) pasa a depender de
 ambos.
 
-**Lo nuevo en `@agentpay/directory`, todo aditivo:** tabla
+**Lo nuevo en `@agentpey/directory`, todo aditivo:** tabla
 `directory_idempotency` (`C-50`, resuelve lo que `C-46` había dejado
 pendiente en T45) y los métodos `findMandateById`/`listMandates` (`C-51`).
 Cero cambios a una tabla o método existente.
@@ -1057,7 +1057,7 @@ Cero cambios a una tabla o método existente.
 **La pieza nueva en `apps/web`:** `partner-routes.ts` — un router puro
 (nunca toca `req`/`res`) que hace, en orden, para cada ruta: autentica y
 chequea el permiso (`authorizeRequest`, de T45), resuelve idempotencia
-solo en el POST que la necesita, ejecuta contra `@agentpay/directory` con
+solo en el POST que la necesita, ejecuta contra `@agentpey/directory` con
 aislamiento de tenant explícito, y mapea cualquier error a su código HTTP.
 `server.ts` le delega todo `pathname` bajo `/v1/`.
 
@@ -1079,7 +1079,7 @@ inmediato (`401`). Los datos de prueba se limpiaron de la base real al
 terminar.
 
 Verificado offline: 28 tests nuevos (6 de integración de
-`@agentpay/directory` contra Postgres real, 22 de `partner-routes.ts` con
+`@agentpey/directory` contra Postgres real, 22 de `partner-routes.ts` con
 un directorio falso, más los que ya existían). `pnpm typecheck`, `pnpm
 build` y `pnpm test` limpios en todo el monorepo. `git diff --stat`
 contra `apps/agent` y `contracts` en cero — cero cambios a
@@ -1123,14 +1123,14 @@ decide nada — solo llama a endpoints que este hito deja ya estables — así
 que separarla no perdía nada y evitaba un PR mucho más grande
 (`C-49`, de T49, ya había anotado esta división).
 
-**Lo nuevo en `@agentpay/directory`:** tabla `directory_consent_sessions`
+**Lo nuevo en `@agentpey/directory`:** tabla `directory_consent_sessions`
 y tres métodos (`createConsentSession`, `findConsentSession`,
 `completeConsentSession`). Un detalle que solo apareció escribiendo el
 SQL, no en el diseño: la columna no se puede llamar `grant` a secas
 —es palabra reservada de SQL— así que quedó `proposed_grant` en la base,
 `grant` en TypeScript (`C-55`).
 
-**Lo nuevo en `@agentpay/partner-api`:** `computeConsentSessionStatus`/
+**Lo nuevo en `@agentpey/partner-api`:** `computeConsentSessionStatus`/
 `toConsentSessionResource`, exactamente lo que T45 había dejado
 pendiente "para quien construya la ruta".
 
@@ -1140,7 +1140,7 @@ y el Mandato nunca pueden nombrar principals distintos). Ganó un `grant`
 opcional que, si no se pasa, se comporta exactamente igual que antes —el
 único call site que ya existía no cambió una línea, y los seis tests que
 fijan el invariante tampoco. Cuando `consent_sessions` sí lo pasa, el
-Mandato puede llevar `payTo` (algo que `@agentpay/mandate` soporta desde
+Mandato puede llevar `payTo` (algo que `@agentpey/mandate` soporta desde
 `M-14` pero que nunca se había usado) mientras la credencial sigue
 recibiendo solo el `Scope` plano, que nunca pudo expresarlo (`C-56`).
 
@@ -1170,10 +1170,10 @@ de prueba se limpiaron de la base real al terminar.
 
 Verificado offline: 19 tests nuevos (6 de
 `computeConsentSessionStatus`/`toConsentSessionResource` en
-`@agentpay/partner-api`, 4 de `session-documents.ts` con `grant`
+`@agentpey/partner-api`, 4 de `session-documents.ts` con `grant`
 explícito, 9 de las dos rutas nuevas de `partner-routes.ts` con un
 directorio falso), **882 en total**. Más 5 tests de integración nuevos de
-`@agentpay/directory` contra Postgres real (30 en total en esa suite,
+`@agentpey/directory` contra Postgres real (30 en total en esa suite,
 aparte de los 882 — corre con `test:integration`, no con `pnpm test`).
 `pnpm typecheck`, `pnpm build` y `pnpm test` limpios en todo el
 monorepo. `git diff --stat` contra `apps/agent` y `contracts` en cero —
@@ -1208,7 +1208,7 @@ botón de firmar sobre una invitación muerta.
 
 **Quién lo hizo y qué se revisó.** Codex, en su propio worktree,
 delegado según el protocolo de `CLAUDE.md` § "Coordinación con Codex"
-(PR [#13](https://github.com/vicentewolde/AgentPay/pull/13)). Antes de
+(PR [#13](https://github.com/vicentewolde/AgentPey/pull/13)). Antes de
 mergear: diff completo (solo `apps/web/public/consent.html`, nuevo, y su
 propia entrada de `docs/AGENT_LOG.md` — ningún `.ts` de `apps/web/src`
 tocado, la única superficie prohibida para este hito), `pnpm build`/
@@ -1261,7 +1261,7 @@ reintentar sin duplicar nada (`Idempotency-Key`).
 **Quién lo hizo y qué se revisó.** Codex, en su propio worktree, tarea
 delegada con el nombre ya decidido (AgentPey, `P-11`) y el criterio de
 `PLATAFORMA-PARTNERS.md` § F5 (PR
-[#15](https://github.com/vicentewolde/AgentPay/pull/15)). Diff acotado
+[#15](https://github.com/vicentewolde/AgentPey/pull/15)). Diff acotado
 exactamente a lo permitido: `examples/cloudops-partner-integration.md`,
 `docs/fase-6-agentguard-comercializacion/evidencia/T50.md` y su propia
 entrada de `AGENT_LOG.md` — nada bajo `apps/`, `packages/` ni
@@ -1629,7 +1629,7 @@ Queda anotado en el propio script para quien lo retome.
 [`evidencia/T60.md`](evidencia/T60.md); el resumen:
 
 - `Directory.listAgentsWithPolicyRail()` (nuevo): la primera lectura de
-  `@agentpay/directory` que cruza tenants y partners a propósito — todo
+  `@agentpey/directory` que cruza tenants y partners a propósito — todo
   lo demás de este paquete está scoped a uno solo. 34 tests de
   integración contra Postgres real (+1).
 - `scripts/check-rail-balances.ts` (nuevo, `pnpm run check:rail-balances`):
@@ -1656,7 +1656,7 @@ acá — reservado a Claude Code por `P-10` (lee cuentas pagadoras).
 **Qué quedó funcionando, en palabras llanas.** Cualquiera puede crear una
 wallet Stellar gratis, en su computadora, sin pedirle nada a nadie. Hasta
 hoy, cada una de esas wallets que se conectaba a la demo hacía que
-AgentPay pagara, de su propio bolsillo (la cuenta admin), una transacción
+AgentPey pagara, de su propio bolsillo (la cuenta admin), una transacción
 real para registrarla — sin ningún límite en cuántas veces podía pasar
 eso. Ahora hay un tope: la cuenta admin paga como máximo 20 registros
 nuevos por hora, para toda la demo junta. Pasado ese número, se corta

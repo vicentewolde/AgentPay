@@ -5,11 +5,11 @@
 
 ---
 
-## 1. El paquete: `@agentpay/vault`
+## 1. El paquete: `@agentpey/vault`
 
 Nuevo paquete del monorepo, `packages/vault/`. Una sola dependencia:
 `@agentpass/core` (para `AgentPassError` y `decimalAmountSchema`). No depende
-de `apps/agent` ni de `@agentpay/mandate` — ver `V-1`.
+de `apps/agent` ni de `@agentpey/mandate` — ver `V-1`.
 
 ```
 packages/vault/src/
@@ -141,7 +141,7 @@ function verifyPaymentAnchor(registry: RegistryAnchorStatus, record: VaultRecord
 ```
 
 `RegistryAnchor`/`RegistryAnchorStatus` son la misma forma estructural que
-`RegistryAccess` (T20, `@agentpay/mandate`) — `AgentPass` de `@agentpass/sdk`
+`RegistryAccess` (T20, `@agentpey/mandate`) — `AgentPass` de `@agentpass/sdk`
 las satisface directamente, sin adaptador.
 
 **Cableado en `apps/web`:** `anchorSettledPayment()` (`server.ts`) corre

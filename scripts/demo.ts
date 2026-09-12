@@ -47,9 +47,9 @@ import {
 import { createAgentPass } from "@agentpass/sdk";
 import { Keypair } from "@stellar/stellar-sdk";
 
-import { anchorMandate, createMandate, revokeMandate } from "@agentpay/mandate";
+import { anchorMandate, createMandate, revokeMandate } from "@agentpey/mandate";
 
-import type { CreatePurchaseIntentResult } from "@agentpay/agent";
+import type { CreatePurchaseIntentResult } from "@agentpey/agent";
 import {
   type CatalogAdapter,
   createAgent,
@@ -57,7 +57,7 @@ import {
   createMockCatalog,
   createOnChainMandateVerifier,
   interpretPurchase,
-} from "@agentpay/agent";
+} from "@agentpey/agent";
 
 import { parseDemoArgs, type DemoAdapter } from "./lib/demo-args.js";
 import { readEnvFile } from "./lib/env-file.js";
@@ -151,7 +151,7 @@ async function main(): Promise<void> {
 
   const catalog = createCatalog(adapter, env);
 
-  process.stdout.write(`\nAgentPay demo · Fase 2 + Fase 3 · Stellar testnet · catálogo: ${adapter}\n`);
+  process.stdout.write(`\nAgentPey demo · Fase 2 + Fase 3 · Stellar testnet · catálogo: ${adapter}\n`);
 
   // 1. Read the Spanish instruction — deterministically, not via an LLM call.
   //    See src/interpret.ts for why, and injection.test.ts for the property

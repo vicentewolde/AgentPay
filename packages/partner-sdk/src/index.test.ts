@@ -1,5 +1,5 @@
 import { AgentPassError, hasErrorCode } from "@agentpass/core";
-import { successEnvelope } from "@agentpay/partner-api";
+import { successEnvelope } from "@agentpey/partner-api";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 

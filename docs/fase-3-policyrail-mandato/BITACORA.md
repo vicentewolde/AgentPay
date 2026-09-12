@@ -32,7 +32,7 @@ del Mandato —no de la credencial— desde afuera del agente.
 | Tests TypeScript | 559 rápidos (core 74 · mandate 44 · sdk 16 · cli 29 · agent 364 · scripts 32) |
 | Tests de integración | 6 contra testnet real (3 credenciales + 3 mandatos) |
 | Tests Rust | **43** (22 `agent-registry`, sin cambios · **21 `policy-rail`, nuevo**) |
-| Paquete nuevo | `@agentpay/mandate` (T16) · contrato `policy-rail` (T22) |
+| Paquete nuevo | `@agentpey/mandate` (T16) · contrato `policy-rail` (T22) |
 | Bloqueado por el embajador | **Nada.** Ver abajo |
 
 **Lo que cambió en T19, y es lo más importante de esta fase.** Se leyó el repo
@@ -52,7 +52,7 @@ pregunta para el embajador (`M-11`, `M-12`). En concreto:
   verificable leyendo código público (`M-12`).
 
 `sdk` pasó de 11 a 16 tests entre T16 y T17: no es trabajo de esta fase, es el
-[PR #1](https://github.com/vicentewolde/AgentPay/pull/1) de Devin (tests
+[PR #1](https://github.com/vicentewolde/AgentPey/pull/1) de Devin (tests
 unitarios de `guards.ts`), coordinado y revisado según `P-2` en
 `docs/DECISIONES.md`. Cada hito desde T17 se trabaja en su propia rama
 (`cc/t17-check-mandate`, `cc/t18-spend-ledger`), siguiendo esa misma
@@ -119,7 +119,7 @@ Salidas crudas completas en [evidencia/T16.md](evidencia/T16.md).
 - `packages/core/src/jws-document.ts` — la maquinaria de firma JWS,
   generalizada y parametrizada por un perfil (`M-5`). Aditiva: `vc-jwt.ts` de la
   Fase 1 y el firmado de intents de la Fase 2 **no se tocaron**.
-- `packages/mandate/` → `@agentpay/mandate` (`M-2`): `mandate.ts` (el esquema
+- `packages/mandate/` → `@agentpey/mandate` (`M-2`): `mandate.ts` (el esquema
   zod estricto), `create.ts` (`createMandate()`), `sign.ts` (`signMandate()`,
   `verifyMandate()`), `testing.ts` (fixtures con llaves reales, nada stubbeado).
 - Tres códigos de error nuevos en la misma unión de `packages/core/src/errors.ts`:
@@ -196,7 +196,7 @@ Salidas crudas completas en [evidencia/T17.md](evidencia/T17.md).
   `MandatePrincipalMismatch`, `MandateActionNotAllowed`, `MandateVenueNotAllowed`,
   `MandateAssetNotAllowed`, `MandateCurrencyMismatch`, `MandateWindowMismatch`,
   `MandateAmountExceeded`.
-- `apps/agent` pasa a depender de `@agentpay/mandate` — el primer consumidor
+- `apps/agent` pasa a depender de `@agentpey/mandate` — el primer consumidor
   real del paquete de T16.
 
 **Comandos**

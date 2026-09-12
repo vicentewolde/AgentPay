@@ -1,6 +1,6 @@
 import type { CredStatus } from "@agentpass/sdk";
 import { Keypair } from "@stellar/stellar-sdk/base";
-import type { VaultRecord } from "@agentpay/vault";
+import type { VaultRecord } from "@agentpey/vault";
 import { describe, expect, it } from "vitest";
 
 import {

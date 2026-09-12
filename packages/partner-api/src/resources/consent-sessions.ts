@@ -4,23 +4,23 @@
  * the principal there to connect a wallet and sign the Mandate, and polls or
  * gets a webhook when it resolves.
  *
- * T45 froze the request/response shape before `@agentpay/directory` had a
+ * T45 froze the request/response shape before `@agentpey/directory` had a
  * `consent_sessions` table at all — `consentSessionIdSchema` and
  * `consentSessionStatusSchema` were hand-rolled here for that reason.
  * T51 gives the table a home, so this file now imports both from
- * `@agentpay/directory` instead (same pattern `tenants.ts`/`agents.ts`
+ * `@agentpey/directory` instead (same pattern `tenants.ts`/`agents.ts`
  * already use) and adds the mapping from a stored record to the public
  * resource — the piece T45's own doc comment had explicitly left for
  * "whichever ticket builds the route".
  *
- * The proposed grant reuses `@agentpay/mandate`'s `mandateGrantSchema`
+ * The proposed grant reuses `@agentpey/mandate`'s `mandateGrantSchema`
  * verbatim rather than re-describing `actions`/`venues`/`assets`/`limits`/
  * `payTo`: a consent session is proposing exactly the grant a Mandate will
  * carry, and a second definition of the same shape is a second place for the
  * two to drift apart.
  */
-import { consentSessionIdSchema, consentSessionStatusSchema, tenantIdSchema, mandateIdSchema, type ConsentSessionRecord } from "@agentpay/directory";
-import { mandateGrantSchema } from "@agentpay/mandate";
+import { consentSessionIdSchema, consentSessionStatusSchema, tenantIdSchema, mandateIdSchema, type ConsentSessionRecord } from "@agentpey/directory";
+import { mandateGrantSchema } from "@agentpey/mandate";
 import { z } from "zod";
 
 export { consentSessionIdSchema, consentSessionStatusSchema };
@@ -29,7 +29,7 @@ export type ConsentSessionStatus = z.infer<typeof consentSessionStatusSchema>;
 export const createConsentSessionRequestSchema = z.strictObject({
   tenant_id: tenantIdSchema,
   grant: mandateGrantSchema,
-  /** Defaults to now, same as `@agentpay/mandate`'s `createMandate`. */
+  /** Defaults to now, same as `@agentpey/mandate`'s `createMandate`. */
   valid_from: z.iso.datetime().optional(),
   valid_until: z.iso.datetime(),
 });

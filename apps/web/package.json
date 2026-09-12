@@ -1,5 +1,5 @@
 {
-  "name": "@agentpay/web",
+  "name": "@agentpey/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,12 +11,12 @@
   "dependencies": {
     "@agentpass/core": "workspace:*",
     "@agentpass/sdk": "workspace:*",
-    "@agentpay/agent": "workspace:*",
-    "@agentpay/directory": "workspace:*",
-    "@agentpay/mandate": "workspace:*",
-    "@agentpay/partner-api": "workspace:*",
-    "@agentpay/tenancy": "workspace:*",
-    "@agentpay/vault": "workspace:*",
+    "@agentpey/agent": "workspace:*",
+    "@agentpey/directory": "workspace:*",
+    "@agentpey/mandate": "workspace:*",
+    "@agentpey/partner-api": "workspace:*",
+    "@agentpey/tenancy": "workspace:*",
+    "@agentpey/vault": "workspace:*",
     "@stellar/stellar-sdk": "^17.0.1"
   }
 }

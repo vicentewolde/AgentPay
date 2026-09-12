@@ -17,8 +17,8 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createDirectory } from "@agentpay/directory";
-import { API_SCOPES } from "@agentpay/partner-api";
+import { createDirectory } from "@agentpey/directory";
+import { API_SCOPES } from "@agentpey/partner-api";
 
 import { readEnvFile } from "./lib/env-file.js";
 

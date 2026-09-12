@@ -28,7 +28,7 @@ comprobados por la red dentro de la misma transacción que mueve la plata.
 | | |
 |---|---|
 | Tests TypeScript | **635** rápidos (604 en T26 + 17 de T27 + 7 de T28 + 2 de T29 + 5 de T31; T30 no agrega tests rápidos, extiende la integración del SDK) |
-| Paquete nuevo | `@agentpay/vault` (T27) |
+| Paquete nuevo | `@agentpey/vault` (T27) |
 | Código de fases cerradas tocado | `packages/sdk` (Fase 1) — un método nuevo, `getRecord()`, mismo precedente aditivo que `anchor()` en T20 (`V-11`). `payment/x402.ts` (Fase 4) gana un `payer?` opcional en T31, sin tocar el camino existente. `contracts/policy-rail/` (Fase 3) pierde su evento de auditoría, con confirmación explícita del usuario (`V-13`). `policy-rail.ts` (Fase 3) sigue sin cambios |
 | Transacciones reales de la evidencia | pago T27: `8d8e72989e...` · pago T28: `47896c6db6...`, anclaje: `feda66884b...` · pago T29/T30: `089d6ccce4...`, anclaje: `e6c34acb71...`, revocación: `5478e1e42b...` |
 
@@ -36,7 +36,7 @@ comprobados por la red dentro de la misma transacción que mueve la plata.
 
 | Hito | Qué es | Estado |
 |---|---|---|
-| T27 | `@agentpay/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` | ✅ cerrado 2026-09-04 |
+| T27 | `@agentpey/vault`: bitácora durable, encadenada por hash, de cada decisión de `PolicyRail` | ✅ cerrado 2026-09-04 |
 | T28 | Ancla `paymentLinkHash(record, paymentTx)` on-chain contra `agent_registry` tras cada pago real | ✅ cerrado 2026-09-04 |
 | T29 | Superficie de consulta: sección "Bitácora" en `apps/web`, estado on-chain de cada anclaje en vivo | ✅ cerrado 2026-09-04 |
 | T30 | `AgentPass.getRecord()`: credencial y Mandato, con su estado on-chain, en la misma bitácora | ✅ cerrado 2026-09-04 |
@@ -176,7 +176,7 @@ por `policy_rail`).
 
 ---
 
-## T27 · `@agentpay/vault` — bitácora durable de cada decisión — cerrado 2026-09-04
+## T27 · `@agentpey/vault` — bitácora durable de cada decisión — cerrado 2026-09-04
 
 **Qué quedó funcionando, en palabras llanas.** Antes de este hito, si el
 servidor de `apps/web` se reiniciaba, perdía toda memoria de cuánto se había
@@ -200,7 +200,7 @@ que sí es enteramente nuestra (una transacción companion que ancla un hash
 contra `agent_registry`, T20 reusado), y quedó confirmada para T28. Detalle
 completo en `DECISIONES.md` → `V-3`.
 
-**Cómo quedó construido.** `@agentpay/vault`, paquete nuevo: un archivo JSON
+**Cómo quedó construido.** `@agentpey/vault`, paquete nuevo: un archivo JSON
 Lines, *append-only*, donde cada línea es un registro con su propio hash y el
 hash del registro anterior — editar cualquier línea vieja rompe todos los
 hashes posteriores, y `verify()` lo confirma recorriendo la cadena entera.

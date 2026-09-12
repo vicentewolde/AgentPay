@@ -69,16 +69,16 @@ autorización de Soroban, no en un requisito de SCF.
 
 ---
 
-### M-2 · El Mandato vive en un paquete propio, `@agentpay/mandate` · `Vigente`
+### M-2 · El Mandato vive en un paquete propio, `@agentpey/mandate` · `Vigente`
 **Fecha:** 2026-09-02 · **Hito:** T16
 
 El documento y su firma viven en `packages/mandate`, publicado como
-`@agentpay/mandate`, no dentro de `@agentpass/core` ni de `apps/agent`.
+`@agentpey/mandate`, no dentro de `@agentpass/core` ni de `apps/agent`.
 
 **Motivo.** Es la misma lógica de `B-2`: el Mandato **consume** AgentPass, no lo
 extiende. `@agentpass/core` sigue siendo la capa de identidad de la Fase 1, y
 una fase cerrada no empieza a cargar documentos de fases posteriores. El scope
-`@agentpay/*` ya agrupa a los consumidores (`@agentpay/agent`).
+`@agentpey/*` ya agrupa a los consumidores (`@agentpey/agent`).
 
 Y una razón que descarta la tercera opción por sí sola: **el Mandato lo firma el
 principal, no el agente.** Meterlo dentro del paquete del agente invertiría
@@ -171,7 +171,7 @@ de otro hito.
 **Costo conocido y aceptado:** por un tiempo, `core` tiene dos maneras de firmar
 un documento. Es feo y está documentado; la alternativa era peor.
 
-**Alternativa descartada:** una tercera copia dentro de `@agentpay/mandate`.
+**Alternativa descartada:** una tercera copia dentro de `@agentpey/mandate`.
 Cero riesgo para las fases cerradas, pero multiplica por tres el lugar donde
 puede aparecer una regla de verificación sutilmente distinta.
 
@@ -339,7 +339,7 @@ lo que `checkScope` + `checkDailyLimit` + la reconciliación de términos
 (`M-14`) ya hacen. Su propio cliente tiene un juguete en ese lugar —
 `BazaarAgentClient.validatePaymentPolicy()`, con `maxPriceAllowedUsdc`,
 `allowedNetworks` y `allowedAssets` pasados al constructor. La diferencia con
-AgentPay es exactamente la tesis del proyecto: allá los límites son constantes
+AgentPey es exactamente la tesis del proyecto: allá los límites son constantes
 de un objeto que el proceso del agente puede reescribir; acá vienen de un
 documento firmado por el principal, revocable desde fuera, con memoria de
 gasto.
@@ -472,7 +472,7 @@ testeable sin construir un agente entero, igual que `checkScope` y
 Y sobre todo: el rail nunca recibe documentos sin verificar. Recibe un `Scope`
 (ya extraído de una credencial que verificó) y un `AgentPayMandate` (ya
 verificado), no un JWS que tendría que verificar él. Verificar firmas es de
-`@agentpass/core` y `@agentpay/mandate`; PolicyRail decide, no verifica. Es la
+`@agentpass/core` y `@agentpey/mandate`; PolicyRail decide, no verifica. Es la
 misma división que hace que `checkScope` no sepa nada de criptografía.
 
 **Alternativa descartada:** fijar `scope` y `mandate` al construir el rail
@@ -653,7 +653,7 @@ una operación de admin, fuera del alcance de esta fase, igual que ya lo es
 para credenciales.
 
 **Alternativa descartada:** una función `ensurePrincipalRegistered()` en
-`@agentpay/mandate` que llamara a `registerIssuer()` por dentro, con
+`@agentpey/mandate` que llamara a `registerIssuer()` por dentro, con
 vocabulario de Mandato. Habría sido una capa de una sola línea de valor real
 (el nombre) sobre una función que ya existe, genérica, y correctamente
 ubicada en el paquete que gobierna la confianza del registro completo.
@@ -677,7 +677,7 @@ enterrada detrás de la firma de una credencial. Las alternativas para no tocar
    `registerIssuer`, `deactivateIssuer`, la conexión, el manejo de errores — mucha
    más superficie de la que Mandato necesita, para un paquete de una fase
    posterior. `anchor()` sola es la pieza mínima.
-2. **Reimplementar la llamada Soroban en `@agentpay/mandate`.** Habría
+2. **Reimplementar la llamada Soroban en `@agentpey/mandate`.** Habría
    duplicado exactamente lo que el comentario de `registry.ts` dice que existe
    para evitar: "reimplementar el mapeo que el spec del contrato ya describe,
    que es peor lugar para estar equivocado."

@@ -2,14 +2,14 @@
  * `/v1/mandates` — read-only in this alcance. A partner needs to know
  * whether the mandate it holds is still good, not replay the raw signed
  * document: `document`, `signature` and `jws` stay inside
- * `@agentpay/directory`'s `MandateRecord` and do not cross into this
+ * `@agentpey/directory`'s `MandateRecord` and do not cross into this
  * resource. Exposing the parsed `grant` is deliberately left out of T45 —
- * `document` is stored unvalidated (`@agentpay/directory` never judges a
+ * `document` is stored unvalidated (`@agentpey/directory` never judges a
  * mandate, only stores it), so shaping a public field from it is a decision
  * for whichever ticket builds the route, informed by what a real partner
  * integration actually asks for.
  */
-import { agentIdSchema, mandateIdSchema, tenantIdSchema, type MandateRecord } from "@agentpay/directory";
+import { agentIdSchema, mandateIdSchema, tenantIdSchema, type MandateRecord } from "@agentpey/directory";
 import { z } from "zod";
 
 export const mandateStatusSchema = z.enum(["pending", "active", "expired", "revoked"]);

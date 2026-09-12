@@ -5,7 +5,7 @@
  * `createFileMandateVault` cannot promise on a host with an ephemeral
  * filesystem (Render's free tier).
  *
- *   pnpm --filter @agentpay/vault run test:integration
+ *   pnpm --filter @agentpey/vault run test:integration
  *
  * Requires `DATABASE_URL` in `.env.local`. Every test uses its own random
  * `tenantId` and deletes its own rows in `afterEach`, so repeated runs never

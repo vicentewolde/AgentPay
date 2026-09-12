@@ -1,5 +1,5 @@
 {
-  "name": "agentpay",
+  "name": "agentpey",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -17,10 +17,10 @@
     "demo:pay-real": "tsx --tsconfig tsconfig.scripts.json scripts/demo-real-payment.ts",
     "generate:openapi": "tsx --tsconfig tsconfig.scripts.json scripts/generate-openapi.ts",
     "partner:create": "tsx --tsconfig tsconfig.scripts.json scripts/create-partner.ts",
-    "web": "pnpm --filter @agentpay/web run dev",
+    "web": "pnpm --filter @agentpey/web run dev",
     "build": "tsc -b",
     "test": "pnpm -r --stream test && vitest run",
-    "test:integration": "pnpm --filter @agentpass/sdk run test:integration && pnpm --filter @agentpay/mandate run test:integration",
+    "test:integration": "pnpm --filter @agentpass/sdk run test:integration && pnpm --filter @agentpey/mandate run test:integration",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "check": "pnpm typecheck && pnpm test",
     "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo"

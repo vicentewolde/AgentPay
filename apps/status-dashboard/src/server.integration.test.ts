@@ -3,7 +3,7 @@
  * the existing directory and vault writers, then asks the dashboard only via
  * HTTP GET — the dashboard itself has no writer in scope.
  *
- *   pnpm --filter @agentpay/status-dashboard run test:integration
+ *   pnpm --filter @agentpey/status-dashboard run test:integration
  *
  * Requires DATABASE_URL in .env.local. The cleanup removes only this test's
  * randomly named tenant, partner, principal and vault records.
@@ -14,8 +14,8 @@ import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 
 import { AgentPassError, stellarAddressToDid } from "@agentpass/core";
-import { createDirectory, type Directory } from "@agentpay/directory";
-import { createPostgresMandateVault } from "@agentpay/vault";
+import { createDirectory, type Directory } from "@agentpey/directory";
+import { createPostgresMandateVault } from "@agentpey/vault";
 import { Keypair } from "@stellar/stellar-sdk";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";

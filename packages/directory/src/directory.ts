@@ -113,7 +113,7 @@ export interface DirectoryOptions {
 /**
  * Turns an allocated key index into the Stellar identity derived from it.
  *
- * A callback, not a dependency on `@agentpay/tenancy`, so the master seed
+ * A callback, not a dependency on `@agentpey/tenancy`, so the master seed
  * never enters this package's scope — and so an agent row can never be
  * written with an address that does not correspond to its own index, which is
  * what two separate calls would eventually allow.
@@ -402,7 +402,7 @@ export interface Directory {
   findLatestMandate(tenantId: string): Promise<MandateRecord | undefined>;
   revokeMandate(mandateHash: string, revokeTx: string, at?: Date): Promise<void>;
 
-  /** `/v1`'s idempotency store — `resolveIdempotency` (`@agentpay/partner-api`) reads through this. */
+  /** `/v1`'s idempotency store — `resolveIdempotency` (`@agentpey/partner-api`) reads through this. */
   findIdempotentResponse(partnerId: string, key: string): Promise<IdempotencyRecord | undefined>;
   recordIdempotentResponse(input: RecordIdempotentResponseInput): Promise<IdempotencyRecord>;
 

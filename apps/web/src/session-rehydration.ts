@@ -20,7 +20,7 @@
  * somehow) costs nothing new: the purchase path already refuses it, the same
  * way it always has.
  */
-import type { CredentialRecord, MandateRecord } from "@agentpay/directory";
+import type { CredentialRecord, MandateRecord } from "@agentpey/directory";
 
 export type RehydrationDecision =
   | {

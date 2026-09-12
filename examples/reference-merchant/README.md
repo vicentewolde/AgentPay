@@ -1,7 +1,7 @@
 # Reference x402 merchant
 
 This is a deliberately small `node:http` server that implements a second,
-independent x402 merchant for AgentPay's generic catalogue adapter. It has one
+independent x402 merchant for AgentPey's generic catalogue adapter. It has one
 discoverable product and one paid resource:
 
 - `GET /api/discovery/search?query=*` returns the `ServiceCard` shape consumed

@@ -1,5 +1,5 @@
 {
-  "name": "@agentpay/directory",
+  "name": "@agentpey/directory",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -21,7 +21,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@agentpay/tenancy": "workspace:*",
+    "@agentpey/tenancy": "workspace:*",
     "@types/pg": "^8.11.0"
   }
 }

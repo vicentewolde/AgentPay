@@ -24,7 +24,7 @@
  */
 import type { Scope } from "@agentpass/core";
 import { AgentPassError } from "@agentpass/core";
-import type { AgentPayMandate } from "@agentpay/mandate";
+import type { AgentPayMandate } from "@agentpey/mandate";
 
 import type { PurchaseIntent } from "../intent/intent.js";
 import { checkDailyLimit, type DailyLimitRejectionCode } from "../ledger/check-daily-limit.js";
@@ -44,7 +44,7 @@ export type AuthorisationRejectionCode =
  *
  * `scope` and `mandate` arrive **already verified** — a `Scope` lifted out of
  * a credential that verified, and a mandate whose signature and window were
- * checked by `@agentpay/mandate`. PolicyRail decides; it does not verify
+ * checked by `@agentpey/mandate`. PolicyRail decides; it does not verify
  * signatures, exactly as `checkScope` knows nothing about cryptography.
  */
 export interface AuthorisationRequest {

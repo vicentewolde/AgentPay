@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: agentpay-web
+    name: agentpey-web
     runtime: node
     plan: free
     region: oregon

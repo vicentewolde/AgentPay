@@ -1,5 +1,5 @@
 import { AgentPassError } from "@agentpass/core";
-import type { ApiKey } from "@agentpay/directory";
+import type { ApiKey } from "@agentpey/directory";
 import { describe, expect, it, vi } from "vitest";
 
 import { API_KEY_SECRET_PATTERN, authorizeRequest } from "./auth.js";

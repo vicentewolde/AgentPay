@@ -1,11 +1,11 @@
 /**
- * `/v1/agents` — read-only in this alcance. `@agentpay/directory`'s
+ * `/v1/agents` — read-only in this alcance. `@agentpey/directory`'s
  * `AgentInstance` has a `keyIndex` (the SEP-0005 derivation index): it never
  * crosses this boundary — it names nothing a partner integrates against, and
  * the least a partner-facing API can expose about a key derivation scheme is
  * the index inside it.
  */
-import { agentIdSchema, agentStatusSchema, onchainStateSchema, tenantIdSchema, type AgentInstance } from "@agentpay/directory";
+import { agentIdSchema, agentStatusSchema, onchainStateSchema, tenantIdSchema, type AgentInstance } from "@agentpey/directory";
 import { stellarAddressSchema, stellarDidSchema } from "@agentpass/core";
 import { z } from "zod";
 

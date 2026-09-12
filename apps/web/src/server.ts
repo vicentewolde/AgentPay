@@ -45,7 +45,7 @@ import {
 import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
-import { createDirectory, type ConsentSessionRecord, type Directory, type MandateRecord } from "@agentpay/directory";
+import { createDirectory, type ConsentSessionRecord, type Directory, type MandateRecord } from "@agentpey/directory";
 import {
   agentPayMandateSchema,
   anchorMandate,
@@ -56,11 +56,11 @@ import {
   revokeMandate,
   walletMandateHash,
   type AgentPayMandate,
-} from "@agentpay/mandate";
-import { createPostgresMandateVault, type MandateVault } from "@agentpay/vault";
-import { AUTHORIZATION_HEADER, computeConsentSessionStatus, IDEMPOTENCY_KEY_HEADER } from "@agentpay/partner-api";
+} from "@agentpey/mandate";
+import { createPostgresMandateVault, type MandateVault } from "@agentpey/vault";
+import { AUTHORIZATION_HEADER, computeConsentSessionStatus, IDEMPOTENCY_KEY_HEADER } from "@agentpey/partner-api";
 
-import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, MandateSource, VenueId } from "@agentpay/agent";
+import type { Agent, CatalogAdapter, CreatePurchaseIntentResult, MandateSource, VenueId } from "@agentpey/agent";
 import {
   anchorPaymentDecision,
   createAgent,
@@ -75,7 +75,7 @@ import {
   withVault,
   type PolicyRail,
   type PolicyRailPayer,
-} from "@agentpay/agent";
+} from "@agentpey/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
 import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
@@ -115,7 +115,7 @@ const TESTNET = {
 
 /**
  * What the session needs of its own Mandate — deliberately without `.jws`,
- * unlike `AnchoredMandate` (`@agentpay/mandate`): a wallet-anchored mandate
+ * unlike `AnchoredMandate` (`@agentpey/mandate`): a wallet-anchored mandate
  * has no JWS at all (T35), and everything here reads identically whichever
  * path produced it. `principalAddress` and `signature` are what a later
  * revoke needs to know whether it must go through the wallet-signed path
@@ -523,7 +523,7 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
   const walletAddress = walletAddressBySession.get(sessionId);
 
   if (walletAddress !== undefined) {
-    // T39: `sessionId` is this tenant's own id in `@agentpay/directory`
+    // T39: `sessionId` is this tenant's own id in `@agentpey/directory`
     // (set by `/api/wallet/verify`) — check whether it already has a live
     // credential and mandate before issuing anything new. This is the check
     // that makes "volver desde otro navegador" not mint a fresh identity.
@@ -716,7 +716,7 @@ async function startConsentSession(consentSessionId: string): Promise<StartConse
   });
   const tenantAgent = await ensureTenantAgent(directory, masterMnemonic, session.tenantId);
 
-  // Validated here, not trusted from storage: `@agentpay/directory` stores
+  // Validated here, not trusted from storage: `@agentpey/directory` stores
   // `grant` unvalidated by design (`C-5`-style separation of storing from
   // judging) — this is the point where it is actually about to be signed
   // into a real Mandate, so it is the point that has to be sure.
@@ -1198,7 +1198,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
 
     // T39: the session id is now this wallet's real tenant id in
-    // `@agentpay/directory` — not `sha256(address)` (`C-25`/`D4`) — resolved
+    // `@agentpey/directory` — not `sha256(address)` (`C-25`/`D4`) — resolved
     // (or created, on this wallet's very first connection) here, once, so
     // every later request can find the same tenant by cookie alone.
     try {
@@ -1684,5 +1684,5 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 }
 
 server.listen(PORT, () => {
-  process.stdout.write(`\nAgentPay web · Fase 4 (T25) · http://localhost:${PORT}\n\n`);
+  process.stdout.write(`\nAgentPey web · Fase 4 (T25) · http://localhost:${PORT}\n\n`);
 });

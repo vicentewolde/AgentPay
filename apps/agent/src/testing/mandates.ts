@@ -11,7 +11,7 @@
  */
 import type { Scope, StellarDid } from "@agentpass/core";
 import { AgentPassError, stellarAddressToDid } from "@agentpass/core";
-import { createMandate, signMandate, verifyMandate, type AgentPayMandate } from "@agentpay/mandate";
+import { createMandate, signMandate, verifyMandate, type AgentPayMandate } from "@agentpey/mandate";
 import { Keypair } from "@stellar/stellar-sdk/base";
 
 import type { MandateSource, MandateVerifier, VerifiedOwnMandate } from "../mandate/verifier.js";

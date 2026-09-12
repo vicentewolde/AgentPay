@@ -25,7 +25,7 @@ una de tres etiquetas, sin excepción:
 
 ## 1. Resumen ejecutivo
 
-**Qué hay hoy, verificado leyendo el código y no la documentación.** AgentPay
+**Qué hay hoy, verificado leyendo el código y no la documentación.** AgentPey
 prueba, de punta a punta y contra Stellar testnet real, la cadena completa
 de un pago agéntico: una wallet real (Freighter) demuestra que controla su
 dirección con una firma SEP-0053; esa misma wallet firma su propio Mandato y
@@ -45,7 +45,7 @@ contrato `policy_rail` desplegado son los mismos para todos los visitantes
 de partner: no hay tabla de partners, ni API key, ni scopes, ni idempotencia,
 ni versionado, ni rate limiting, ni webhooks, ni OpenAPI — verificado con
 una búsqueda sobre todo el repo, cero coincidencias. El paquete que resuelve
-la derivación de llaves por tenant, `@agentpay/tenancy` (T32), **no está
+la derivación de llaves por tenant, `@agentpey/tenancy` (T32), **no está
 importado por ningún archivo fuera de su propio paquete**: existe como
 biblioteca, no como capacidad del producto. Y el `tenant_id` de hoy es
 `sha256(dirección de la wallet)` (`apps/web/src/wallet-session.ts:walletTenantId`),
@@ -84,7 +84,7 @@ que cambian el orden del trabajo.**
 **La decisión de fondo que este documento no toma.** Todo lo demás —el
 modelo de datos, la API, el onboarding— es trabajo acotado y de bajo riesgo.
 Lo que gobierna el diseño entero es **quién firma el pago y quién tiene las
-llaves** (sección 4.1). Hoy, de hecho, AgentPay custodia: la plataforma
+llaves** (sección 4.1). Hoy, de hecho, AgentPey custodia: la plataforma
 tiene el secreto que gasta y el owner del `policy_rail`. Eso es aceptable en
 testnet y está declarado, pero define el techo regulatorio del producto y no
 puede resolverse "más adelante", porque cambia el modelo de entidades, el
@@ -93,7 +93,7 @@ onboarding y la superficie de API. Es la primera pregunta de la sección 7.
 **Recomendación de arranque.** El primer hito implementable sin tocar
 ninguna área restringida es la **capa de persistencia de partner/tenant/
 agente/mandato** (sección 8): una migración, un paquete nuevo
-`@agentpay/registry-datos`, y ninguna modificación a `checkMandate`, a los
+`@agentpey/registry-datos`, y ninguna modificación a `checkMandate`, a los
 contratos, al vault ni al camino de pago. Habilita todo lo demás y no
 depende de la decisión de custodia.
 
@@ -111,7 +111,7 @@ flowchart TB
     PB["Backend del partner"]
   end
 
-  subgraph AP["AgentPay — plataforma"]
+  subgraph AP["AgentPey — plataforma"]
     API["API de partners /v1<br/>(API key + scopes + idempotencia)"]
     HOSTED["Flujo de consentimiento hospedado<br/>(wallet connect + firma del Mandato)"]
     REG[("Registro: partners, tenants,<br/>principals, agentes, mandatos")]
@@ -172,7 +172,7 @@ erDiagram
 
 | Distinción pedida | Cómo la sostiene el modelo |
 |---|---|
-| `usr_123` es identidad de aplicación, no criptográfica | Vive solo en `TENANT.external_ref`, una cadena opaca. AgentPay nunca la interpreta ni la usa para autorizar nada |
+| `usr_123` es identidad de aplicación, no criptográfica | Vive solo en `TENANT.external_ref`, una cadena opaca. AgentPey nunca la interpreta ni la usa para autorizar nada |
 | Tenant = partner + cliente/workspace | Clave única `(partner_id, external_ref)`. El tenant **no** se deriva de la wallet |
 | Principal = quien consiente y revoca | `PRINCIPAL` es global por dirección Stellar; `PRINCIPAL_BINDING` lo ata a un tenant con su prueba de control |
 | Agente técnico ≠ wallet | `AGENT_INSTANCE` tiene dirección propia, derivada, distinta de la del principal |
@@ -208,14 +208,14 @@ Tres compartimentos, con una regla por borde.
 
 | Compartimento | Contiene | Regla |
 |---|---|---|
-| **Partner** | `usr_123`, email, RUT, perfil, todo lo que su producto necesite | Nunca cruza a AgentPay. El contrato de integración lo dice explícito, y la API **rechaza** `external_ref` que parezca email o RUT `PROP` |
+| **Partner** | `usr_123`, email, RUT, perfil, todo lo que su producto necesite | Nunca cruza a AgentPey. El contrato de integración lo dice explícito, y la API **rechaza** `external_ref` que parezca email o RUT `PROP` |
 | **Usuario** | Su clave privada, su semilla, su historial de wallet | Nunca sale de Freighter. Hoy `YA`: el servidor solo ve firmas, jamás un secreto |
-| **AgentPay** | `partner_id`, `external_ref` opaco, dirección pública de la wallet, dirección del agente, parámetros del mandato, hashes, transacciones | Mínimo suficiente para autorizar y probar. Una dirección Stellar es un seudónimo público, no PII, pero **es correlacionable entre partners** — ver abajo |
+| **AgentPey** | `partner_id`, `external_ref` opaco, dirección pública de la wallet, dirección del agente, parámetros del mandato, hashes, transacciones | Mínimo suficiente para autorizar y probar. Una dirección Stellar es un seudónimo público, no PII, pero **es correlacionable entre partners** — ver abajo |
 
 **El punto incómodo, dicho de frente.** Si Vinny usa `G-VINNY` con CloudOps
-y con otro partner, AgentPay puede ver que es la misma persona aunque nunca
+y con otro partner, AgentPey puede ver que es la misma persona aunque nunca
 reciba su email. La aislación de tenants impide que *los partners* se vean
-entre sí, no que AgentPay correlacione. Mitigaciones posibles, ninguna
+entre sí, no que AgentPey correlacione. Mitigaciones posibles, ninguna
 gratis: (a) declararlo en la política de privacidad y no explotarlo; (b)
 guardar `sha256(partner_id || dirección)` como clave de búsqueda y la
 dirección en claro solo donde la cadena la exige; (c) recomendar al usuario
@@ -238,7 +238,7 @@ emite nada nuevo.
 sequenceDiagram
   participant V as Vinny
   participant C as CloudOps
-  participant A as AgentPay
+  participant A as AgentPey
   participant W as Freighter
   participant S as Stellar
 
@@ -259,7 +259,7 @@ sequenceDiagram
 ```
 
 Cuatro propiedades que este diseño compra y que un flujo dentro del partner
-no compra: el consentimiento lo muestra AgentPay, así que el partner no
+no compra: el consentimiento lo muestra AgentPey, así que el partner no
 puede fabricarlo; el texto que firma la wallet es el mismo que se ancla; el
 partner nunca ve la firma antes que la cadena; y la revocación tiene una
 URL propia, alcanzable sin pasar por el partner — que es la mitad del
@@ -269,12 +269,12 @@ sentido de "revocable desde afuera del agente".
 
 | Alternativa | A favor | En contra | Veredicto |
 |---|---|---|---|
-| **Solo SDK** (cada partner hospeda todo) | Sin custodia, sin datos de terceros en AgentPay, sin costo de infraestructura | El consentimiento lo renderiza el partner: deja de ser prueba de nada. Cada partner necesita su Postgres, su seed, su deploy. Iterar exige que N partners actualicen | No |
-| **Solo API hospedada** | Un solo lugar donde arreglar cosas, evidencia centralizada, integración en horas | El agente del partner tiene que hablar HTTP para cada paso; AgentPay se vuelve dependencia de disponibilidad | Insuficiente sola |
+| **Solo SDK** (cada partner hospeda todo) | Sin custodia, sin datos de terceros en AgentPey, sin costo de infraestructura | El consentimiento lo renderiza el partner: deja de ser prueba de nada. Cada partner necesita su Postgres, su seed, su deploy. Iterar exige que N partners actualicen | No |
+| **Solo API hospedada** | Un solo lugar donde arreglar cosas, evidencia centralizada, integración en horas | El agente del partner tiene que hablar HTTP para cada paso; AgentPey se vuelve dependencia de disponibilidad | Insuficiente sola |
 | **Híbrido** `PROP` **recomendado** | API hospedada para identidad, consentimiento, autorización y evidencia; SDK delgado que envuelve esa API y **además** trae local lo que ya es local y verificable (`checkScope`, `checkMandate`, verificación de credencial e intent) | Dos superficies que mantener sincronizadas | **Sí** |
 
 **Por qué el híbrido y no otra cosa.** El proyecto ya está construido así:
-`@agentpass/core`, `@agentpass/sdk`, `@agentpay/mandate` y el motor de
+`@agentpass/core`, `@agentpass/sdk`, `@agentpey/mandate` y el motor de
 `apps/agent` son bibliotecas puras y verificables sin red — esa es la tesis
 ("verificable, no confiable"). Obligar a un partner a preguntarle a una API
 si un Mandato es válido, cuando puede verificar la firma él mismo, tira esa
@@ -286,7 +286,7 @@ Reparto concreto propuesto: **hospedado** = alta de tenants y agentes,
 consentimiento, custodia de llaves derivadas, decisión de autorización con
 estado (`perDay`), bitácora, webhooks. **SDK local** = verificar credencial,
 verificar Mandato, `checkScope`, `checkMandate`, armar el `PurchaseIntent`,
-hablar x402. Un partner paranoico puede reverificar todo lo que AgentPay
+hablar x402. Un partner paranoico puede reverificar todo lo que AgentPey
 afirma.
 
 ### 2.7 Contratos de API `PROP`
@@ -312,7 +312,7 @@ segunda compra. Hoy no existe, y el `intentId` del vault cumple una función
 parecida pero solo dentro del vault.
 
 **Versionado.** Prefijo `/v1` para cambios rompientes, más un header
-`AgentPay-Version: 2026-09-10` fijado por partner al alta, para cambios
+`AgentPey-Version: 2026-09-10` fijado por partner al alta, para cambios
 aditivos. Sin versión, la versión del alta.
 
 **Rate limiting.** Por partner y por ruta, ventana deslizante, `429` con
@@ -334,7 +334,7 @@ esquema disponible; duplicarlo a mano garantiza que se desincronice.
 
 **Caso base: el comercio no integra nada.** `YA` verificado. El comercio
 publica su recurso con x402 y responde `402` con sus `PaymentRequirements`.
-AgentPay es, desde su punto de vista, un comprador cualquiera que paga y se
+AgentPey es, desde su punto de vista, un comprador cualquiera que paga y se
 va. Todo el enforcement pasa del lado del comprador. Esto ya funciona
 contra el bazaar real (`apps/agent/src/payment/x402.ts`), y es la propiedad
 más valiosa del diseño: no hay que convencer a ningún comercio de nada.
@@ -347,7 +347,7 @@ niveles, de menos a más intrusivo:
    `intentId` y la posición en la cadena del vault. El comercio verifica
    contra la cadena por su cuenta.
 2. **Encabezado de evidencia.** El comprador manda un
-   `AgentPay-Evidence: <jws>` junto con el pago. El comercio, con el SDK o
+   `AgentPey-Evidence: <jws>` junto con el pago. El comercio, con el SDK o
    con `verifyStellarMessage` a mano, comprueba que un principal identificado
    consintió esa compra. Cero cambios en x402: es un header extra que un
    comercio que no lo entiende ignora.
@@ -357,13 +357,13 @@ niveles, de menos a más intrusivo:
 
 ---
 
-## 3. Flujo completo: Vinny → CloudOps → AgentPay → comercio
+## 3. Flujo completo: Vinny → CloudOps → AgentPey → comercio
 
 Cada paso marcado con lo que hoy existe y lo que falta.
 
 | # | Paso | Hoy | Qué falta |
 |---|---|---|---|
-| 1 | Vinny se registra en CloudOps como `usr_123` | Fuera de alcance de AgentPay | — |
+| 1 | Vinny se registra en CloudOps como `usr_123` | Fuera de alcance de AgentPey | — |
 | 2 | CloudOps crea el tenant: `POST /v1/tenants` con `external_ref` opaco | `PROP` | Todo: tabla, API, autenticación |
 | 3 | CloudOps crea la instancia de agente para ese tenant | `PROP` — la derivación existe (`deriveTenantKeypair`), sin usarse | Índice durable, persistencia, fondeo |
 | 4 | CloudOps abre un `consent_session` y redirige a Vinny | `PROP` | Flujo hospedado, token de un solo uso, redirección |
@@ -372,7 +372,7 @@ Cada paso marcado con lo que hoy existe y lo que falta.
 | 7 | El Mandato se ancla on-chain | `YA` — `agent_registry`, firmado por la wallet | Persistir el resultado |
 | 8 | CloudOps recibe la confirmación | `PROP` | Webhooks |
 | 9 | El agente de CloudOps pide un recurso y recibe un `402` | `YA` contra el bazaar real | Generalizar más allá de un producto y un asset |
-| 10 | AgentPay verifica identidad, mandato, destinatario, monto, vigencia, revocación y límites | `YA` — las siete, `checkScope` + `checkMandate` + `checkDailyLimit` + `reconcileTerms` + estado on-chain | Que la decisión tenga estado durable entre procesos |
+| 10 | AgentPey verifica identidad, mandato, destinatario, monto, vigencia, revocación y límites | `YA` — las siete, `checkScope` + `checkMandate` + `checkDailyLimit` + `reconcileTerms` + estado on-chain | Que la decisión tenga estado durable entre procesos |
 | 11 | Se paga | `YA` — `policy_rail` liquida con `perTx`/`perDay` on-chain | Una cuenta pagadora por tenant, no una compartida |
 | 12 | Queda evidencia encadenada | `YA` — MandateVault en Postgres | Consultable por partner y por principal, con permisos |
 | 13 | Vinny ve su historial y revoca | `YA` la revocación firmada por wallet; el historial **exige una sesión viva en memoria** | Historial durable, alcanzable desde otro navegador |
@@ -396,7 +396,7 @@ Cada paso marcado con lo que hoy existe y lo que falta.
 encontré leyendo el contrato y el SDK, y una recomendación al final que
 necesita tu aprobación explícita.**
 
-Punto de partida honesto: **hoy AgentPay es custodial de facto.** La
+Punto de partida honesto: **hoy AgentPey es custodial de facto.** La
 plataforma tiene `AGENT_SECRET_KEY`, que es quien paga en el camino clásico,
 y tiene el owner del único `policy_rail` desplegado. El usuario no pone
 fondos: los pone el proyecto. Es coherente con un piloto de testnet y está
@@ -410,8 +410,8 @@ partir.
 - *Experiencia*: pop-up de Freighter en cada compra. El agente no puede
   actuar mientras Vinny duerme.
 - *Quién firma*: Vinny, siempre.
-- *Llaves*: todas de Vinny. AgentPay no tiene ninguna.
-- *Límites reales*: AgentPay puede negarse a pedir la firma, pero **no puede
+- *Llaves*: todas de Vinny. AgentPey no tiene ninguna.
+- *Límites reales*: AgentPey puede negarse a pedir la firma, pero **no puede
   impedir** que Vinny firme otra cosa. El límite es asesoría, no enforcement.
 - *Riesgos*: custodia nula, recuperación = la de su wallet, fraude acotado a
   que aprobó lo que aprobó, revocación trivial (deja de firmar).
@@ -437,7 +437,7 @@ opción 3.
 - *Experiencia*: firma una vez, el agente opera después. La mejor de las
   cuatro, si fuera implementable como suena.
 - *Quién firma*: la clave delegada.
-- *Llaves*: la delegada la tendría AgentPay o el partner.
+- *Llaves*: la delegada la tendría AgentPey o el partner.
 - *Límites reales*: **ninguno a nivel de red**, salvo que se degrade a la
   opción 3. Es la trampa de esta opción.
 - *Riesgos*: si la clave delegada se filtra, se pierde toda la cuenta.
@@ -451,9 +451,9 @@ opción 3.
 
 - *Experiencia*: una firma para consentir, una transferencia para fondear.
   Después el agente opera solo, hasta el límite y hasta `valid_until`.
-- *Quién firma*: la clave owner del rail, que hoy tendría AgentPay. El
+- *Quién firma*: la clave owner del rail, que hoy tendría AgentPey. El
   contrato decide si la firma cuenta.
-- *Llaves*: Vinny mantiene `G-VINNY`; AgentPay tiene el owner del rail.
+- *Llaves*: Vinny mantiene `G-VINNY`; AgentPey tiene el owner del rail.
 - *Límites reales*: **los únicos verdaderamente aplicados por la red**.
   `policy_rail.__check_auth` autoriza exactamente una llamada a `transfer`
   de su propio asset, con él mismo como `from`, y aplica `per_tx` y
@@ -461,14 +461,14 @@ opción 3.
 - *Riesgos, y acá está lo que hay que mirar*: leyendo
   `contracts/policy-rail/src/lib.rs`, el contrato **no tiene función de
   retiro, ni de rotación de owner, ni de revocación**. Solo el owner puede
-  mover fondos, y solo hacia un `transfer`. Consecuencia: si AgentPay tiene
+  mover fondos, y solo hacia un `transfer`. Consecuencia: si AgentPey tiene
   el owner, **Vinny no puede recuperar su propio dinero**, y si el owner se
   pierde, los fondos quedan atrapados hasta `valid_until`... y después
   también. Para un piloto de testnet con montos simbólicos es tolerable.
   Para fondos de terceros, no. Arreglarlo **toca un contrato — área
   restringida, requiere tu aprobación explícita antes de que se escriba una
   línea.**
-- *Regulatorio*: intermedio. AgentPay opera una llave sobre fondos ajenos,
+- *Regulatorio*: intermedio. AgentPey opera una llave sobre fondos ajenos,
   aunque acotada por el contrato. Con retiro por parte del principal, se
   parece más a un no-custodial con límites; sin él, se parece a custodia.
 - *Compatibilidad*: **es la tesis del proyecto, escrita en Rust.** "Dale a
@@ -476,12 +476,12 @@ opción 3.
 
 ---
 
-**Opción 4 — AgentPay custodia una cuenta por tenant.**
+**Opción 4 — AgentPey custodia una cuenta por tenant.**
 
 - *Experiencia*: la más simple. Sin fondeo por parte del usuario.
-- *Quién firma*: AgentPay, con la llave derivada del seed maestro (`T32`).
-- *Llaves*: todas de AgentPay.
-- *Límites reales*: solo los que AgentPay aplique en software. Si su código
+- *Quién firma*: AgentPey, con la llave derivada del seed maestro (`T32`).
+- *Llaves*: todas de AgentPey.
+- *Límites reales*: solo los que AgentPey aplique en software. Si su código
   falla, no hay red que lo frene.
 - *Riesgos*: máximos. Compromiso del seed maestro = todos los tenants a la
   vez. Recuperación depende del respaldo del seed. El fraude interno es
@@ -502,7 +502,7 @@ que lo pidan. La opción 2, descartada por lo que dice el protocolo de
 Stellar, no por preferencia.
 
 **Precondición no negociable de la opción 3 antes de cualquier fondo real:**
-que el principal pueda retirar su saldo sin depender de AgentPay. Eso es un
+que el principal pueda retirar su saldo sin depender de AgentPey. Eso es un
 cambio de contrato y **no lo propongo como trabajo hasta que lo apruebes**.
 
 ### 4.2 Decisiones abiertas menores
@@ -527,7 +527,7 @@ de implementarse.
 |---|---|---|---|---|---|---|
 | G1 | Identidad técnica y pagador compartidos | `apps/web/src/server.ts` lee `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY` fijos; `render.yaml` los declara únicos; un solo `POLICY_RAIL_CONTRACT_ID` | Dos partners comparten fondos e identidad. El `perDay` de uno consume el del otro | G2, G3, 4.1 | Piloto ya | F4 |
 | G2 | Tenant derivado solo de la wallet | `walletTenantId()` = `sha256(dirección)`, `apps/web/src/wallet-session.ts` | La misma wallet con dos partners cae en un solo tenant. Rompe el modelo B2B2C de raíz | G3 | Piloto ya | F2 |
-| G3 | `@agentpay/tenancy` sin índice durable, sin gestión de seed, sin rotación, sin decisión de emisor | El paquete no está importado por **ningún** archivo fuera de sí mismo (verificado); `deriveTenantKeypair` recibe `tenantIndex` de quien la llame y nadie la llama | Un índice mal asignado o reusado hace colisionar llaves de tenants distintos | D1, D2 | Piloto ya | F2 → F4 |
+| G3 | `@agentpey/tenancy` sin índice durable, sin gestión de seed, sin rotación, sin decisión de emisor | El paquete no está importado por **ningún** archivo fuera de sí mismo (verificado); `deriveTenantKeypair` recibe `tenantIndex` de quien la llame y nadie la llama | Un índice mal asignado o reusado hace colisionar llaves de tenants distintos | D1, D2 | Piloto ya | F2 → F4 |
 | G4 | Vault y Postgres frente a varios procesos | `postgres-vault.ts` cachea todas las filas al construirse y responde `spentOn()` desde memoria; cola de escrituras solo intra-proceso (`C-7`) | **Con dos instancias, `perDay` se puede exceder en el camino de cuenta clásica.** El camino `policy_rail` está cubierto por el contrato | — | Producción; hoy mitigado por correr una sola instancia | F8 |
 | G5 | `apps/web` no es una API de partners | Doce rutas, autenticación solo por cookie de sesión, cero apariciones de API key / rate limit / idempotencia / webhook / OpenAPI en todo el repo | Nadie puede integrar sin que le demos un navegador | G1, G2 | Piloto ya | F5 |
 | G6 | Camino de comercio específico | `BAZAAR_VENUE_CONTRACT_ID` y `BAZAAR_USDC_ISSUER` fijos; `mapAsset` acepta solo `"USDC"`; `PAYABLE_PRODUCT_ID = "swap-risk-quote"` y `ROUTE_PARAMS` fijos en `server.ts` | Un comercio nuevo exige cambiar código | — | Piloto | F7 |
@@ -652,9 +652,9 @@ un olvido, está dicho así a propósito.
 
 ### F2 · Modelo partner/tenant y persistencia ⚪
 
-- **Objetivo llano.** Que AgentPay sepa quiénes son sus partners y sus
+- **Objetivo llano.** Que AgentPey sepa quiénes son sus partners y sus
   clientes, y no se olvide al reiniciar.
-- **Alcance.** Paquete nuevo `@agentpay/directory` (nombrado así en
+- **Alcance.** Paquete nuevo `@agentpey/directory` (nombrado así en
   `C-26`, no `registry-datos` como decía este párrafo antes de construirlo):
   repositorios para partner, api_key, tenant, principal, vinculación,
   instancia de agente, credencial, mandato. Asignación durable del índice de
@@ -677,7 +677,7 @@ un olvido, está dicho así a propósito.
 **Delegación Claude Code / Codex.**
 
 **Cerrada (T38), construida enteramente por Claude Code — sin delegar
-nada.** Las interfaces de `@agentpay/directory` no existían todavía cuando
+nada.** Las interfaces de `@agentpey/directory` no existían todavía cuando
 se hizo, así que no había contrato estable contra el cual abrir un ticket
 de Codex. Se documenta igual, como ejemplo de qué sí habría sido delegable
 una vez publicado el paquete: cobertura de tests adicional sobre `ids.ts` y
@@ -728,7 +728,7 @@ No se abrió ese ticket porque el hito completo tomó menos de una sesión.
 
 1. **Qué debe hacer Claude Code.** Persistir credencial y Mandato contra el
    tenant en cada emisión/anclaje; rehidratar la sesión desde
-   `@agentpay/directory` cuando una wallet vuelve a probar control;
+   `@agentpey/directory` cuando una wallet vuelve a probar control;
    mantener el invariante de `buildSessionDocuments` que `C-17` ya rompió
    una vez. Todo esto toca `apps/web/src/server.ts`,
    `session-documents.ts` y `wallet-session.ts` — el camino que arma los
@@ -753,7 +753,7 @@ No se abrió ese ticket porque el hito completo tomó menos de una sesión.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T39 | Claude | F2 (`@agentpay/directory`) cerrada | Alto — toca el seam de `C-17` | `apps/web/src/server.ts`, `session-documents.ts`, `wallet-session.ts` | Ciclo completo contra testnet grabado en `evidencia/`; el invariante de `C-17` sigue cubierto por test |
+| T39 | Claude | F2 (`@agentpey/directory`) cerrada | Alto — toca el seam de `C-17` | `apps/web/src/server.ts`, `session-documents.ts`, `wallet-session.ts` | Ciclo completo contra testnet grabado en `evidencia/`; el invariante de `C-17` sigue cubierto por test |
 | T40 | Codex | T39 mergeado a `main` | Bajo — solo presentación | `apps/web/public/index.html` (prohibido: cualquier `.ts` de `apps/web/src`) | Renderiza lo que el endpoint de T39 devuelve; no agrega lógica de decisión |
 | T41 | Codex | T39 mergeado; solo si Claude publica una función pura delegable | Bajo | Únicamente archivos `*.test.ts` de `apps/web/src/` | Cobertura nueva en verde, sin tocar el archivo bajo prueba |
 | T42 | Codex | Ninguna (independiente de T39) | Bajo — solo docs | `packages/directory/README.md`, `PLATAFORMA-PARTNERS.md` (prosa, no decisiones) | Revisión de lectura por Claude antes de mergear |
@@ -781,7 +781,7 @@ No se abrió ese ticket porque el hito completo tomó menos de una sesión.
 
 - **Objetivo llano.** Que cada tenant tenga su propio agente y su propia
   cuenta, en vez de compartir una con todos.
-- **Alcance.** Cablear `@agentpay/tenancy` (T32) usando el índice de F2;
+- **Alcance.** Cablear `@agentpey/tenancy` (T32) usando el índice de F2;
   seed maestro en un gestor de secretos; fondeo con Friendbot; pantalla que
   explique el USDC de testnet; procedimiento de rotación **documentado**.
 - **Fuera de alcance.** 🔴 Cualquier cambio a `policy_rail`. Rotación
@@ -796,7 +796,7 @@ No se abrió ese ticket porque el hito completo tomó menos de una sesión.
 - **Listo cuando.** `AGENT_SECRET_KEY` ya no participa de ninguna compra.
 
 **Lo que efectivamente se cerró (T40), en vez de lo de arriba.** Cablear
-`@agentpay/tenancy` usando el `key_index` de `@agentpay/directory` — hecho,
+`@agentpey/tenancy` usando el `key_index` de `@agentpey/directory` — hecho,
 cada tenant deriva su propia identidad. Seed maestro en `.env.local`/env
 var del host, **no** en un gestor de secretos dedicado: `D1` decía
 "gestor de secretos... cuando se cablee la derivación", pero crear una
@@ -814,7 +814,7 @@ despliegue — el despliegue en sí no es parte de este hito.
 
 1. **Qué debe hacer Claude Code.** Todo lo que toca custodia por
    definición de `P-10`: cablear `deriveTenantKeypair` usando el
-   `key_index` de `@agentpay/directory`, decidir e integrar el gestor de
+   `key_index` de `@agentpey/directory`, decidir e integrar el gestor de
    secretos para el seed maestro, y el flujo de fondeo (Friendbot para
    XLM). Nada de esto se delega, ni siquiera como scaffolding.
 2. **Qué puede delegarse a Codex en paralelo.** Únicamente la pantalla
@@ -839,11 +839,11 @@ despliegue — el despliegue en sí no es parte de este hito.
 ### F5 · API y SDK para partners ⚪🟡
 
 > **T45 cerrado el 2026-09-10.** El contrato quedó congelado en el paquete
-> `@agentpay/partner-api` (`C-43` a `C-47`): esquemas zod de los cuatro
+> `@agentpey/partner-api` (`C-43` a `C-47`): esquemas zod de los cuatro
 > recursos, autenticación por API key, permisos (`ApiScope` — renombrado
 > desde `Scope` para no chocar con el de `@agentpass/core`, `C-44`),
 > idempotencia. Cero rutas HTTP, cero tabla de `consent_sessions` en
-> `@agentpay/directory` todavía. **Brecha encontrada al construir, no al
+> `@agentpey/directory` todavía. **Brecha encontrada al construir, no al
 > planificar (`C-47`):** ningún ticket de esta tabla nombra explícitamente
 > "conectar el contrato con rutas reales" — T49 describe solo el
 > middleware de autenticación, y T50 asume que la API ya responde de
@@ -853,7 +853,7 @@ despliegue — el despliegue en sí no es parte de este hito.
 > **T49 cerrado el 2026-09-10, con el alcance dividido (`C-49`).** Se
 > resolvió la mitad de `/v1` que no toca el flujo de firma de wallet:
 > tenants, agentes y mandatos, cableados de verdad contra
-> `@agentpay/directory`, más el script `scripts/create-partner.ts` para
+> `@agentpey/directory`, más el script `scripts/create-partner.ts` para
 > emitir la primera API key de un partner (no existía nada para esto,
 > `C-52`). Verificado con `curl` real contra Postgres: idempotencia,
 > aislamiento entre partners (`404`, nunca `403` — `C-53`), y revocación
@@ -944,11 +944,11 @@ Claude Code congele el contrato.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T45 | Claude | F2, F3, F4 cerradas; D2, D3 | Medio — define el contrato que todo lo demás asume | Esquemas zod nuevos (paquete a definir) | ✅ cerrado — `@agentpay/partner-api`, 42 tests puros, congelado y documentado antes de abrir T46-T49 |
+| T45 | Claude | F2, F3, F4 cerradas; D2, D3 | Medio — define el contrato que todo lo demás asume | Esquemas zod nuevos (paquete a definir) | ✅ cerrado — `@agentpey/partner-api`, 42 tests puros, congelado y documentado antes de abrir T46-T49 |
 | T46 | Codex | T45 mergeado | Bajo — generación mecánica | `docs/api/openapi.yaml`, `scripts/generate-openapi.ts` (prohibido: `packages/directory/src/**`) | ✅ cerrado — `z.toJSONSchema` nativo, cero librerías nuevas de conversión, `redocly lint` sin advertencias, revisado y mergeado (PR #6) |
 | T47 | Codex | T45 mergeado | Bajo — envoltorios tipados, sin lógica | `packages/partner-sdk/**` (nuevo) (prohibido: `apps/web/**`, `packages/directory/**`) | ✅ cerrado — `/v1` real no existe todavía, así que se verificó contra un `node:http` de prueba en vez del criterio original; revisado y mergeado (PR #7) |
-| T48 | Codex | ✅ forma del evento publicada (`webhooks.ts` en `@agentpay/partner-api`, `C-48`) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | ✅ cerrado — reintentos con backoff verificados contra un servidor de prueba que falla intermitentemente; revisado y mergeado (PR #8) |
-| T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | ✅ cerrado — tenants/agentes/mandatos cableados contra `@agentpay/directory`, aislamiento entre partners y revocación verificados con `curl` real contra Postgres (`C-49` a `C-54`) |
+| T48 | Codex | ✅ forma del evento publicada (`webhooks.ts` en `@agentpey/partner-api`, `C-48`) | Bajo — entrega, no decisión | `packages/webhooks/**` (nuevo) (prohibido: cualquier archivo que decida *cuándo* dispara un webhook) | ✅ cerrado — reintentos con backoff verificados contra un servidor de prueba que falla intermitentemente; revisado y mergeado (PR #8) |
+| T49 | Claude | T45 mergeado | 🔴 Alto — es un punto de autorización de acceso | `apps/web/src/*` (o su sucesor) | ✅ cerrado — tenants/agentes/mandatos cableados contra `@agentpey/directory`, aislamiento entre partners y revocación verificados con `curl` real contra Postgres (`C-49` a `C-54`) |
 | T51 | Claude | T49 mergeado; `C-49` | 🔴 Alto — toca el flujo de firma de wallet (`C-17`) | `packages/directory/src/*` (tabla nueva), `packages/partner-api/src/*`, `apps/web/src/*` (rutas, sin la página) | ✅ cerrado — backend completo, verificado de punta a punta contra Postgres y testnet reales con un script que firma como Freighter; `payTo` propuesto llegó exacto hasta el Mandato anclado (`C-55` a `C-59`) |
 | T52 | Codex | T51 mergeado | Bajo — HTML/JS que llama a endpoints ya estables, no decide nada | `apps/web/public/consent.html` (nuevo) (prohibido: cualquier `.ts` de `apps/web/src`) | ✅ cerrado — solo `consent.html` tocado (ningún `.ts` de `apps/web/src`), `pnpm build`/`typecheck`/`test` limpios en un worktree aislado, y verificado en un navegador real contra Postgres y testnet: grant completo con `payTo` renderizado, los tres estados terminales (`expired`/`completed`/`cancelled`) ocultan el botón de firmar con un mensaje claro, un id inexistente no deja pantalla en blanco, y el flujo completo de firma (contra los endpoints reales, con un script que firma como Freighter — la extensión no se puede instalar en este navegador) ancla un Mandato real en testnet (PR #13) |
 | T50 | Codex | T45, T49 y T51 mergeados (T52 no es requisito — el `curl` no necesita la página) | Bajo — solo documentación y ejemplos | `docs/fase-6-agentguard-comercializacion/evidencia/**`, `examples/**` | ✅ cerrado — `examples/cloudops-partner-integration.md`, sin tocar `apps/`/`packages/`/`contracts/`; verificado con `curl` real contra Postgres y testnet (tenant, `consent_session` con `payTo`, replay y conflicto de idempotencia, mandato anclado de verdad) (PR #15) |
@@ -1240,7 +1240,7 @@ Claude Code congele el contrato.
 
 Solo las que cambian una decisión material. Sin ellas, F1 no cierra.
 
-1. **¿AgentPay es no custodial, custodial o híbrido?** Es la que gobierna
+1. **¿AgentPey es no custodial, custodial o híbrido?** Es la que gobierna
    todo el resto (§4.1). Recuerdo que hoy, de hecho, es custodial en testnet.
 2. **¿Cuál es el primer partner y cuál la primera compra?** ¿El bazaar del
    embajador, un equipo de hackathon, otro? La respuesta define qué se
@@ -1265,7 +1265,7 @@ Solo las que cambian una decisión material. Sin ellas, F1 no cierra.
 
 ## 8. Primer hito recomendado
 
-> **F2 se cerró el 2026-09-10 como T38** (`@agentpay/directory`) — ver
+> **F2 se cerró el 2026-09-10 como T38** (`@agentpey/directory`) — ver
 > `BITACORA.md` → T38 y `evidencia/T38.md`. Se conserva el razonamiento
 > original sin editar, porque sigue siendo la explicación de por qué ese
 > orden y no otro. El siguiente hito recomendado es **F3 = T39**:
@@ -1286,7 +1286,7 @@ Solo las que cambian una decisión material. Sin ellas, F1 no cierra.
   se piensa la decisión difícil.
 - **Desbloquea todo lo demás.** F3, F4 y F5 dependen de que exista un
   `tenant_index` durable. Nada serio avanza sin esto.
-- **Sigue el patrón que el proyecto ya validó.** `@agentpay/tenancy` (T32)
+- **Sigue el patrón que el proyecto ya validó.** `@agentpey/tenancy` (T32)
   se construyó igual: paquete puro, sin leer entorno, sin depender de una
   app, testeado solo.
 - **Cierra la brecha más barata de arreglar ahora y más cara después.** G2

@@ -11,7 +11,7 @@
  * is even reached. This is the one seam that adds nothing to `policy-rail.ts`
  * itself (Fase 3, closed): it observes what the port already returns.
  */
-import type { MandateVault } from "@agentpay/vault";
+import type { MandateVault } from "@agentpey/vault";
 
 import type { AuthorisationDecision, AuthorisationRequest, PolicyRail } from "./policy-rail.js";
 

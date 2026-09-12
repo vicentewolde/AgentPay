@@ -2,7 +2,7 @@
  * Each tenant's own signing identity — the piece F4 (T40) adds. Before this,
  * every tenant's credential subject and Mandato `agent` field named the same
  * shared `AGENT_SECRET_KEY` (`C-33`). From here, each tenant gets its own
- * derived Stellar keypair via `@agentpay/tenancy`'s `deriveTenantKeypair`,
+ * derived Stellar keypair via `@agentpey/tenancy`'s `deriveTenantKeypair`,
  * scoped by its own `directory_agents` row and `key_index`.
  *
  * **What this identity is for, and what it deliberately is not.** It is the
@@ -27,8 +27,8 @@
  * to Postgres.
  */
 import { stellarAddressToDid } from "@agentpass/core";
-import type { AgentInstance, Directory } from "@agentpay/directory";
-import { deriveTenantKeypair } from "@agentpay/tenancy";
+import type { AgentInstance, Directory } from "@agentpey/directory";
+import { deriveTenantKeypair } from "@agentpey/tenancy";
 import { Keypair } from "@stellar/stellar-sdk";
 
 export interface TenantAgent {
@@ -54,7 +54,7 @@ function deriveKeypair(masterMnemonic: string, keyIndex: number): Keypair {
  * Idempotent by lookup, same shape as `shared-identity.ts`'s two bootstraps:
  * a creation race (two requests for one brand-new tenant's very first agent,
  * arriving together) resolves by re-listing rather than surfacing whatever
- * error the loser's insert raised — nothing in `@agentpay/directory` maps
+ * error the loser's insert raised — nothing in `@agentpey/directory` maps
  * that error to a typed code yet (`createAgent` has no unique-violation
  * handling of its own), so this treats *any* failure during creation as a
  * possible race and re-checks before giving up.

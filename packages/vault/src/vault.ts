@@ -12,7 +12,7 @@
  * `MandateVault` is deliberately typed to satisfy `SpendLedger`'s three
  * methods (`spentOn`, `record`, `hasRecorded`) **structurally**, without
  * importing that type — the same pattern `RegistryAccess` already established
- * in `@agentpay/mandate` (T20): a package stays ignorant of an app's types,
+ * in `@agentpey/mandate` (T20): a package stays ignorant of an app's types,
  * and TypeScript's structural typing is what makes the app's `PolicyRail`
  * accept a `MandateVault` wherever it expects a `SpendLedger`, with no
  * adapter code anywhere. `packages/*` never depends on `apps/*` in this repo;

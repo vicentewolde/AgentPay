@@ -1,5 +1,5 @@
 /**
- * @agentpay/agent — the minimal purchasing agent (phase 2).
+ * @agentpey/agent — the minimal purchasing agent (phase 2).
  *
  * It consumes AgentPass rather than extending it: identity, signing and
  * revocation all stay in `@agentpass/core` and `@agentpass/sdk`. What lives

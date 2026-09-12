@@ -4,7 +4,7 @@ import {
   signWebhookPayload,
   WEBHOOK_SIGNATURE_HEADER,
   type WebhookEvent,
-} from "@agentpay/partner-api";
+} from "@agentpey/partner-api";
 
 const DEFAULT_MAX_ATTEMPTS = 5;
 const REQUEST_TIMEOUT_MS = 10_000;

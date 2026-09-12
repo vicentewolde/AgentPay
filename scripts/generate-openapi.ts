@@ -1,5 +1,5 @@
 /**
- * Generates the `/v1` OpenAPI contract from @agentpay/partner-api's frozen
+ * Generates the `/v1` OpenAPI contract from @agentpey/partner-api's frozen
  * Zod schemas. Run with `pnpm run generate:openapi`; do not edit its output.
  */
 import {
@@ -10,7 +10,7 @@ import {
   errorEnvelopeSchema,
   mandateResourceSchema,
   tenantResourceSchema,
-} from "@agentpay/partner-api";
+} from "@agentpey/partner-api";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { stringify } from "yaml";
@@ -84,15 +84,15 @@ const idempotencyKeyParameter = {
 const document = {
   openapi: "3.1.0",
   info: {
-    title: "AgentPay Partner API",
+    title: "AgentPey Partner API",
     version: "0.1.0",
-    description: "The testnet partner API. This contract is generated from @agentpay/partner-api Zod schemas.",
+    description: "The testnet partner API. This contract is generated from @agentpey/partner-api Zod schemas.",
     license: { name: "Apache-2.0", url: "https://www.apache.org/licenses/LICENSE-2.0" },
   },
   servers: [
     {
       url: "/",
-      description: "The base URL of your AgentPay testnet deployment.",
+      description: "The base URL of your AgentPey testnet deployment.",
     },
   ],
   paths: {
@@ -254,7 +254,7 @@ const document = {
         type: "http",
         scheme: "bearer",
         bearerFormat: "API key",
-        description: "An AgentPay partner API key (`ap_test_...`).",
+        description: "An AgentPey partner API key (`ap_test_...`).",
       },
     },
   },

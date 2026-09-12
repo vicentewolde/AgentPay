@@ -1,5 +1,5 @@
 import { hasErrorCode, stellarAddressToDid, type Scope } from "@agentpass/core";
-import { createMandate, type AgentPayMandate, type MandateGrant } from "@agentpay/mandate";
+import { createMandate, type AgentPayMandate, type MandateGrant } from "@agentpey/mandate";
 import { Keypair } from "@stellar/stellar-sdk/base";
 import { describe, expect, it } from "vitest";
 

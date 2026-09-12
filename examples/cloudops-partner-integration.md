@@ -1,6 +1,6 @@
-# CloudOps: integración con la Partner API de AgentPay
+# CloudOps: integración con la Partner API de AgentPey
 
-Esta guía integra a CloudOps con AgentPay testnet mediante HTTP. Se puede
+Esta guía integra a CloudOps con AgentPey testnet mediante HTTP. Se puede
 seguir desde cualquier terminal con `curl`, `jq` y Node.js; después de recibir
 la API key no requiere clonar ni modificar este repositorio.
 
@@ -10,7 +10,7 @@ la API testnet y una API key que comienza con `ap_test_`.
 
 ## 1. Recibir una API key
 
-La creación de partners no es una ruta HTTP: un operador de AgentPay ejecuta
+La creación de partners no es una ruta HTTP: un operador de AgentPey ejecuta
 una sola vez el siguiente comando en el checkout del servicio:
 
 ```sh
@@ -58,7 +58,7 @@ printf 'TENANT_ID=%s\n' "$TENANT_ID"
 ```
 
 Una repetición de esa misma operación de red debe usar el mismo
-`Idempotency-Key` y el mismo cuerpo. Durante 24 horas, AgentPay reproduce la
+`Idempotency-Key` y el mismo cuerpo. Durante 24 horas, AgentPey reproduce la
 misma respuesta sin crear otro tenant. Para un nuevo intento lógico, generá
 otra key. No reutilices una key con un cuerpo diferente.
 
@@ -190,5 +190,5 @@ responde `InvalidApiKey`. `AgentNotFound` no se expone como ruta individual:
 
 Una respuesta 4xx no se corrige reintentando ciegamente. Para un corte de
 red o 5xx, reenviá el mismo `POST` con la misma `Idempotency-Key` y el mismo
-cuerpo; eso permite que AgentPay devuelva el resultado original sin duplicar
+cuerpo; eso permite que AgentPey devuelva el resultado original sin duplicar
 el tenant o consentimiento.

@@ -21,7 +21,7 @@ flowchart TB
         core["@agentpass/core<br/>did:stellar, VC-JWT, errores<br/><b>+ jws-document.ts (T16)</b>"]
         sdk["@agentpass/sdk<br/>issue · verify · revoke · anchor"]
     end
-    subgraph "packages/mandate — @agentpay/mandate (T16)"
+    subgraph "packages/mandate — @agentpey/mandate (T16)"
         mandate["mandate.ts<br/>el esquema del documento"]
         create["create.ts<br/>createMandate()"]
         msign["sign.ts<br/>signMandate · verifyMandate"]
@@ -32,7 +32,7 @@ flowchart TB
         rail["PolicyRail.authorise() — T19"]
         anchor["anclaje y revocación — T20"]
     end
-    agent["apps/agent — @agentpay/agent (Fase 2)"]
+    agent["apps/agent — @agentpey/agent (Fase 2)"]
 
     core --> mandate
     core --> msign
@@ -46,7 +46,7 @@ flowchart TB
     rail --> agent
 ```
 
-`@agentpay/mandate` depende de `@agentpass/core` y de nada más del repo. Ni
+`@agentpey/mandate` depende de `@agentpass/core` y de nada más del repo. Ni
 `core`, ni `sdk`, ni el agente saben que existe.
 
 ## 2. Los tres documentos firmados del proyecto
@@ -211,7 +211,7 @@ cual, la misma operación que ya registra a un emisor de credenciales (`M-17`).
 
 ## 7. `checkMandate()` — T17 ✅
 
-Vive en `apps/agent/src/mandate/check-mandate.ts` — no en `@agentpay/mandate`,
+Vive en `apps/agent/src/mandate/check-mandate.ts` — no en `@agentpey/mandate`,
 a propósito: es un consumidor de dos documentos (`AgentPayMandate` del paquete
 de mandato, `PurchaseIntent` del propio `apps/agent`), y el mismo lugar donde
 ya vive `checkScope()`.

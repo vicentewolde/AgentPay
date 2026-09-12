@@ -1,11 +1,11 @@
 /**
  * `/v1/tenants` — the wire shape a partner sends and receives, distinct from
- * `@agentpay/directory`'s `Tenant` on purpose: a partner never sees
+ * `@agentpey/directory`'s `Tenant` on purpose: a partner never sees
  * `partnerId` (implicit from their own api key) or `updatedAt` (nothing in
  * this alcance updates a tenant after creation), and the wire format is
  * snake_case where the internal one is camelCase.
  */
-import { tenantIdSchema, tenantStatusSchema, type Tenant } from "@agentpay/directory";
+import { tenantIdSchema, tenantStatusSchema, type Tenant } from "@agentpey/directory";
 import { z } from "zod";
 
 export const createTenantRequestSchema = z.strictObject({

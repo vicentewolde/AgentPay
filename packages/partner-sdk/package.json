@@ -1,5 +1,5 @@
 {
-  "name": "@agentpay/partner-sdk",
+  "name": "@agentpey/partner-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@agentpass/core": "workspace:*",
-    "@agentpay/partner-api": "workspace:*",
+    "@agentpey/partner-api": "workspace:*",
     "zod": "^4.5.4"
   }
 }

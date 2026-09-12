@@ -4,13 +4,13 @@
  * the database makes and not guarantees TypeScript makes: a unique constraint,
  * a foreign key, and a sequence that never hands the same value out twice.
  *
- *   pnpm --filter @agentpay/directory run test:integration
+ *   pnpm --filter @agentpey/directory run test:integration
  *
  * Requires `DATABASE_URL` in `.env.local`. Every test creates its own partners
  * and deletes everything it created in `afterEach`, so repeated runs never
  * accumulate rows and never collide with real data.
  *
- * `@agentpay/tenancy` is used here, and only here, to turn an allocated index
+ * `@agentpey/tenancy` is used here, and only here, to turn an allocated index
  * into a real Stellar keypair. That is deliberate: the claim this milestone
  * has to support is not "the directory stores a number", it is "two tenants
  * of two different partners end up with different Stellar identities", and
@@ -21,7 +21,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { hasErrorCode, stellarAddressToDid } from "@agentpass/core";
-import { deriveTenantKeypair, generateMasterMnemonic } from "@agentpay/tenancy";
+import { deriveTenantKeypair, generateMasterMnemonic } from "@agentpey/tenancy";
 import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 

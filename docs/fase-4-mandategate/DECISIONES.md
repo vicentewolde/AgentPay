@@ -255,7 +255,7 @@ punto, y el costo real de cada clic es centavos de un activo de prueba.
 
 **Lo que este repo prepara, y lo que no.** `render.yaml` (Blueprint) fija el
 comando de build (`pnpm install --frozen-lockfile && pnpm build`) y el de
-arranque (`pnpm --filter @agentpay/web run start`) — ambos verificados
+arranque (`pnpm --filter @agentpey/web run start`) — ambos verificados
 localmente, corriendo exactamente esos comandos antes de escribir el
 archivo, no asumidos desde la documentación de Render. Las cuatro variables
 de entorno secretas (`ISSUER_SECRET_KEY`, `AGENT_SECRET_KEY`,
@@ -283,7 +283,7 @@ que "front simple" pedía.
 `402` real— era "el próximo campo que le falta al Mandato", sin construirlo:
 ni `scope` de la credencial ni `grant` del mandato tenían nada firmado
 contra qué compararlo. Se cierra ahora: `mandateGrantSchema` (en
-`@agentpay/mandate`) se extiende con `payTo?: string[]` — cuentas clásicas
+`@agentpey/mandate`) se extiende con `payTo?: string[]` — cuentas clásicas
 (`G...`) o de contrato (`C...`), la misma dupla que `parseAssetId` ya acepta
 para un emisor. `reconcileTerms` (`apps/agent/src/policy/terms.ts`) chequea
 el `payTo` del reto real contra esa lista **solo cuando ambos existen** —

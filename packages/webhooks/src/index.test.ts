@@ -1,5 +1,5 @@
 import { AgentPassError } from "@agentpass/core";
-import { verifyWebhookSignature, webhookEventSchema } from "@agentpay/partner-api";
+import { verifyWebhookSignature, webhookEventSchema } from "@agentpey/partner-api";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 

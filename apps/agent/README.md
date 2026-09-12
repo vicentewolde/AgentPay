@@ -1,6 +1,6 @@
-# @agentpay/agent
+# @agentpey/agent
 
-The minimal purchasing agent — **phase 2** of AgentPay. It consumes AgentPass
+The minimal purchasing agent — **phase 2** of AgentPey. It consumes AgentPass
 rather than extending it: identity, signing and revocation stay in
 `@agentpass/core` and `@agentpass/sdk`.
 
@@ -226,7 +226,7 @@ carrying a prompt injection.
 ## Commands
 
 ```bash
-pnpm --filter @agentpay/agent run test
+pnpm --filter @agentpey/agent run test
 ```
 
 ```bash

@@ -50,7 +50,7 @@ describe("signIntent", () => {
     expect(signed.hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("uses the AgentPay intent media type, not the credential's", async () => {
+  it("uses the AgentPey intent media type, not the credential's", async () => {
     const signed = await signIntent(anIntent(), AGENT);
     const header = JSON.parse(
       Buffer.from(signed.jws.split(".")[0] ?? "", "base64url").toString("utf8"),

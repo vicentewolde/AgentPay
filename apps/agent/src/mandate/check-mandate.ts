@@ -24,7 +24,7 @@
  * of past spending — enforcement with state, which is T18's job, exactly the
  * boundary `B-16` already drew for the credential's own `perTx`/`perDay` split.
  */
-import type { AgentPayMandate } from "@agentpay/mandate";
+import type { AgentPayMandate } from "@agentpey/mandate";
 import { AgentPassError } from "@agentpass/core";
 
 import { parseAssetId } from "../catalog/ids.js";

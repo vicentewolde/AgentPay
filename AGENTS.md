@@ -1,4 +1,4 @@
-# AgentPay — instrucciones para Codex
+# AgentPey — instrucciones para Codex
 
 Pila de pagos agénticos sobre **Stellar testnet**, en siete fases. Este
 archivo es lo que vos, Codex, leés al operar sobre este repo. No duplica el

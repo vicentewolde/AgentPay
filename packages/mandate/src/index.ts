@@ -1,5 +1,5 @@
 /**
- * `@agentpay/mandate` — the principal's signed consent.
+ * `@agentpey/mandate` — the principal's signed consent.
  *
  * Phase 3, T16. A consumer of AgentPass, not an extension of it (`B-2`): it
  * imports `@agentpass/core` for `did:stellar` and the JWS machinery, and

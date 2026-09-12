@@ -8,7 +8,7 @@
  * against a mandate last seen hours ago would put the agent's signature on
  * consent the principal may have withdrawn since.
  *
- * The agent holds a {@link MandateVerifier}, not `@agentpay/mandate`'s full
+ * The agent holds a {@link MandateVerifier}, not `@agentpey/mandate`'s full
  * anchor/verify/revoke surface — the port has exactly one method, so the
  * agent structurally cannot anchor a mandate or revoke one. `createOnChainMandateVerifier`
  * below is the one place that closes over a live registry to satisfy it.
@@ -26,8 +26,8 @@ import type {
   RegistryAccess,
   VerifyMandateOptions,
   VerifyWalletSignedMandateOptions,
-} from "@agentpay/mandate";
-import { mandateHash, verifyMandateOnChain, verifyWalletSignedMandateOnChain, walletMandateHash } from "@agentpay/mandate";
+} from "@agentpey/mandate";
+import { mandateHash, verifyMandateOnChain, verifyWalletSignedMandateOnChain, walletMandateHash } from "@agentpey/mandate";
 import type { StellarDid } from "@agentpass/core";
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
 

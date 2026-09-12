@@ -7,7 +7,7 @@
 
 ## 1. Qué prueba esta fase (la mitad que arrancó)
 
-Que AgentPay puede dejar de ser una demo de un solo visitante compartiendo
+Que AgentPey puede dejar de ser una demo de un solo visitante compartiendo
 una sola identidad Stellar, y convertirse en algo que un tercero —un
 comercio, un equipo de hackathon, un desarrollador de agentes— pueda
 integrar de verdad, en Stellar testnet, sin presupuesto de escala.
@@ -58,7 +58,7 @@ financiera que precedió cualquier código.
 
 ## 5. Hacia dónde apunta (hoja de ruta, sin comprometerse a fechas)
 
-Cuatro etapas, detalladas en el plan de trabajo "AgentPay: De Piloto a
+Cuatro etapas, detalladas en el plan de trabajo "AgentPey: De Piloto a
 Producto" (2026-09-09): (1) multi-tenancy + persistencia real — **en
 curso, T32 arranca la mitad de derivación de llaves**; (2) superficie de
 API para terceros; (3) publicación de paquetes npm + hardening de

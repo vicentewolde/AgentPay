@@ -56,7 +56,7 @@ export const onchainStateSchema = z.enum(["derived", "funded"]);
 export const mandateSignatureKindSchema = z.enum(["wallet-sep53", "platform-jws"]);
 
 /**
- * Same four values `@agentpay/partner-api`'s `consentSessionStatusSchema`
+ * Same four values `@agentpey/partner-api`'s `consentSessionStatusSchema`
  * freezes (T45) — not imported, the dependency runs the other way. This
  * package only ever writes `pending` and `completed`; `expired` is computed
  * at read time from `expires_at` (`computeConsentSessionStatus`, T51), the
@@ -177,7 +177,7 @@ export const mandateRecordSchema = z.strictObject({
   signatureKind: mandateSignatureKindSchema,
   /**
    * The `AgentPayMandate` exactly as it was signed. Typed as an object here
-   * rather than re-validated against the mandate schema: `@agentpay/mandate`
+   * rather than re-validated against the mandate schema: `@agentpey/mandate`
    * owns that shape, and this package deliberately does not depend on it —
    * storing a document is not the same job as deciding it is valid.
    */
@@ -211,7 +211,7 @@ export const consentSessionRecordSchema = z.strictObject({
   status: consentSessionStatusSchema,
   /**
    * The `MandateGrant` the partner proposed. Typed as an object, not
-   * re-validated against `@agentpay/mandate`'s schema, for the same reason
+   * re-validated against `@agentpey/mandate`'s schema, for the same reason
    * `mandateRecordSchema.document` is: this package stores documents, it
    * does not judge them.
    */
@@ -226,7 +226,7 @@ export const consentSessionRecordSchema = z.strictObject({
 
 /**
  * A cached `/v1` response, keyed by `(partnerId, key)` — the storage side of
- * `@agentpay/partner-api`'s `resolveIdempotency`. Field names match that
+ * `@agentpey/partner-api`'s `resolveIdempotency`. Field names match that
  * package's own `IdempotencyRecord` exactly (not imported — the dependency
  * runs the other way, `partner-api` depends on `directory`), so
  * `findIdempotentResponse` can be passed straight in as `resolveIdempotency`'s
