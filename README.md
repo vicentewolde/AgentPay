@@ -215,7 +215,7 @@ built on top of AgentPass; from the repo root, after `bootstrap` and
 `deploy:registry`, `pnpm demo` runs its full walkthrough — issue a credential,
 a Spanish purchase instruction, a signed intent, a real revocation, a rejected
 retry — against live testnet in about twelve seconds.
-[`packages/mandate`](packages/mandate/README.md) is phase 3, in progress: the
+[`packages/mandate`](packages/mandate/README.md) is phase 3, complete: the
 principal's signed consent, the document that says what the agent is actually
 allowed to spend.
 
@@ -245,7 +245,23 @@ pnpm run demo:pay-real -- --payer=policy-rail
 ```
 
 `pnpm run web` puts both behind buttons, alongside the MandateVault log that
-records every decision and anchors each payment on chain.
+records every decision and anchors each payment on chain. It is deployed live
+at [agentpay-web.onrender.com](https://agentpay-web.onrender.com) — the
+public URL still carries the project's old name; the service itself, the
+repo, and everything on the page already say AgentPey (see
+[ROADMAP.md](ROADMAP.md) if that mismatch looks odd).
+
+Phase 6 turns the pilot into something a third party can integrate: a
+partner gets an API key (`pnpm run partner:create`), calls `/v1` to create
+tenants and propose a spending grant, and a principal reviews and signs that
+grant by connecting their own wallet at a hosted `/consent/{id}` link — no
+partner ever touches a private key. Each tenant gets its own `policy_rail`,
+funded and owned by that tenant's own wallet, not a shared account.
+`packages/partner-api`, `packages/partner-sdk` and `packages/webhooks` are
+the pieces; [`examples/cloudops-partner-integration.md`](examples/cloudops-partner-integration.md)
+is a full walkthrough with exact `curl` commands. See
+[docs/fase-6-agentguard-comercializacion/](docs/fase-6-agentguard-comercializacion/)
+for the design and current state.
 
 ## License
 
