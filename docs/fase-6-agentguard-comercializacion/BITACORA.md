@@ -1801,3 +1801,54 @@ Pendiente actualizado: comprar `agentpey.com` y conectar el dominio
 cuatro despliegues pendientes de la sesión anterior (T40, T49, T51, T52)
 ya quedaron confirmados en producción real — no queda nada de la lista
 original sin verificar.**
+
+---
+
+## Migración del rail compartido al contrato de T57 (sin numerar) — 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** El botón de "Comprar"
+simple de la demo (el que no pide conectar wallet) paga desde un
+contrato Soroban que hasta hoy no tenía dueño real: cualquier fondo que
+entrara ahí se quedaba atrapado para siempre, sin forma de sacarlo. Se
+reemplazó por un contrato nuevo, con la misma lógica de límites de
+siempre, pero con una wallet real (la del operador del proyecto) capaz
+de retirar el saldo o cambiar la llave que gasta si hiciera falta —
+la misma mejora que ya tenían los rails de cada partner desde T58, ahora
+también en el camino de demo compartido.
+
+**Un hallazgo real antes de tocar el contrato.** Al preparar la
+migración se descubrió que el rename a AgentPey de la sesión anterior
+había tocado un comentario dentro del código Rust del contrato — dos
+palabras, cero cambio de lógica — pero eso alcanzó para que el contrato
+compilado fuera **técnicamente distinto** (un hash distinto) del que ya
+está subido y en uso por los rails de cada tenant desde T58. Se
+revirtió ese comentario específico antes de seguir, para que el
+contrato nuevo del rail compartido sea exactamente el mismo código que
+ya corre en producción, no una tercera versión. Detalle completo en
+`DECISIONES.md` → `C-65`.
+
+**Evidencia técnica** (`C-66`):
+
+- `contracts/policy-rail/src/lib.rs` revertido (la palabra del rename),
+  `cargo test` 32/32 en verde, hash del wasm confirmado igual al que ya
+  usa T58 (`8690d1f5…`).
+- `pnpm run deploy:policy-rail -- --redeploy --principal
+  <ADMIN_PUBLIC_KEY>` desplegó el contrato nuevo
+  (`CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA`),
+  verificado por el propio script (`owner`/`principal`/`asset` leídos de
+  vuelta de la red, no asumidos) y fondeado con 0.05 USDC.
+- `pnpm run demo:pay-real -- --payer=policy-rail` corrió contra testnet
+  real después de la migración: reto 402 real, reconciliado, pagado por
+  el contrato nuevo,
+  `3915b0510231e9b2332b7356f2d980706e8561a020b5d4da5ac7581fb5545087`,
+  `settled: true`.
+- `render.yaml` actualizado con el contract id nuevo (`.env.local` lo
+  actualizó el propio script). El rail viejo
+  (`CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I`) queda
+  abandonado con su saldo simbólico — nunca se pudo retirar, ni antes ni
+  ahora.
+- `pnpm typecheck`/`test` limpios (nada de TypeScript cambió).
+
+Pendiente: confirmar en Render, después del redeploy que dispara este
+push, que el botón "Comprar" clásico paga de verdad contra el contrato
+nuevo — mismo criterio de verificación que T40/T49/T51/T52.

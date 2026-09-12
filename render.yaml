@@ -58,12 +58,17 @@ services:
         value: https://stellar-bazaar-x402.vercel.app
       # Not a secret — a public Soroban contract address, already committed
       # in deployments/testnet.json and shown as `pagador` on the live demo
-      # itself. Missing here (never added since T31) is exactly why the
-      # deployed site's sole "Buy" button stayed disabled: apps/web/src/
-      # server.ts reads this var and reports `policyRail: null` without it,
-      # and the MVP no longer has a classic-account button to fall back to.
+      # itself. Migrated once already (see AGENT_LOG.md, 2026-09-12): the
+      # rail this pointed to since T31 predates T57's `principal`/`withdraw`/
+      # `set_owner` — funds sent to it could never come back out. Redeployed
+      # from the current wasm (same one T58's per-tenant rails use, see
+      # POLICY_RAIL_WASM_HASH below), owned by the agent, with
+      # ADMIN_PUBLIC_KEY as principal. The old contract
+      # (CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I) is
+      # abandoned with whatever symbolic testnet balance it held — not worth
+      # recovering, and it never could be without this exact migration.
       - key: POLICY_RAIL_CONTRACT_ID
-        value: CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I
+        value: CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA
       # Not a secret either — the wasm hash of `contracts/policy-rail`'s
       # current source (T57, `principal`/`withdraw`/`set_owner`), already
       # uploaded to testnet. `ensureTenantPolicyRail` (F6/T58) instantiates a

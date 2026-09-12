@@ -1953,3 +1953,104 @@ Documentación tocada: `BITACORA.md` (este hito, sin numerar),
 — este hito no cambia ningún entregable de la plataforma.
 
 ---
+
+### C-65 · El rename tocó un comentario del contrato `policy_rail` y le cambió el hash del wasm — revertido · `Vigente`
+**Fecha:** 2026-09-12
+
+Al ejecutar `C-64`, el barrido de "AgentPay" → "AgentPey" en comentarios
+de código incluyó `contracts/policy-rail/src/lib.rs` — dos palabras en un
+comentario `///`, cero cambio de lógica. Antes de migrar el rail
+compartido (ver más abajo) se descubrió que ese cambio, aunque puramente
+cosmético, **cambia el hash del wasm compilado**: `8690d1f5…` (el que
+T58 ya subió a testnet y usa para cada rail nuevo por tenant) pasó a
+`ab73c14a…` con el comentario editado. Confirmado reconstruyendo el
+fuente de antes de `C-64` (commit `a650dff`, T57) y comparando byte a
+byte.
+
+**La decisión:** revertir esas dos palabras a "AgentPay" en
+`lib.rs` — el único lugar de todo el rename donde el texto de un
+comentario es, en la práctica, parte del artefacto desplegado. Nada
+más de `C-64` se revierte; esto es específico a los contratos Rust que
+se compilan a wasm y se referencian por hash (`policy_rail`,
+`agent_registry` no se tocó porque `C-64` nunca editó su fuente).
+
+**Por qué importa, y por qué no es solo estética.** `tenant-rail.ts`
+(T58) nunca reconstruye el contrato — instancia por hash ya subido
+(`POLICY_RAIL_WASM_HASH`, "un wasm, muchas instancias"), así que no vio
+ningún efecto. Pero `scripts/deploy-policy-rail.ts` sí reconstruye y
+compara antes de reusar un rail existente (para no pisar un contrato
+distinto por accidente) — con el hash cambiado, cualquier operación
+futura contra el rail compartido lo habría marcado como "wasm distinto
+al desplegado" por una razón que no tenía nada que ver con su
+comportamiento. Dejar los dos hashes divergir también habría roto la
+premisa de "un wasm, muchas instancias" que T58 documentó a propósito.
+
+**Alternativa descartada:** reescribir el comentario con una palabra
+neutra ("the platform") en vez de volver a "AgentPay". Descartada:
+*cualquier* cambio de texto — no solo la palabra vieja — produce un
+hash distinto, así que la única forma de mantener el hash ya subido y
+en uso es no tocar esos bytes en absoluto. La marca en el nombre público
+del proyecto no depende de un comentario en un archivo Rust que nadie
+lee para entender qué es AgentPey.
+
+Documentación tocada: este archivo, `evidencia/rename-agentpey.md`
+(nota agregada). Verificado con `cargo test` (32/32 en verde) tras
+revertir.
+
+---
+
+### C-66 · El rail compartido se migra al contrato de T57 — `withdraw`/`set_owner` habilitados, `ADMIN_PUBLIC_KEY` como principal · `Vigente`
+**Fecha:** 2026-09-12
+
+`C-61`/T57 le agregó a `policy_rail` la capacidad de que el `principal`
+retire el saldo o rote la llave que gasta — pero el rail **compartido**
+del piloto (el que usa el camino clásico, sin wallet, `C-34`/`C-62`) se
+había desplegado en T31, **antes** de T57. Sin migrarlo, ese contrato
+seguía sin `principal` — cualquier fondo que entrara ahí no podía salir
+nunca, exactamente el problema que `G9` describía, sin resolver en el
+único rail que efectivamente recibe tráfico real hoy.
+
+**La decisión, a pedido explícito del usuario:** redesplegar el rail
+compartido desde el wasm actual (`8690d1f5…`, el mismo que usan los
+rails por tenant de T58 — "un wasm, muchas instancias" se mantiene
+exacto), con `owner = AGENT_SECRET_KEY` (sin cambios, sigue siendo quien
+firma cada compra) y `principal = ADMIN_PUBLIC_KEY` — la identidad
+operadora que ya existe en este proyecto (la misma que registra
+emisores), elegida por el usuario en vez de generar una clave nueva.
+
+**Qué pasó con el saldo del rail viejo.** Se abandona.
+`CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I` sigue
+existiendo on-chain con lo que tenía (montos simbólicos de testnet) —
+sin `principal`, nunca hubo forma de sacarlo de ahí, ni antes ni ahora;
+migrar no lo libera retroactivamente. El rail nuevo
+(`CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA`) arrancó
+fondeado con 0.05 USDC desde la cuenta del agente, igual que
+`scripts/deploy-policy-rail.ts` ya hacía en T22/T31.
+
+**Verificado, no solo desplegado:** `pnpm run demo:pay-real --
+--payer=policy-rail` corrió de punta a punta contra testnet real después
+de la migración — reto 402 real del bazaar, reconciliado contra lo
+firmado, pagado por el contrato nuevo
+(`3915b0510231e9b2332b7356f2d980706e8561a020b5d4da5ac7581fb5545087`,
+`settled: true`). La capacidad de retiro/rotación en sí no se volvió a
+probar en esta instancia específica porque es el mismo wasm que T57 ya
+probó en vivo (retiro y rotación firmados por el principal, rechazo por
+un firmante ajeno) — repetirlo acá no habría probado nada distinto.
+
+**Qué falta, a propósito:** actualizar `POLICY_RAIL_CONTRACT_ID` en el
+dashboard de Render (o dejar que el redeploy automático desde
+`render.yaml` lo aplique — el valor ya no es secreto, está commiteado)
+y confirmarlo contra el sitio real, igual que se hizo con
+`MASTER_MNEMONIC`.
+
+**Alternativa descartada:** mover el saldo del rail viejo antes de
+abandonarlo. Imposible por diseño — es exactamente la limitación que
+esta migración corrige, no algo que se pudiera sortear para el rail
+viejo específicamente.
+
+Documentación tocada: `BITACORA.md` (este hito). Archivos tocados:
+`contracts/policy-rail/src/lib.rs` (revertido, ver `C-65`),
+`deployments/testnet.json`, `render.yaml`, `.env.local` (no
+commiteado).
+
+---

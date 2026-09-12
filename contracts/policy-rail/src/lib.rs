@@ -242,8 +242,8 @@ impl PolicyRail {
     /// say-so. The escape hatch `G9` said was missing: before this existed,
     /// funds that reached this contract could only ever leave through a
     /// payment the `owner` key signed — so a customer who funded a rail
-    /// AgentPey held the `owner` key for could not get their own money back
-    /// without AgentPey's cooperation.
+    /// AgentPay held the `owner` key for could not get their own money back
+    /// without AgentPay's cooperation.
     ///
     /// Gated by `config.principal.require_auth()` — Soroban's own mechanism
     /// for an ordinary `Address`, the same one every wallet signature in this
