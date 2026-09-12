@@ -2906,3 +2906,82 @@ resolver, verificado en vivo en vez de supuesto.
 tercero y puede caerse el día de la prueba externa; el caso de
 aceptación 9 ("catálogo caído, sin intento de pago") deja de ser
 hipotético por eso mismo.
+
+---
+
+### C-78 · T74: el runner de compra sale de la sesión-cookie, y sale *sin* llevarse ninguna decisión con él · `Vigente`
+**Fecha:** 2026-09-12
+
+Hasta T74, el único código de este repo capaz de ejecutar una compra era
+`buy()` en `apps/web/src/server.ts`: tomaba una `DemoSession` guardada en
+memoria detrás de una cookie, y podía comprar exactamente un producto
+(`PAYABLE_PRODUCT_ID`, un ítem fijo del bazaar) en una URL con tres
+parámetros hardcodeados (`ROUTE_PARAMS`). Todas las capas de autorización que
+F9 necesita ya estaban ahí y ya eran correctas; lo que faltaba era cualquier
+forma de llegar a ellas sin ser un navegador con esa cookie.
+
+**La decisión de fondo: `tenant-purchase.ts` mueve el *llegar* y no mueve
+nada más.** Las capas se llaman en el mismo orden, por las mismas funciones,
+con los mismos argumentos que tienen desde T21:
+`create_purchase_intent` (que corre `checkScope` + `checkMandate` + `perDay`
+vía `PolicyRail`), después el desafío 402 con `reconcileTerms`, después el
+pago con `PolicyRail` otra vez y los límites del propio contrato encima.
+El módulo no decide nada. Está escrito en su docstring con esas palabras:
+si alguna línea de ese archivo parece estar tomando una decisión de
+autorización, eso es el bug.
+
+**Qué sí cambia, y por qué tenía que cambiar.**
+
+- **El venue ya no es una constante.** Se resuelve contra `venues.json`, y un
+  venue que el registro no conoce se rechaza con `VenueNotRegistered`
+  **antes de hacerle una sola llamada de red**. El orden importa: un
+  comercio que un catálogo público anuncie y el registro no conozca ni
+  siquiera se entera de que se preguntó por él. Es `C-77` hecho código.
+- **El precio ya no viene de ningún lado más que del comercio.** Ni del
+  llamador, ni del catálogo. Se re-pide y se compara contra el Mandato
+  firmado.
+- **La ruta pagada sale del catálogo del comercio**, no de `ROUTE_PARAMS`. Y
+  si esa ruta declara un input obligatorio que la compra no cubre, se rechaza
+  con `RouteParamMissing` en vez de armar una URL con un hueco: el comercio
+  pidió un parámetro, y mandárselo vacío es adivinar.
+- **El scope sale de la credencial de ese tenant**, no de `examples/scope.json`.
+  `buy()` leía el archivo del repo, lo cual daba igual cuando toda sesión era
+  la misma demo; por tenant no da igual. Y se parsea con
+  `agentPassCredentialSchema`, no se castea.
+- **El `principal` del rail sale del Mandato firmado**, no de una fila. El
+  registro guarda un `principalId` (`prc_…`) y el contrato necesita una
+  dirección Stellar; el `issuer` del documento es esa dirección en forma de
+  DID, y es el valor que el principal mismo firmó. Derivar la custodia de
+  algo menos que el documento firmado significaría que una fila mal escrita
+  en Postgres puede entregarle el derecho de retiro a otra cuenta (`C-61`,
+  T57).
+
+**Rechazos como valor, fallas como excepción.** "Tu Mandato no permite esto"
+y "Postgres no responde" no pueden llegarle al llamador vestidos igual: lo
+primero es una respuesta, lo segundo es una caída. Solo un `AgentPassError`
+tipado se convierte en rechazo; cualquier otra cosa sigue viaje hacia arriba.
+Hay un test que lo fija lanzando un `TypeError` desde el directorio y
+exigiendo que salga como `TypeError`.
+
+**Dos defectos que encontraron los tests mientras se escribía esto**, ambos
+míos, ambos de este mismo hito:
+
+1. `baseUrlForVenue` **lanza** para un venue que no tiene, y solo devuelve
+   `undefined` para uno registrado sin URL. La primera versión solo
+   contemplaba el `undefined`, así que un venue desconocido salía como
+   excepción en vez de como rechazo — justo la distinción que el párrafo
+   anterior define. Lo encontró el test del slug registrado apareado con
+   otro contract id.
+2. Elegir el Mandato con `find(...) ?? activeMandates[0]` podía tomar el
+   Mandato de **otro agente del mismo tenant**. `checkMandate` lo habría
+   atajado una capa después con `MandateAgentMismatch`, así que no era un
+   agujero — pero un camino de compra no debe entregarle a la capa de
+   enforcement un documento que ya sabe que es el equivocado y confiar. Ahora
+   rechaza explícitamente.
+
+**Lo que NO hizo T74, a propósito:** borrar `buy()`. El camino clásico sin
+wallet (`C-34`) no tiene tenant en el directorio, así que el módulo nuevo no
+puede servirlo. Quedan dos plomerías hacia el mismo pago — pero **una sola
+capa de enforcement**: las dos pasan por `checkMandate`, así que el permiso
+por producto de `C-75` rige en ambas. Retirar la demo cuando el flujo de F9
+funcione es trabajo posterior, anotado y sin construir.

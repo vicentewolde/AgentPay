@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T73 (contrato de ejecución de F9 congelado) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T74 (el runner de compra, fuera de la sesión-cookie) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -124,6 +124,7 @@ ninguna ruta nueva capaz de escribir.
 | T71 | Panel completo de métricas/alertas en `status-dashboard`: uso de `perDay` hoy, rechazos recientes, saldo USDC del `policy_rail` de cada tenant — todo de solo lectura | ✅ cerrado 2026-09-12 |
 | T72 | F9: propuesta de arquitectura y plan del piloto externo público ([PILOTO-F9.md](PILOTO-F9.md)) — solo documentación, sin código | ✅ cerrado 2026-09-12 |
 | T73 | F9: contrato de ejecución congelado — permiso por producto en el grant firmado, tres scopes y tres rutas `/v1` nuevas respondiendo `501` hasta T75 | ✅ cerrado 2026-09-12 |
+| T74 | F9: el runner de compra sale de la sesión-cookie a un módulo por tenant (`tenant-purchase.ts`), sin producto ni venue hardcodeados | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2675,3 +2676,67 @@ nunca para autorizar).
 **Qué sigue.** T74: sacar el runner de compra de la sesión-cookie a un módulo
 por tenant, sin producto hardcodeado. Es el hito de más riesgo de la fase —
 mover enforcement de sitio sin aflojarlo.
+
+---
+
+## T74 · El runner de compra sale de la sesión-cookie — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Hasta hoy, la única forma de
+que este sistema comprara algo era que un navegador tuviera abierta la demo,
+con su cookie, y pidiera *el* producto: uno solo, fijo, en una dirección
+escrita a mano en el código. Ahora existe una función que compra **para un
+tenant**, sin navegador y sin cookie: recibe qué comercio, qué producto y
+cuánto, y saca todo lo demás de la base de datos y del registro de comercios.
+
+Lo importante es lo que **no** se movió. Las capas que deciden si una compra
+se hace —lo que el emisor firmó, lo que el principal consintió, el límite
+diario, el precio y la cuenta cobradora reales de la factura— se llaman en el
+mismo orden, con las mismas funciones y los mismos argumentos que tenían
+antes. Este hito movió la cañería, no la decisión. Si algún día una línea de
+ese archivo parece estar decidiendo si una compra se permite, eso es un bug.
+
+Y el comercio dejó de ser una constante: se resuelve contra el registro
+(`venues.json`), y uno que el registro no conozca se rechaza **antes de
+hacerle una sola llamada**. Un comercio que un catálogo público anuncie y que
+nosotros no tengamos registrado ni se entera de que preguntamos por él.
+
+**Evidencia técnica.**
+
+- `apps/web/src/tenant-purchase.ts` (nuevo): resuelve venue, identidad del
+  tenant, credencial, Mandato, vault, rail y catálogo, y ejecuta. Devuelve un
+  rechazo **como valor** con código tipado; solo una falla real (base caída,
+  red muerta) sigue siendo excepción. Hay un test que lo fija.
+- Se eliminan de la ruta nueva: `PAYABLE_PRODUCT_ID`, `ROUTE_PARAMS`,
+  `createBazaarCatalog` y `readScope()` del archivo del repo. El scope ahora
+  sale de la credencial de ese tenant, parseada con
+  `agentPassCredentialSchema`, no casteada.
+- El `principal` del rail sale del `issuer` del Mandato firmado, no de una
+  fila del directorio — ver `C-78` para por qué eso es custodia y no un
+  detalle.
+- `apps/agent` exporta por primera vez el camino x402 genérico
+  (`createX402Catalog`, `getX402ServiceRoute`, `DEFAULT_VENUE_REGISTRY`,
+  `baseUrlForVenue`, `loadVenueRegistry`): existía desde F7 pero no salía del
+  paquete.
+- Tres códigos de error nuevos: `VenueNotRegistered`, `PurchaseCeilingExceeded`,
+  `RouteParamMissing`.
+- **972 tests verdes** (eran 961), `typecheck` y `build` limpios.
+
+**Dos defectos propios que encontraron los tests**, los dos de este mismo
+hito y los dos arreglados antes de cerrar: un venue desconocido salía como
+excepción en vez de como rechazo (porque el helper del registro lanza, y la
+primera versión solo contemplaba que devolviera vacío); y elegir el Mandato
+con un fallback podía tomar el de **otro agente del mismo tenant** —
+`checkMandate` lo habría atajado después, pero entregarle a la capa de
+enforcement un documento que ya sabés que es el equivocado no es una forma
+aceptable de estar en lo correcto.
+
+**Lo que no se hizo a propósito:** borrar `buy()`. El camino clásico sin
+wallet no tiene tenant en el directorio, así que el módulo nuevo no puede
+servirlo. Quedan dos cañerías hacia el mismo pago, pero **una sola capa de
+enforcement** — las dos pasan por `checkMandate`. Retirar la demo cuando F9
+funcione es trabajo posterior, anotado y sin construir.
+
+**Decisión nueva:** `C-78`.
+
+**Qué sigue.** T75: cablear `POST /v1/purchases` a este módulo, con
+persistencia de la compra e idempotencia real.

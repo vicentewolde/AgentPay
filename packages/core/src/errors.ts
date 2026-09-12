@@ -98,6 +98,12 @@ export type AgentPassErrorCode =
   | "MandateAssetNotAllowed"
   /** `grant.products` is present and does not list the product an intent would buy. */
   | "MandateProductNotAllowed"
+  /** The venue this purchase names is not in the payable venue registry. */
+  | "VenueNotRegistered"
+  /** The total exceeds the ceiling the partner itself declared for this purchase. */
+  | "PurchaseCeilingExceeded"
+  /** The paid route needs an input this purchase did not supply. */
+  | "RouteParamMissing"
   /** The mandate's spending limit is denominated in a different asset than the price. */
   | "MandateCurrencyMismatch"
   /** An intent's `issuedAt` falls outside the mandate's validity window. */

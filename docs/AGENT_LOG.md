@@ -4163,3 +4163,58 @@ los precios de SignalDesk en consecuencia — propuesta en `PILOTO-F9.md`
 sesión-cookie a un módulo por tenant, sin producto hardcodeado — el de más
 riesgo de la fase. Codex sigue sin poder iniciar nada de F9 hasta que T73
 esté mergeado.
+
+---
+
+## 2026-09-12 (11) — main / cc/t74-tenant-purchase
+
+Agente: Claude Code
+
+Qué: mergeados y pusheados `cc/f9-propuesta` (T72) y
+`cc/t73-contrato-ejecucion` (T73) a `main` con confirmación explícita del
+usuario; PR #22 cerrado por el merge. Misma sesión, **T74**: el runner de
+compra sale de la sesión-cookie a `apps/web/src/tenant-purchase.ts`.
+
+El módulo nuevo compra para un tenant sin navegador: resuelve venue contra
+`venues.json`, identidad/credencial/Mandato desde Postgres, arma vault +
+`PolicyRail` + agente, pide la factura al comercio y paga desde el
+`policy_rail` del tenant. **Movió la cañería, no la decisión** — las capas se
+llaman en el mismo orden, con las mismas funciones y argumentos que desde
+T21. Lo que sí cambió: el venue, el producto, la ruta pagada y el scope
+dejaron de ser constantes del repo (`PAYABLE_PRODUCT_ID`, `ROUTE_PARAMS`,
+`createBazaarCatalog`, `readScope()`), y el `principal` del rail pasa a salir
+del `issuer` del Mandato firmado en vez de una fila del directorio — eso es
+custodia, no un detalle (`C-61`).
+
+Dos defectos propios, los dos encontrados por los tests mientras se escribía
+el hito y arreglados antes de cerrarlo: un venue desconocido salía como
+excepción en vez de rechazo (`baseUrlForVenue` lanza; la primera versión solo
+contemplaba `undefined`), y el fallback al elegir Mandato podía tomar el de
+otro agente del mismo tenant.
+
+Verificado: **972 tests** (eran 961), `pnpm typecheck` y `pnpm build`
+limpios. Sin integración contra testnet en este hito — todo lo que T74 toca
+antes del primer byte que sale hacia un comercio está cubierto con fakes; el
+pago real se prueba en T75/T82.
+
+Por qué: era el hito de más riesgo de F9 y la dependencia dura de T75. Todas
+las capas de autorización ya existían y eran correctas; lo único que faltaba
+era poder llegar a ellas sin ser un navegador con una cookie.
+
+Documentación tocada: `DECISIONES.md` (`C-78`), `BITACORA.md` (hito T74 +
+tabla + estado actual). Archivos de código: `apps/web/src/tenant-purchase.ts`
+y su test (nuevos), `apps/agent/src/index.ts` (exporta por primera vez el
+camino x402 genérico de F7), `packages/core/src/errors.ts` (tres códigos
+nuevos).
+
+Pendiente: **mergear `cc/t74-tenant-purchase`** (espera confirmación del
+usuario). `buy()` sigue existiendo para el camino clásico sin wallet
+(`C-34`), que no tiene tenant en el directorio — dos cañerías hacia el mismo
+pago, una sola capa de enforcement; retirar la demo cuando F9 funcione queda
+anotado y sin construir. Del lado del usuario: la cuenta de reserva
+`GAK6E5E7L63ZY…` ya tiene 39.484 USDC testnet (fondeó 20), falta confirmar
+que la `AGENT_SECRET_KEY` de Render sea esa misma cuenta, y falta decidir los
+límites del rail y los precios de SignalDesk juntos (hoy `per_tx` 0.002 /
+`per_day` 0.01 hacen inusable 1 USDC por tenant — propuesta en
+`PILOTO-F9.md` § 12.2). Siguiente hito: **T75**, cablear `POST /v1/purchases`
+a este módulo con persistencia de la compra e idempotencia real.

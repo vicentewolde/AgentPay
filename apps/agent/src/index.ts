@@ -52,6 +52,35 @@ export {
   type BazaarServiceRoute,
 } from "./catalog/bazaar.js";
 
+/**
+ * The generic x402 path (F7, T53/T55), exported for the first time in T74.
+ *
+ * `bazaar.ts` above is one venue's spelling of this; these are the pieces
+ * that work for any registered venue, and `apps/web` needs them by name now
+ * that a purchase is no longer welded to a single merchant.
+ */
+export {
+  loadVenueRegistry,
+  baseUrlForVenue,
+  mapAssetCodeForVenue,
+  mapAssetIssuerForVenue,
+  registryAssetSchema,
+  registryVenueSchema,
+  venueRegistrySchema,
+  type RegistryVenueRow,
+  type ResolvedVenue,
+  type VenueRegistry,
+} from "./catalog/registry.js";
+
+export { DEFAULT_VENUE_REGISTRY } from "./catalog/default-registry.js";
+
+export {
+  createX402Catalog,
+  getX402ServiceRoute,
+  type X402CatalogOptions,
+  type X402ServiceRoute,
+} from "./catalog/x402-catalog.js";
+
 export {
   TOOL_NAMES,
   createToolSet,
