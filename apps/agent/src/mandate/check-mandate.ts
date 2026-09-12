@@ -14,11 +14,14 @@
  * widen what the other permits, only narrow it. Composing the two is a later
  * hito's job (T19); this function only answers for the mandate.
  *
- * `grant` is `scopeSchema` reused verbatim (`M-4`), so most of these checks
- * mirror `checkScope`'s exactly. What is new here, because a mandate names two
+ * `grant` is `scopeSchema` plus the two fields only a principal's consent has
+ * (`payTo`, `M-14`; `products`, T73), so most of these checks mirror
+ * `checkScope`'s exactly. What is new here, because a mandate names two
  * identities where a credential's scope names none, are the two identity
- * checks — and the window check, because a mandate (unlike `scope.limits`) has
- * its own validity period that an intent can be compared against directly.
+ * checks — the window check, because a mandate (unlike `scope.limits`) has
+ * its own validity period that an intent can be compared against directly —
+ * and the product check, which has no counterpart in a credential's scope at
+ * all and is skipped when the grant does not carry one.
  *
  * What this does **not** do: `grant.limits.perDay`. A daily total needs memory
  * of past spending — enforcement with state, which is T18's job, exactly the
@@ -37,6 +40,7 @@ export type MandateRejectionCode =
   | "MandatePrincipalMismatch"
   | "MandateActionNotAllowed"
   | "MandateVenueNotAllowed"
+  | "MandateProductNotAllowed"
   | "MandateAssetNotAllowed"
   | "MandateCurrencyMismatch"
   | "MandateWindowMismatch"
@@ -117,7 +121,28 @@ export function checkMandate(mandate: AgentPayMandate, intent: PurchaseIntent): 
     });
   }
 
-  // 5. Was this asset consented to?
+  // 5. Was *this product* consented to? Unlike every check around it, this
+  //    one is skipped entirely when the grant does not carry `products` —
+  //    the same posture `payTo` has in `reconcileTerms` (`M-14`). A mandate
+  //    signed before this field existed said nothing about products, and
+  //    reading silence as a restriction would retroactively narrow consent
+  //    nobody gave; reading it as permission is what it actually meant. Once
+  //    the field is present it obeys `B-1` like `venues`/`assets` do: an
+  //    empty array permits nothing.
+  //
+  //    `intent.purchase.productId` is the venue's own product identifier,
+  //    carried in a signed intent — not a `Product` and not the venue's
+  //    prose, so `B-19`'s rule still holds: no third-party text reaches this
+  //    decision.
+  if (grant.products !== undefined && !grant.products.includes(intent.purchase.productId)) {
+    return deny("MandateProductNotAllowed", "this mandate does not permit this product", {
+      productId: intent.purchase.productId,
+      permitted: grant.products,
+      permitsNothing: grant.products.length === 0,
+    });
+  }
+
+  // 6. Was this asset consented to?
   if (!grant.assets.includes(intent.purchase.asset)) {
     return deny("MandateAssetNotAllowed", "this mandate does not permit this asset", {
       asset: intent.purchase.asset,
@@ -126,7 +151,7 @@ export function checkMandate(mandate: AgentPayMandate, intent: PurchaseIntent): 
     });
   }
 
-  // 6. Is the mandate's limit even denominated in what the intent is
+  // 7. Is the mandate's limit even denominated in what the intent is
   //    denominated in? An incomparable limit is not a limit that was
   //    satisfied — same rule as B-15.
   const priceCode = parseAssetId(intent.purchase.asset).code;
@@ -138,7 +163,7 @@ export function checkMandate(mandate: AgentPayMandate, intent: PurchaseIntent): 
     );
   }
 
-  // 7. Was this consent even in force when the intent was issued? Both edges
+  // 8. Was this consent even in force when the intent was issued? Both edges
   //    inclusive, matching every other window in the project.
   const issuedAt = new Date(intent.issuedAt).getTime();
   const validFrom = new Date(mandate.validFrom).getTime();
@@ -151,7 +176,7 @@ export function checkMandate(mandate: AgentPayMandate, intent: PurchaseIntent): 
     });
   }
 
-  // 8. Is the total within the mandate's perTx? Exact integer arithmetic.
+  // 9. Is the total within the mandate's perTx? Exact integer arithmetic.
   const total = multiplyAmount(intent.purchase.unitAmount, intent.purchase.quantity);
   const limit = toScaledAmount(grant.limits.perTx);
 

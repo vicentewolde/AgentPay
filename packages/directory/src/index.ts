@@ -39,6 +39,7 @@ export {
   principalBindingSchema,
   principalIdSchema,
   principalSchema,
+  purchaseIdSchema,
   tenantIdSchema,
   tenantSchema,
   tenantStatusSchema,

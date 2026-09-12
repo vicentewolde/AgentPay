@@ -54,9 +54,25 @@ const payeeSchema = z
  * before — not silently, `reconciled` and the terms check both say so. Once
  * present, it follows `B-1`'s rule for `venues`/`assets`: an empty array
  * permits no payee, it does not mean "unchecked".
+ *
+ * `products` is the same idea applied to *what* may be bought, added in T73
+ * for F9 and following `payTo`'s precedent field for field: optional, so
+ * every mandate signed before this existed keeps meaning exactly what it
+ * meant; unchecked when absent, and saying so out loud rather than silently;
+ * and, once present, an empty array permits no product rather than permitting
+ * all of them.
+ *
+ * **Why this belongs on the grant and not on the credential's `scope`.** A
+ * product allowlist is the principal narrowing their own consent — "you may
+ * spend at this merchant, but only on this" — which is exactly what a grant
+ * is for. `scopeSchema` stays untouched: the issuer's belief about what an
+ * agent may do is not the place where a buyer's shopping list lives, and
+ * widening `scopeSchema` would change every credential ever issued as well
+ * as the credential-vs-mandate comparison of `M-4`.
  */
 export const mandateGrantSchema = scopeSchema.extend({
   payTo: z.array(payeeSchema).optional(),
+  products: z.array(z.string().min(1)).optional(),
 });
 
 export const mandateSubjectSchema = z.strictObject({

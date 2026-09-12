@@ -29,6 +29,7 @@ export const agentIdSchema = idSchema("agent");
 export const credentialIdSchema = idSchema("credential");
 export const mandateIdSchema = idSchema("mandate");
 export const consentSessionIdSchema = idSchema("consentSession");
+export const purchaseIdSchema = idSchema("purchase");
 
 export const tenantIdSchema = z
   .string()

@@ -10,14 +10,24 @@
  *
  * `PLATAFORMA-PARTNERS.md` §2.7 proposed a minimal, damage-separated set
  * (`tenants:write`, `agents:write`, `consent:create`, `mandates:read`,
- * `mandates:revoke`, `payments:authorize`, `vault:read`). T45's alcance is
- * narrower — tenants, agents, consent sessions, and mandates, read-only
- * except for the two creates — so this freezes only the permissions a
- * T45-shaped route actually checks. `mandates:revoke`, `payments:authorize`
- * and `vault:read` are not included: they belong to routes no ticket in F5's
- * table (T45-T50) implements yet, and a permission nobody can be granted for
- * is worse than none at all — it looks wired when it is not. Extend this
- * list, additively, the day a ticket implements the route it would guard.
+ * `mandates:revoke`, `payments:authorize`, `vault:read`). T45 froze only the
+ * permissions a T45-shaped route actually checked, with an explicit rule for
+ * the rest: "extend this list, additively, the day a ticket implements the
+ * route it would guard", because a permission nobody can be granted for is
+ * worse than none at all — it looks wired when it is not.
+ *
+ * **T73 is that day for three of them.** F9 needs a partner to be able to
+ * ask for a purchase and to read back what happened, so `payments:authorize`,
+ * `payments:read` and `vault:read` join the list alongside the routes of
+ * `resources/purchases.ts` and `resources/activity.ts`. They are three
+ * permissions and not one on purpose, following the same damage-separation
+ * the original set had: a key that can *read* a tenant's spending history
+ * has no business being able to *spend*, and the overwhelmingly common
+ * integration — a dashboard — only ever needs the reads.
+ *
+ * `mandates:revoke` is still not included: revocation stays a wallet-signed
+ * action the principal takes through the hosted flow, not something a
+ * partner's API key can trigger on their behalf.
  */
 import { z } from "zod";
 
@@ -28,6 +38,9 @@ export const API_SCOPES = [
   "consent_sessions:read",
   "consent_sessions:write",
   "mandates:read",
+  "payments:authorize",
+  "payments:read",
+  "vault:read",
 ] as const;
 
 export const apiScopeSchema = z.enum(API_SCOPES);

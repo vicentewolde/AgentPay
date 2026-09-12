@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T72 (propuesta de arquitectura y plan de F9, el piloto externo público) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T73 (contrato de ejecución de F9 congelado) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -123,6 +123,7 @@ ninguna ruta nueva capaz de escribir.
 | T70 | Limpieza activa: barrido periódico borra filas vencidas de `wallet_challenges`/`pending_wallet_sessions`/`pending_consent_sessions`/`sdk_pending_writes`, que antes solo dejaban de leerse | ✅ cerrado 2026-09-12 |
 | T71 | Panel completo de métricas/alertas en `status-dashboard`: uso de `perDay` hoy, rechazos recientes, saldo USDC del `policy_rail` de cada tenant — todo de solo lectura | ✅ cerrado 2026-09-12 |
 | T72 | F9: propuesta de arquitectura y plan del piloto externo público ([PILOTO-F9.md](PILOTO-F9.md)) — solo documentación, sin código | ✅ cerrado 2026-09-12 |
+| T73 | F9: contrato de ejecución congelado — permiso por producto en el grant firmado, tres scopes y tres rutas `/v1` nuevas respondiendo `501` hasta T75 | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2610,3 +2611,67 @@ salieron los cuatro hallazgos de arriba.
 los scopes nuevos, la lista blanca de retorno), que es la única puerta que
 permite delegarle algo a Codex después. Antes de arrancarlo hacen falta las
 decisiones D1 a D9 del documento.
+
+---
+
+## T73 · El contrato de ejecución de F9, congelado — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Dos cosas que no existían.
+
+La primera: **ahora se puede firmar un permiso por producto.** Hasta hoy, un
+Mandato podía decir "este agente puede gastar hasta tanto, en este comercio,
+en este activo" — pero no podía decir *qué* podía comprar. Si la persona
+elegía "solo el informe XLM/USDC", eso lo tenía que hacer cumplir la
+plataforma, que es justamente la parte en la que el diseño decidió no
+confiar. Desde T73 la lista de productos permitidos va dentro del documento
+que la wallet firma, y la comprueba el mismo código que ya comprueba el
+comercio y el monto. Los Mandatos firmados antes de hoy no cambian de
+significado: un Mandato sin lista de productos sigue permitiendo cualquiera,
+porque eso es lo que quería decir cuando se firmó — leer su silencio como
+una restricción sería inventar un permiso que nadie negó.
+
+La segunda: **la API para partners ya tiene por dónde ejecutar una compra.**
+Antes llevaba a alguien hasta el Mandato firmado y ahí se terminaba: no había
+ninguna ruta capaz de comprar ni de contar qué había pasado. Ahora hay tres —
+pedir una compra, leer una compra, y leer toda la actividad de un tenant
+(Mandato, permisos, gasto del día, saldo, compras y rechazos con su razón).
+Están autenticadas, con sus permisos, validando el cuerpo y respetando la
+clave de idempotencia **de verdad desde hoy**; lo único que todavía no hacen
+es mover plata, y lo dicen con un `501` que significa "esto existe, tu
+petición estaba bien, todavía no puedo actuar" — no un `404` que haría
+pensar que el endpoint no va a existir nunca.
+
+Congelar el contrato antes de implementarlo es lo que permite, recién ahora,
+delegarle piezas de F9 a Codex.
+
+**Evidencia técnica.**
+
+- `mandateGrantSchema` gana `products?: string[]`, opcional, con la semántica
+  exacta de `payTo` (`M-14`): ausente = sin verificar, vacío = no permite
+  nada (`B-1`).
+- `checkMandate` gana el chequeo 5, entre venue y asset, con el código tipado
+  `MandateProductNotAllowed`. Compara contra `intent.purchase.productId`, que
+  el intent firmado ya llevaba — ningún dato nuevo, y `B-19` intacto: no entra
+  prosa del comercio a la decisión.
+- Tres scopes nuevos (`payments:authorize`, `payments:read`, `vault:read`) y
+  tres rutas (`POST /v1/purchases`, `GET /v1/purchases/{id}`,
+  `GET /v1/tenants/{id}/activity`), con sus esquemas zod en
+  `@agentpey/partner-api` y el prefijo de id `pur_` en `@agentpey/directory`.
+- `docs/api/openapi.yaml` regenerado desde los esquemas: las tres rutas, sus
+  `501`, y `products` dentro del grant que una consent session propone.
+- **961 tests verdes** (eran 932): +9 sobre el permiso por producto, +5 sobre
+  los scopes, +19 sobre los esquemas nuevos, +10 sobre las rutas. `pnpm
+  typecheck` y `pnpm build` limpios.
+- Un test comprueba algo que parecía un detalle: el `501` **no** se guarda
+  contra la clave de idempotencia. Si se guardara, esa clave seguiría
+  devolviendo `501` después de que T75 hiciera funcionar la ruta.
+
+**Decisiones nuevas:** `C-74` (cambio de alcance de F9, confirmado por el
+usuario), `C-75` (el permiso por producto vive en el grant firmado),
+`C-76` (congelar las rutas antes de implementarlas, `501` y no `404`),
+`C-77` (Periplo validado contra el servicio vivo: se usa para descubrir,
+nunca para autorizar).
+
+**Qué sigue.** T74: sacar el runner de compra de la sesión-cookie a un módulo
+por tenant, sin producto hardcodeado. Es el hito de más riesgo de la fase —
+mover enforcement de sitio sin aflojarlo.

@@ -6,9 +6,12 @@ import {
   agentResourceSchema,
   consentSessionResourceSchema,
   createConsentSessionRequestSchema,
+  createPurchaseRequestSchema,
   createTenantRequestSchema,
   errorEnvelopeSchema,
   mandateResourceSchema,
+  purchaseResourceSchema,
+  tenantActivityResourceSchema,
   tenantResourceSchema,
 } from "@agentpey/partner-api";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -64,6 +67,8 @@ const agentListSuccessSchema = successEnvelopeComponent({ type: "array", items: 
 const consentSessionSuccessSchema = successEnvelopeComponent(schemaRef("ConsentSessionResource"));
 const mandateSuccessSchema = successEnvelopeComponent(schemaRef("MandateResource"));
 const mandateListSuccessSchema = successEnvelopeComponent({ type: "array", items: schemaRef("MandateResource") });
+const purchaseSuccessSchema = successEnvelopeComponent(schemaRef("PurchaseResource"));
+const tenantActivitySuccessSchema = successEnvelopeComponent(schemaRef("TenantActivityResource"));
 
 const errorResponse = {
   description: "An error response.",
@@ -230,6 +235,68 @@ const document = {
         },
       },
     },
+    "/v1/purchases": {
+      post: {
+        operationId: "createPurchase",
+        summary: "Ask an agent to buy something",
+        description:
+          "Requires the payments:authorize scope. This is a request, not an authorisation: the platform re-resolves the venue against its own registry, fetches the merchant's 402 invoice itself, and compares price, asset and payTo against the signed Mandate before paying. A refusal by any of those layers is a 201 whose outcome is \"refused\", not a 4xx — 4xx is reserved for the request itself being wrong.",
+        security: bearerSecurity,
+        parameters: [idempotencyKeyParameter],
+        requestBody: {
+          required: true,
+          content: { [JSON_MEDIA_TYPE]: { schema: schemaRef("CreatePurchaseRequest") } },
+        },
+        responses: {
+          "201": { description: "The decision, settled or refused.", ...jsonContent("PurchaseSuccessResponse") },
+          "501": { description: "Not wired yet — frozen in T73, implemented in T75.", $ref: "#/components/responses/ErrorResponse" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/v1/purchases/{id}": {
+      get: {
+        operationId: "getPurchase",
+        summary: "Get a purchase",
+        description: "Requires the payments:read scope.",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: fieldSchema(purchaseResourceSchema, "id"),
+          },
+        ],
+        responses: {
+          "200": { description: "The purchase.", ...jsonContent("PurchaseSuccessResponse") },
+          "501": { description: "Not wired yet — frozen in T73, implemented in T75.", $ref: "#/components/responses/ErrorResponse" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/v1/tenants/{id}/activity": {
+      get: {
+        operationId: "getTenantActivity",
+        summary: "Get everything a tenant may be shown about their own agent",
+        description:
+          "Requires the vault:read scope. Strictly read-only: the active Mandate and its permissions, today's spending against its perDay limit, the tenant's rail balance, its purchases, and its refused attempts with a typed code and a readable reason. Every number comes from the same computation the authorisation itself uses, never a second sum.",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: fieldSchema(tenantActivityResourceSchema, "tenant_id"),
+          },
+        ],
+        responses: {
+          "200": { description: "The tenant's activity.", ...jsonContent("TenantActivitySuccessResponse") },
+          "501": { description: "Not wired yet — frozen in T73, implemented in T75.", $ref: "#/components/responses/ErrorResponse" },
+          ...errorResponses,
+        },
+      },
+    },
   },
   components: {
     responses: {
@@ -248,6 +315,11 @@ const document = {
       ConsentSessionSuccessResponse: consentSessionSuccessSchema,
       MandateSuccessResponse: mandateSuccessSchema,
       MandateListSuccessResponse: mandateListSuccessSchema,
+      CreatePurchaseRequest: toJsonSchema(createPurchaseRequestSchema),
+      PurchaseResource: toJsonSchema(purchaseResourceSchema),
+      TenantActivityResource: toJsonSchema(tenantActivityResourceSchema),
+      PurchaseSuccessResponse: purchaseSuccessSchema,
+      TenantActivitySuccessResponse: tenantActivitySuccessSchema,
     },
     securitySchemes: {
       bearerAuth: {

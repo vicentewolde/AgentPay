@@ -45,7 +45,7 @@ function fakeApiKeyRecord(partnerId: string, scopes: readonly string[]): ApiKey 
 
 function createFakeDirectory(): FakeDirectory {
   const apiKeys = new Map<string, { partnerId: string; scopes: readonly string[]; revoked: boolean }>();
-  apiKeys.set(SECRET_A, { partnerId: PARTNER_A, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read", "consent_sessions:read", "consent_sessions:write"], revoked: false });
+  apiKeys.set(SECRET_A, { partnerId: PARTNER_A, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read", "consent_sessions:read", "consent_sessions:write", "payments:authorize", "payments:read", "vault:read"], revoked: false });
   apiKeys.set(SECRET_B, { partnerId: PARTNER_B, scopes: ["tenants:read", "tenants:write", "agents:read", "mandates:read", "consent_sessions:read", "consent_sessions:write"], revoked: false });
 
   const tenants = new Map<string, Tenant>();
@@ -262,7 +262,9 @@ describe("statusForError", () => {
     expect(statusForError(new AgentPassError("IdempotencyKeyRequired", "x"))).toBe(400);
     expect(statusForError(new AgentPassError("IdempotencyKeyConflict", "x"))).toBe(409);
     expect(statusForError(new AgentPassError("TenantNotFound", "x"))).toBe(404);
-    expect(statusForError(new AgentPassError("NotImplemented", "x"))).toBe(500);
+    expect(statusForError(new AgentPassError("NotImplemented", "x"))).toBe(501);
+    // A code this layer never anticipated must not masquerade as a client mistake.
+    expect(statusForError(new AgentPassError("VaultCorrupted", "x"))).toBe(500);
     expect(statusForError(new Error("plain"))).toBe(500);
   });
 });
@@ -531,6 +533,109 @@ describe("routePartnerRequest — GET /v1/consent_sessions/{id}", () => {
   it("404s an id that does not exist", async () => {
     const result = await routePartnerRequest(baseRequest({ pathname: `/v1/consent_sessions/${newId("consentSession")}` }));
     expect(result.status).toBe(404);
+  });
+});
+
+describe("routePartnerRequest — the execution routes T73 froze (T75 implements them)", () => {
+  const VENUE = "signaldesk:CCL57L4ZDBRRWL2PKHZCYQZRDV4A37LOZRWMSCRQQ5JYRKMJW6I3TM7F";
+
+  function purchaseBody(tenantId: string, overrides: Record<string, unknown> = {}) {
+    return { tenant_id: tenantId, venue: VENUE, product_id: "signaldesk:market-brief-xlm-usdc", quantity: 1, ...overrides };
+  }
+
+  it("answers 501, not 404 — the route exists, it just cannot act yet", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-1" }),
+    );
+    expect(result.status).toBe(501);
+    expect((result.body as { code: string }).code).toBe("NotImplemented");
+  });
+
+  it("refuses a key without payments:authorize before anything else happens", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    const result = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        authorizationHeader: `Bearer ${SECRET_B}`,
+        body: purchaseBody(tenant.id),
+        idempotencyKeyHeader: "pur-2",
+      }),
+    );
+    expect(result.status).toBe(403);
+    expect((result.body as { code: string }).code).toBe("ScopeNotGranted");
+  });
+
+  it("still requires an Idempotency-Key — a purchase is never safe to replay blindly", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id) }),
+    );
+    expect(result.status).toBe(400);
+    expect((result.body as { code: string }).code).toBe("IdempotencyKeyRequired");
+  });
+
+  it("404s another partner's tenant without revealing whether the body was valid", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    const result = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-3" }),
+    );
+    expect(result.status).toBe(404);
+    expect((result.body as { code: string }).code).toBe("TenantNotFound");
+  });
+
+  it("400s a malformed body, so the frozen shape is enforced from today", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id, { quantity: 0 }), idempotencyKeyHeader: "pur-4" }),
+    );
+    expect(result.status).toBe(400);
+  });
+
+  it("400s a body carrying a field this route does not know", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id, { pay_to: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K" }), idempotencyKeyHeader: "pur-5" }),
+    );
+    expect(result.status).toBe(400);
+  });
+
+  it("does not cache the 501 against the idempotency key, so T75 is not poisoned by it", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-6" }),
+    );
+    // Reusing the key with a *different* body is the probe: had the 501 been
+    // stored, this would come back `IdempotencyKeyConflict` (409). Nothing
+    // was stored, so it simply fails the same way again.
+    const second = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id, { quantity: 7 }), idempotencyKeyHeader: "pur-6" }),
+    );
+    expect(second.status).toBe(501);
+  });
+
+  it("GET /v1/purchases/{id} answers 501 behind payments:read", async () => {
+    const result = await routePartnerRequest(baseRequest({ pathname: "/v1/purchases/pur_01JB0000000000000000000003" }));
+    expect(result.status).toBe(501);
+  });
+
+  it("GET /v1/tenants/{id}/activity answers 501 behind vault:read", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity` }));
+    expect(result.status).toBe(501);
+  });
+
+  it("GET /v1/tenants/{id}/activity 404s another partner's tenant", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity` }));
+    expect(result.status).toBe(404);
+  });
+
+  it("does not shadow GET /v1/tenants/{id}, which still returns the tenant", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}` }));
+    expect(result.status).toBe(200);
   });
 });
 

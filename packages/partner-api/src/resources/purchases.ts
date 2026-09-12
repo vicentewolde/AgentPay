@@ -1,0 +1,122 @@
+/**
+ * `POST /v1/purchases` and `GET /v1/purchases/{id}` — the execution surface
+ * F9 needs and `/v1` did not have.
+ *
+ * Through T51 a partner could take a principal all the way to a signed
+ * Mandate and then stop: there was no route that could act on one. The only
+ * code path that ever executed a purchase lived inside `apps/web`'s demo
+ * session, welded to one bazaar product. This file freezes the shape of the
+ * route that replaces it; `apps/web` wires it in T75.
+ *
+ * **The request is a request, not an authorisation.** This is the rule the
+ * whole design of F9 hangs on (`PILOTO-F9.md` §1.2), and it is worth stating
+ * where the shape is defined rather than only where it is implemented: the
+ * partner names a venue and a product, and the platform believes none of it.
+ * It re-resolves the venue against its own registry, fetches the 402 invoice
+ * from the merchant itself, and compares price, asset and `payTo` against the
+ * signed Mandate before anything is paid. A partner whose API key is stolen
+ * can ask for purchases that will be refused. That is the whole of what it
+ * can do.
+ *
+ * **A refusal is a `201`, not a `4xx`.** The Mandate saying no is the system
+ * working exactly as designed, and reporting it as a client error would put
+ * "your consent does not cover this" in the same bucket as "your JSON is
+ * malformed". `4xx` is reserved for the partner getting the *request* wrong:
+ * a missing scope, another partner's tenant, a body that does not parse.
+ */
+import { agentIdSchema, purchaseIdSchema, tenantIdSchema } from "@agentpey/directory";
+import { z } from "zod";
+
+export { purchaseIdSchema };
+
+/**
+ * `<slug>:<contract id>` — the venue identity `apps/agent`'s catalogue mints
+ * and a signed `PurchaseIntent` carries. Described here rather than imported
+ * because the dependency runs the other way (`apps/*` depends on
+ * `packages/*`, never the reverse), the same reason `consent-sessions.ts`
+ * hand-rolled its id schemas before `@agentpey/directory` had the table.
+ * Deliberately structural and not a registry lookup: this schema's job is to
+ * refuse a malformed string, and deciding whether a venue is *payable* is
+ * the platform's job, at a point where refusing means refusing a payment.
+ */
+export const venueIdSchema = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*:C[A-Z2-7]{55}$/, "expected a venue id (<slug>:C...)");
+
+/**
+ * What the partner may ask for. `strictObject`, so a field this route does
+ * not know about is a `400` rather than something silently ignored — if an
+ * integrator believes they are constraining a purchase with a field we drop,
+ * the failure has to be loud.
+ */
+export const createPurchaseRequestSchema = z.strictObject({
+  tenant_id: tenantIdSchema,
+  venue: venueIdSchema,
+  /** The merchant's own product identifier, as its catalogue publishes it. */
+  product_id: z.string().min(1).max(200),
+  quantity: z.int().min(1).max(1000),
+  /**
+   * An optional ceiling the *partner* is willing to see spent, in the asset
+   * the merchant quotes. Never widens anything — the signed Mandate's
+   * `perTx`/`perDay` still decide, and this can only refuse earlier than they
+   * would. It exists so a platform that showed a price to a person can refuse
+   * when the invoice disagrees with what that person saw, without waiting for
+   * the Mandate to be the only thing standing between them and a surprise.
+   */
+  max_total: z.string().regex(/^\d+(?:\.\d{1,7})?$/, "expected a decimal amount with at most 7 places").optional(),
+});
+
+export type CreatePurchaseRequest = z.infer<typeof createPurchaseRequestSchema>;
+
+/**
+ * `settled` means the network settled the payment and the merchant released
+ * the resource. `refused` means some layer said no — and which one is in
+ * `code`, not in prose a caller would have to parse.
+ */
+export const purchaseOutcomeSchema = z.enum(["settled", "refused"]);
+
+export type PurchaseOutcome = z.infer<typeof purchaseOutcomeSchema>;
+
+/** What the merchant handed back, once it actually handed something back. */
+export const purchaseDeliverySchema = z.strictObject({
+  delivery_id: z.string().min(1),
+  /** Where the buyer can fetch what they bought. */
+  artifact_url: z.url().nullable(),
+  /** `sha256` of the merchant's canonicalised, signed receipt. */
+  receipt_hash: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+});
+
+export const purchaseResourceSchema = z.strictObject({
+  id: purchaseIdSchema,
+  tenant_id: tenantIdSchema,
+  agent_id: agentIdSchema,
+  outcome: purchaseOutcomeSchema,
+  /**
+   * The `AgentPassError` code of whichever layer refused — `MandateExpired`,
+   * `MandateProductNotAllowed`, `ScopeAmountExceeded`, `TermsPayeeNotAllowed`,
+   * `MandateDailyLimitExceeded`, and so on. `null` when settled.
+   *
+   * Typed on purpose, and separate from `reason`: an integrator branches on
+   * this, a person reads that one, and conflating them forces one audience to
+   * live with the other's needs.
+   */
+  code: z.string().min(1).nullable(),
+  /** The same refusal, in a sentence a buyer can act on. `null` when settled. */
+  reason: z.string().min(1).nullable(),
+  venue: venueIdSchema,
+  product_id: z.string().min(1),
+  quantity: z.int().min(1),
+  /** Set as soon as an intent was signed — present on most refusals too. */
+  intent_id: z.uuid().nullable(),
+  total: z.string().nullable(),
+  asset: z.string().nullable(),
+  /** The account the merchant asked to be paid, as its invoice named it. */
+  pay_to: z.string().nullable(),
+  transaction_hash: z.string().min(1).nullable(),
+  explorer_url: z.url().nullable(),
+  delivery: purchaseDeliverySchema.nullable(),
+  created_at: z.iso.datetime(),
+});
+
+export type PurchaseResource = z.infer<typeof purchaseResourceSchema>;
+export type PurchaseDelivery = z.infer<typeof purchaseDeliverySchema>;

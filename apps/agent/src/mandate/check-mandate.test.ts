@@ -166,6 +166,98 @@ describe("fail-closed, per B-1", () => {
   });
 });
 
+describe("the product allowlist (T73), when the grant carries one", () => {
+  const GRANT_WITH_PRODUCTS = {
+    grant: {
+      actions: ["catalog:read", "intent:create"],
+      venues: [MOCK_VENUE_ID],
+      assets: [USDC_TESTNET],
+      limits: { perTx: "50.00", perDay: "200.00", currency: "USDC" },
+      products: ["mate-calabaza"],
+    },
+  };
+
+  it("allows the product it names", () => {
+    expect(decide(GRANT_WITH_PRODUCTS).allowed).toBe(true);
+  });
+
+  it("refuses a product it does not name, at a venue and asset it does permit", () => {
+    const decision = decide(GRANT_WITH_PRODUCTS, {
+      purchase: { productId: "bombilla-alpaca", quantity: 1, unitAmount: "18.50", totalAmount: "18.50", asset: USDC_TESTNET },
+    });
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.code).toBe("MandateProductNotAllowed");
+    expect(decision.details).toMatchObject({ productId: "bombilla-alpaca", permitted: ["mate-calabaza"] });
+  });
+
+  it("matches byte-for-byte, per B-3 — a differing product id is another product", () => {
+    const decision = decide(GRANT_WITH_PRODUCTS, {
+      purchase: { productId: "Mate-Calabaza", quantity: 1, unitAmount: "18.50", totalAmount: "18.50", asset: USDC_TESTNET },
+    });
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.code).toBe("MandateProductNotAllowed");
+  });
+
+  it("an empty products list permits no product at all, per B-1", () => {
+    const decision = decide({
+      grant: { ...GRANT_WITH_PRODUCTS.grant, products: [] },
+    });
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.code).toBe("MandateProductNotAllowed");
+    expect(decision.details).toMatchObject({ permitsNothing: true });
+  });
+
+  it("survives being signed and re-read — the allowlist is part of the signed document", async () => {
+    const mandate = mandateFor(GRANT_WITH_PRODUCTS);
+    const signed = await signMandate(mandate, principal);
+    expect(signed.mandate.credentialSubject.grant.products).toEqual(["mate-calabaza"]);
+    const decision = checkMandate(signed.mandate, intentFor({
+      purchase: { productId: "bombilla-alpaca", quantity: 1, unitAmount: "18.50", totalAmount: "18.50", asset: USDC_TESTNET },
+    }));
+    expect(decision.allowed).toBe(false);
+  });
+});
+
+describe("a grant with no product allowlist is unchecked, not restricted", () => {
+  it("allows any product, the way every mandate signed before T73 meant", () => {
+    expect(decide({}, {
+      purchase: { productId: "cualquier-cosa", quantity: 1, unitAmount: "18.50", totalAmount: "18.50", asset: USDC_TESTNET },
+    }).allowed).toBe(true);
+  });
+
+  it("still refuses on venue, so absence of a product list widens nothing else", () => {
+    const decision = decide({}, { venue: OTHER_VENUE });
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.code).toBe("MandateVenueNotAllowed");
+  });
+});
+
+describe("the product check runs after venue and before asset", () => {
+  it("reports the venue first when both the venue and the product are wrong", () => {
+    const decision = decide(
+      { grant: { actions: ["catalog:read", "intent:create"], venues: [MOCK_VENUE_ID], assets: [USDC_TESTNET], limits: { perTx: "50.00", perDay: "200.00", currency: "USDC" }, products: ["mate-calabaza"] } },
+      { venue: OTHER_VENUE, purchase: { productId: "otro", quantity: 1, unitAmount: "18.50", totalAmount: "18.50", asset: USDC_TESTNET } },
+    );
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.code).toBe("MandateVenueNotAllowed");
+  });
+
+  it("reports the product before the asset when both are wrong", () => {
+    const decision = decide(
+      { grant: { actions: ["catalog:read", "intent:create"], venues: [MOCK_VENUE_ID], assets: [USDC_TESTNET], limits: { perTx: "50.00", perDay: "200.00", currency: "USDC" }, products: ["mate-calabaza"] } },
+      { purchase: { productId: "otro", quantity: 1, unitAmount: "18.50", totalAmount: "18.50", asset: EURC_MOCK } },
+    );
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.code).toBe("MandateProductNotAllowed");
+  });
+});
+
 describe("byte-for-byte matching, per B-3", () => {
   it.each([
     ["a different venue", { venue: OTHER_VENUE }],

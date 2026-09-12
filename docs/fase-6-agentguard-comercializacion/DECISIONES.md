@@ -2736,3 +2736,173 @@ Documentación tocada: `BITACORA.md` (nuevo hito T71),
 `apps/status-dashboard/package.json`.
 
 ---
+
+---
+
+### C-74 · F9 deja de ser "incorporar un partner real" y pasa a ser un piloto con plataforma y comercio propios · `Vigente`
+**Fecha:** 2026-09-12 · **Confirmada por el usuario**
+
+`PLATAFORMA-PARTNERS.md` § F9 definió esta fase, desde su borrador de
+T37, como "incorporar al partner real, mediar el piloto". Eso quedó
+bloqueado desde T69: al usuario se le preguntó dos veces quién era el
+partner y las dos veces contestó que no lo tenía decidido.
+
+**El brief del 2026-09-12 resolvió el bloqueo cambiando la premisa en
+vez de respondiéndola.** No hay partner externo: el proyecto construye
+la plataforma de agentes (**RealOps Agent**) y el comercio
+(**SignalDesk**) para probar una integración parecida a una real, y
+poder mostrársela después a partners y comercios potenciales. El
+criterio de éxito son los diez casos de aceptación del brief § 7 —
+camino feliz de dos productos más los rechazos guiados — no una métrica
+de volumen, por la misma razón que `C-24` ya había fijado para el
+piloto interno: en testnet sin usuarios reales el volumen se infla sin
+probar nada.
+
+**Qué se descartó.** Esperar al bazaar del embajador o a un equipo de
+hackathon. Ambos seguían siendo candidatos razonables, pero ninguno
+estaba comprometido, y el riesgo que `PLATAFORMA-PARTNERS.md` § F9 ya
+anotaba —"que el partner desaparezca"— es precisamente el que convierte
+un piloto en una espera indefinida. Construir las dos puntas cuesta más
+trabajo y compra independencia total del calendario de un tercero.
+
+**Qué NO cambia.** SignalDesk es un comercio nuevo con proceso, claves
+y dominio propios, no una máscara del bazaar existente. Y sigue en pie
+que nada de esta fase toca `checkMandate`, `scope.limits`/`perDay` ni
+los contratos Soroban salvo por lo que `C-75` registra explícitamente.
+
+---
+
+### C-75 · El permiso por producto vive en el grant firmado (`grant.products`), no en `scopeSchema` ni en la plataforma · `Vigente`
+**Fecha:** 2026-09-12 · **Decisión del usuario: "quiero que sí incluya permiso por producto"**
+
+Al leer el código para escribir `PILOTO-F9.md` apareció un hueco que la
+documentación no registraba: **no había forma de firmar un permiso por
+producto.** `scopeSchema` (`packages/core/src/credential.ts`) es un
+`z.strictObject` con `actions`, `venues`, `assets` y `limits`, y
+`checkScope` comprueba una única acción fija (`intent:create`). Un
+Mandato podía decir "puede gastar hasta X en SignalDesk en USDC", nunca
+"puede comprar el informe XLM/USDC".
+
+Eso importaba porque el brief pide que la persona ajuste el
+producto/servicio entre sus permisos. Mostrarlo como permiso firmado
+cuando en realidad lo haría cumplir RealOps habría sido mentir sobre lo
+que la firma cubre — y RealOps es exactamente la parte en la que el
+diseño decidió no confiar (`PILOTO-F9.md` § 1.2).
+
+**Se le ofrecieron tres salidas al usuario y eligió tener el permiso de
+verdad.** T73 lo implementa así:
+
+- `mandateGrantSchema` gana `products?: string[]`, **opcional**, copiando
+  campo por campo el precedente de `payTo` (`M-14`): ausente significa
+  *sin verificar*, no *prohibido*, así que todo Mandato firmado antes de
+  hoy sigue significando exactamente lo que significaba; presente pero
+  vacío no permite ningún producto, siguiendo la regla `B-1` de
+  `venues`/`assets`.
+- `checkMandate` gana el chequeo 5, entre venue y asset, y el código
+  tipado `MandateProductNotAllowed`. Compara contra
+  `intent.purchase.productId`, que el intent firmado ya llevaba desde
+  T9 — no hace falta ningún dato nuevo, y `B-19` se mantiene intacto:
+  no entra prosa del comercio a la decisión.
+
+**Por qué en el grant y no en `scopeSchema`.** Una lista de productos
+permitidos es el principal acotando su propio consentimiento — "podés
+gastar en este comercio, pero solo en esto" — que es literalmente para
+lo que existe un grant. Meterlo en `scopeSchema` habría cambiado la
+forma de **toda credencial ya emitida** y la comparación
+credencial↔mandato de `M-4`, para modelar algo que la creencia del
+emisor sobre un agente no expresa.
+
+**Alternativa descartada:** un `action` por producto
+(`purchase:market-report`). Reutilizaba un campo ya firmado, pero
+obligaba igual a cambiar `checkScope`, y degradaba el significado de
+`actions` —"qué clase de cosa puede hacer este agente"— a una lista de
+compras.
+
+**Alternativa descartada:** dejarlo del lado de RealOps con una etiqueta
+honesta en la UI. Era gratis y no mentía, pero deja el permiso que más
+naturalmente entiende una persona ("solo esto") como el único que no
+está protegido criptográficamente.
+
+---
+
+### C-76 · Las tres rutas de ejecución se congelan antes de implementarse, y responden `501` mientras tanto · `Vigente`
+**Fecha:** 2026-09-12
+
+`/v1` llevaba a un partner hasta el Mandato firmado y ahí se detenía:
+no existía ninguna ruta capaz de ejecutar una compra ni de leer qué
+pasó. T73 agrega tres —`POST /v1/purchases`, `GET /v1/purchases/{id}`,
+`GET /v1/tenants/{id}/activity`— y tres permisos —`payments:authorize`,
+`payments:read`, `vault:read`— **con todo cableado salvo la ejecución.**
+
+Autenticación, scope, propiedad del tenant, validación del cuerpo e
+idempotencia funcionan de verdad desde hoy; lo único que falta es la
+parte que mueve plata, y lo dice con `NotImplemented` → **`501`, no
+`404`**. Un `404` le diría a un integrador que el endpoint no existe ni
+va a existir; un `501` dice que existe, que su petición estaba bien
+formada, y que todavía no puede actuar.
+
+**Por qué congelar antes de implementar.** Los chequeos contra los que
+un integrador escribe su código —¿mi key puede gastar?, ¿este tenant es
+mío?, ¿mi `Idempotency-Key` se respeta?— son justamente los que no
+pueden cambiarle debajo después. Y es la puerta que `CLAUDE.md` §
+"Coordinación con Codex" exige: nada de F9 se delega hasta que este
+contrato esté mergeado.
+
+**Detalle que parecía menor y no lo es:** el `501` **no** se guarda
+contra la clave de idempotencia. Cachearlo haría que la misma clave
+siguiera devolviendo `501` después de que T75 hiciera funcionar la
+ruta — un contrato envenenado por su propio placeholder. Hay un test
+que lo prueba reusando la clave con otro cuerpo: si estuviera cacheado
+devolvería `409`.
+
+**Por qué tres permisos y no uno.** Misma separación de daño que el
+conjunto original de T45: una key que *lee* el historial de gasto de un
+tenant no tiene por qué poder *gastar*, y la integración abrumadoramente
+más común —un panel— solo necesita las lecturas. `mandates:revoke`
+sigue sin existir: revocar es una acción firmada por la wallet del
+principal, no algo que la API key de un partner pueda disparar por él.
+
+---
+
+### C-77 · Periplo se usa para descubrir, nunca para autorizar · `Vigente`
+**Fecha:** 2026-09-12 · **URL aportada por el usuario**
+
+El brief nombraba a Periplo como candidato a catálogo x402 público y
+pedía validarlo antes de elegirlo. La primera búsqueda no lo encontró
+(ni en web abierta, ni en `stellar/x402-stellar`, ni en la
+documentación oficial de x402 en Stellar), y `PILOTO-F9.md` § 4.3 lo
+registró como no verificable. **El usuario aportó el repositorio
+(`github.com/Eras256/Periplo`) y con eso se pudo verificar contra el
+servicio vivo**, no solo contra su README:
+
+- Está desplegado en `https://periplo-testnet.fly.dev`, `stellar:testnet`
+  únicamente.
+- `GET /supported` declara `scheme: exact`, `network: stellar:testnet`,
+  la extensión `bazaar`, y comisiones patrocinadas.
+- `GET /discovery/resources` y `GET /discovery/search?query=` devuelven
+  un catálogo real, con `payTo`, `asset` y `amount` por recurso. El
+  `asset` que cotiza es `CBIELTK6…`, **el mismo SAC de USDC testnet que
+  este proyecto ya usa**.
+- Es facilitador además de catálogo, y cataloga automáticamente al
+  liquidar un pago que lleve la extensión `bazaar` — es decir,
+  SignalDesk puede quedar listado por haber vendido, sin registro
+  aparte.
+
+**La decisión: se adopta para descubrir y se le niega toda autoridad.**
+Un candidato que Periplo devuelve y `venues.json` no conoce se rechaza
+antes de pedir siquiera la factura; y el precio que Periplo declara se
+descarta, porque el único precio que vale es el de la factura 402 del
+comercio, comparada contra el Mandato en `reconcileTerms`.
+
+Esto no es prudencia abstracta. El catálogo, leído hoy, tiene tres
+entradas: una es una fila de prueba de integración
+(`periplo-phase2-test.example`, `accepts: []`). Un catálogo público
+real contiene basura, entradas de terceros y, eventualmente, entradas
+maliciosas — exactamente el escenario que el brief § 3.4 pedía
+resolver, verificado en vivo en vez de supuesto.
+
+**Alternativa que sigue en pie como respaldo:** el índice propio sobre
+`venues.json` (`AgentPeyDiscovery`, T78). Periplo es un servicio de un
+tercero y puede caerse el día de la prueba externa; el caso de
+aceptación 9 ("catálogo caído, sin intento de pago") deja de ser
+hipotético por eso mismo.

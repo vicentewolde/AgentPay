@@ -4089,3 +4089,77 @@ móvil fuera de alcance). Sin ellas T73 no arranca. Codex no debe iniciar nada
 de F9 por su cuenta: el brief § 11 lo dice y la propuesta lo repite — nada se
 delega antes de que el contrato de `POST /v1/purchases` esté congelado y
 mergeado (T73).
+
+---
+
+## 2026-09-12 (10) — cc/t73-contrato-ejecucion
+
+Agente: Claude Code
+
+Qué: el usuario respondió las nueve decisiones de `PILOTO-F9.md` § 12 y
+pidió arrancar la ejecución. **T73** congela el contrato de ejecución de F9,
+que es la puerta que permite delegarle cualquier cosa a Codex después.
+
+Dos piezas:
+
+1. **Permiso por producto, firmado.** El usuario eligió tenerlo de verdad
+   (D4), así que `mandateGrantSchema` gana `products?: string[]` — opcional,
+   con la semántica exacta de `payTo` (`M-14`): ausente = sin verificar,
+   vacío = no permite nada (`B-1`). `checkMandate` gana el chequeo 5, entre
+   venue y asset, con `MandateProductNotAllowed`. Compara contra
+   `intent.purchase.productId`, que el intent firmado ya llevaba desde T9 —
+   ningún dato nuevo y `B-19` intacto. `scopeSchema` **no** se tocó: meterlo
+   ahí habría cambiado toda credencial ya emitida y la comparación
+   credencial↔mandato de `M-4`. Detalle y alternativas descartadas en `C-75`.
+2. **Tres rutas y tres scopes, congelados sin implementar.**
+   `POST /v1/purchases`, `GET /v1/purchases/{id}`,
+   `GET /v1/tenants/{id}/activity`; `payments:authorize`, `payments:read`,
+   `vault:read`. Autenticación, scope, propiedad del tenant, validación e
+   idempotencia funcionan hoy; la ejecución responde `NotImplemented` →
+   **`501`, no `404`**. El `501` no se cachea contra la clave de
+   idempotencia, con un test que lo prueba — cachearlo envenenaría esa clave
+   después de T75. Ver `C-76`.
+
+Verificado: **961 tests verdes** (eran 932), `pnpm typecheck` y `pnpm build`
+limpios, `docs/api/openapi.yaml` regenerado desde los esquemas (las tres
+rutas, sus `501`, y `products` dentro del grant que propone una consent
+session).
+
+Además, fuera de código: **Periplo existe y se validó contra el servicio
+vivo** — el usuario aportó `github.com/Eras256/Periplo`, y
+`https://periplo-testnet.fly.dev` responde `/supported` (scheme `exact`,
+`stellar:testnet`, extensión `bazaar`) y `/discovery/search` con recursos
+reales que cotizan el mismo SAC de USDC testnet que este proyecto usa. Se
+adopta para descubrir y se le niega toda autoridad (`C-77`). Su catálogo hoy
+tiene tres entradas y una es una fila de prueba de integración con
+`accepts: []` — la basura en un catálogo público dejó de ser una hipótesis.
+
+Por qué: `CLAUDE.md` § "Coordinación con Codex" y el brief § 11 exigen
+contratos congelados antes de delegar, y los chequeos contra los que un
+integrador escribe código son justamente los que no pueden cambiarle debajo
+más tarde.
+
+Documentación tocada: `DECISIONES.md` (`C-74` a `C-77`), `BITACORA.md` (hito
+T73 + tabla + estado actual), `PILOTO-F9.md` (respuestas del usuario en § 12,
+comparación de hosting en § 12.1, cuenta de reserva en § 12.2, § 13.1 marcado
+resuelto). Archivos de código tocados: `packages/core/src/errors.ts`,
+`packages/mandate/src/mandate.ts`, `apps/agent/src/mandate/check-mandate.ts`
+(+ test), `packages/partner-api/src/scopes.ts` (+ test),
+`packages/partner-api/src/resources/purchases.ts` y `activity.ts` (nuevos, +
+tests), `packages/partner-api/src/index.ts`,
+`packages/directory/src/{ids,entities,index}.ts`,
+`apps/web/src/partner-routes.ts` (+ test), `scripts/generate-openapi.ts`,
+`docs/api/openapi.yaml`.
+
+Pendiente: **mergear `cc/f9-propuesta` (PR #22, T72) y luego
+`cc/t73-contrato-ejecucion` a `main`** — las dos esperan confirmación
+explícita del usuario. Dos cosas que el usuario tiene que verificar antes de
+T76: que la `AGENT_SECRET_KEY` del panel de Render sea la misma cuenta
+`GAK6E5E7L63ZY…` que se fondea (la dirección se derivó del `.env.local`
+local, y la de Render es `sync: false`), y que 1 USDC por tenant obliga a
+subir los límites del rail (`per_tx` 0.002 / `per_day` 0.01 hoy) y a fijar
+los precios de SignalDesk en consecuencia — propuesta en `PILOTO-F9.md`
+§ 12.2, sin decidir. Siguiente hito: **T74**, sacar el runner de compra de la
+sesión-cookie a un módulo por tenant, sin producto hardcodeado — el de más
+riesgo de la fase. Codex sigue sin poder iniciar nada de F9 hasta que T73
+esté mergeado.

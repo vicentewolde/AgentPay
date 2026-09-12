@@ -72,3 +72,29 @@ export {
   type ConsentSessionStatus,
   type CreateConsentSessionRequest,
 } from "./resources/consent-sessions.js";
+
+export {
+  createPurchaseRequestSchema,
+  purchaseDeliverySchema,
+  purchaseIdSchema,
+  purchaseOutcomeSchema,
+  purchaseResourceSchema,
+  venueIdSchema,
+  type CreatePurchaseRequest,
+  type PurchaseDelivery,
+  type PurchaseOutcome,
+  type PurchaseResource,
+} from "./resources/purchases.js";
+
+export {
+  activeMandateSchema,
+  perDayUsageSchema,
+  railStatusSchema,
+  refusalSchema,
+  tenantActivityResourceSchema,
+  type ActiveMandate,
+  type PerDayUsage,
+  type RailStatus,
+  type Refusal,
+  type TenantActivityResource,
+} from "./resources/activity.js";

@@ -96,6 +96,8 @@ export type AgentPassErrorCode =
   | "MandateVenueNotAllowed"
   /** `grant.assets` does not list the asset an intent would spend. */
   | "MandateAssetNotAllowed"
+  /** `grant.products` is present and does not list the product an intent would buy. */
+  | "MandateProductNotAllowed"
   /** The mandate's spending limit is denominated in a different asset than the price. */
   | "MandateCurrencyMismatch"
   /** An intent's `issuedAt` falls outside the mandate's validity window. */

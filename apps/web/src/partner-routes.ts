@@ -28,6 +28,7 @@ import {
   toErrorEnvelope,
   toMandateResource,
   toTenantResource,
+  createPurchaseRequestSchema,
   type ApiScope,
 } from "@agentpey/partner-api";
 import { z } from "zod";
@@ -82,6 +83,13 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ConsentSessionNotFound: 404,
   ConsentSessionExpired: 410,
   ConsentSessionAlreadyCompleted: 409,
+  /**
+   * T73 froze the execution routes before T75 implements them. `501` and not
+   * `404`: the route exists, is authenticated, and validates its body — what
+   * it cannot do yet is act. An integrator reading `404` would conclude the
+   * endpoint was never coming.
+   */
+  NotImplemented: 501,
 };
 
 export function statusForError(error: unknown): number {
@@ -263,6 +271,64 @@ async function handleGetConsentSession(input: PartnerRouteRequest, id: string, n
   return { status: 200, body: successEnvelope(toConsentSessionResource(session, now, consentUrl)) };
 }
 
+/**
+ * `POST /v1/purchases` — authenticated, scoped, idempotent and validated
+ * today; able to actually buy something in T75.
+ *
+ * Everything before the execution is deliberately wired now rather than with
+ * the execution: the checks an integrator builds against — is my key allowed
+ * to spend, is this tenant mine, does my body parse, is my `Idempotency-Key`
+ * being honoured — are exactly the ones that must not change underneath them
+ * later. What is missing is the part that moves money, and it says so with a
+ * code rather than a `404`.
+ *
+ * Note the order: authorise, then check the tenant is this partner's, then
+ * parse. A request for another partner's tenant gets the same `404` a
+ * nonexistent one does, before this route reveals whether its body was even
+ * well-formed.
+ */
+async function handleCreatePurchase(input: PartnerRouteRequest, now: Date): Promise<PartnerRouteResponse> {
+  const auth = await authorizeRequest(input.authorizationHeader, "payments:authorize" satisfies ApiScope, input.directory.authenticate);
+
+  const outcome = await resolveIdempotency({
+    partnerId: auth.partnerId,
+    idempotencyKeyHeader: input.idempotencyKeyHeader,
+    body: input.body,
+    lookup: input.directory.findIdempotentResponse,
+    now,
+  });
+  if (outcome.kind === "replay") return { status: outcome.record.responseStatus, body: outcome.record.responseBody };
+
+  const request = parseBody(createPurchaseRequestSchema, input.body);
+  await requireOwnedTenant(input.directory, request.tenant_id, auth.partnerId);
+
+  // Deliberately *not* cached through `respondOrCache`: caching a "not
+  // implemented" against this partner's idempotency key would make the same
+  // key keep replaying a 501 after T75 makes the route work.
+  throw new AgentPassError("NotImplemented", "executing a purchase is not wired yet — T73 froze this contract, T75 implements it", {
+    details: { tenantId: request.tenant_id, venue: request.venue, productId: request.product_id },
+  });
+}
+
+async function handleGetPurchase(input: PartnerRouteRequest, id: string): Promise<PartnerRouteResponse> {
+  await authorizeRequest(input.authorizationHeader, "payments:read" satisfies ApiScope, input.directory.authenticate);
+  throw new AgentPassError("NotImplemented", "reading a purchase is not wired yet — T73 froze this contract, T75 implements it", {
+    details: { purchaseId: id },
+  });
+}
+
+/**
+ * `GET /v1/tenants/{id}/activity` — strictly read-only, and guarded by
+ * `vault:read` rather than by anything that can spend.
+ */
+async function handleGetTenantActivity(input: PartnerRouteRequest, tenantId: string): Promise<PartnerRouteResponse> {
+  const auth = await authorizeRequest(input.authorizationHeader, "vault:read" satisfies ApiScope, input.directory.authenticate);
+  await requireOwnedTenant(input.directory, tenantId, auth.partnerId);
+  throw new AgentPassError("NotImplemented", "reading a tenant's activity is not wired yet — T73 froze this contract, T75 implements it", {
+    details: { tenantId },
+  });
+}
+
 function notFound(method: string, pathname: string): PartnerRouteResponse {
   return { status: 404, body: { ok: false, code: "NotFound", message: `no /v1 route for ${method} ${pathname}`, details: {} } };
 }
@@ -277,6 +343,11 @@ export async function routePartnerRequest(input: PartnerRouteRequest): Promise<P
   try {
     if (input.method === "POST" && input.pathname === "/v1/tenants") {
       return await handleCreateTenant(input, now);
+    }
+
+    const tenantActivityMatch = /^\/v1\/tenants\/([^/]+)\/activity$/.exec(input.pathname);
+    if (input.method === "GET" && tenantActivityMatch?.[1] !== undefined) {
+      return await handleGetTenantActivity(input, decodeURIComponent(tenantActivityMatch[1]));
     }
 
     const tenantMatch = /^\/v1\/tenants\/([^/]+)$/.exec(input.pathname);
@@ -304,6 +375,15 @@ export async function routePartnerRequest(input: PartnerRouteRequest): Promise<P
 
     if (input.method === "GET" && input.pathname === "/v1/mandates") {
       return await handleListMandates(input, now);
+    }
+
+    if (input.method === "POST" && input.pathname === "/v1/purchases") {
+      return await handleCreatePurchase(input, now);
+    }
+
+    const purchaseMatch = /^\/v1\/purchases\/([^/]+)$/.exec(input.pathname);
+    if (input.method === "GET" && purchaseMatch?.[1] !== undefined) {
+      return await handleGetPurchase(input, decodeURIComponent(purchaseMatch[1]));
     }
 
     return notFound(input.method, input.pathname);

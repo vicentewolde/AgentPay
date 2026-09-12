@@ -14,6 +14,13 @@
 > parecida a una real. Ese cambio de alcance es la decisión `C-74` propuesta
 > en § 12.
 >
+> **Actualizado el 2026-09-12, al cerrar T73.** El usuario respondió las
+> nueve decisiones de § 12; sus respuestas están registradas ahí mismo, y las
+> que cambiaron el diseño están implementadas o registradas como decisión:
+> el permiso por producto **sí** se firma (`C-75`, ya construido), Periplo
+> **sí** existe y se validó contra el servicio vivo (`C-77`), y el cambio de
+> alcance quedó confirmado (`C-74`).
+>
 > **Estado del repo al escribirlo.** `main` en `7a7baff`, F8 cerrada de punta
 > a punta (T61–T71), 932 tests verdes. Todo lo que este documento afirma sobre
 > capacidades existentes se verificó leyendo el código, no la documentación —
@@ -590,25 +597,82 @@ cualquier número que se pueda subir corriendo un script.
 
 Ninguna de estas la tomo solo, y siete vienen pedidas por el brief § 10.
 
-| # | Decisión | Mi recomendación |
-|---|---|---|
-| **D1** | **Proveedor de email mágico** | Resend, con dominio propio verificado. Necesita saber qué dominio: `agentpey.com` figura pendiente en el log. Sin dominio verificado, el correo a desconocidos cae en spam y el piloto muere en el paso 1. **Alternativa de respaldo si no hay dominio: entrar con la wallet** (Freighter ya es la identidad del Mandato), dejando el email solo como aviso opcional. |
-| **D2** | **Hosting y dominios** | Los tres en Render, mismo `render.yaml`, subdominios distintos. Advertencia honesta: el plan free duerme y despierta en ~50 s; para una prueba con una persona mirando eso se nota. O se paga una instancia, o RealOps precalienta SignalDesk al cargar la página, o se avisa en la guía. |
-| **D3** | **Catálogo x402 público** | No pude verificar que Periplo exista (§ 4.3). Si tenés la URL, la valido. Si no: `AgentPeyDiscovery` propio como camino principal, con la limitación dicha en voz alta. |
-| **D4** | **Permiso por producto** | Ver § 13.1. Recomiendo **v1 sin producto firmado**, con la UI diciendo exactamente qué capa hace cumplir cada permiso. Agregar `products` al grant es posible pero toca `scopeSchema`, `checkScope` y documentos ya firmados: es su propia decisión, no un detalle de F9. |
-| **D5** | **Formato del artefacto** | HTML autocontenido con su hash impreso. Un PDF se ve mejor y agrega una dependencia de generación; un HTML se verifica a ojo. |
-| **D6** | **Límites del crédito patrocinado** | 0.05 USDC por tenant, 20 tenants, alerta a los 5 restantes (§ 6.3). |
-| **D7** | **Retención** | Lo de § 1.3: email 90 días sin actividad, artefactos 90 días, Mandato y vault **nunca** (son evidencia firmada). |
-| **D8** | **Alcance de F9 sin partner externo** | Confirmar `C-74` (§ 1): F9 deja de ser "incorporar un partner real" y pasa a ser "probar la integración completa con una plataforma y un comercio propios, para poder mostrársela después a partners". Es un cambio de lo que `PLATAFORMA-PARTNERS.md` § F9 dice hoy. |
-| **D9** | **Segunda wallet móvil** | Anotado como fuera de F9, como pide el brief § 9. No prometer móvil sin prueba end-to-end. |
+> **Respondidas por el usuario el 2026-09-12.** Se conservan las preguntas
+> tal como se hicieron, con la respuesta al lado, siguiendo el mismo formato
+> que `PLATAFORMA-PARTNERS.md` § 7 usó para las suyas.
 
----
+| # | Decisión | Mi recomendación | **Respuesta del usuario** |
+|---|---|---|---|
+| **D1** | Proveedor de email mágico | Resend con dominio propio verificado | **Compra `agentpey.com` hoy.** Queda Resend sobre ese dominio; la wallet como respaldo deja de hacer falta |
+| **D2** | Hosting y dominios | Render, con la advertencia del plan free | **Va a pagar la instancia.** Ver § 12.1 para la comparación pedida |
+| **D3** | Catálogo x402 público | No pude verificar Periplo; pedí la URL | **`github.com/Eras256/Periplo`.** Verificado contra el servicio vivo — ver `C-77` |
+| **D4** | Permiso por producto | v1 sin producto firmado, con la UI diciendo qué capa hace cumplir qué | **"Quiero que sí incluya permiso por producto".** Implementado en T73 — ver `C-75`. § 13.1 queda resuelto |
+| **D5** | Formato del artefacto | HTML autocontenido con su hash impreso | **HTML** |
+| **D6** | Límites del crédito patrocinado | 0.05 USDC por tenant, 20 tenants | **1 USDC por tenant, 20 tenants, alerta a los 5 restantes.** Ver § 12.2: cambia los límites del rail y los precios de SignalDesk |
+| **D7** | Retención | Email 90 días, artefactos 90 días, Mandato y vault nunca | **De acuerdo** |
+| **D8** | Alcance de F9 sin partner externo | Confirmar el cambio | **Confirmado** — `C-74` |
+| **D9** | Segunda wallet móvil | Fuera de F9 | **Anotado como mejora, no necesario por ahora** |
+
+### 12.1 Hosting: qué conviene pagar
+
+La pregunta era si Render sigue siendo lo mejor o hay algo más barato.
+
+| Opción | Costo mensual | A favor | En contra |
+|---|---|---|---|
+| **Render, 3 × Starter** | **~21 USD** | Un solo `render.yaml`, un solo panel, cero aprendizaje nuevo, ya está probado con este repo | El más caro de los tres |
+| Render Starter solo para los dos que deben estar despiertos | ~14 USD | SignalDesk gratis, precalentado por RealOps al cargar la página | Un arranque en frío de ~50 s justo dentro de una compra, si el precalentamiento falla |
+| Fly.io, 3 máquinas `shared-cpu-1x` 256 MB | ~6–9 USD | Lo más barato; es donde corre Periplo | Segunda plataforma que aprender y operar, en la fase donde lo que se prueba es el producto y no la infraestructura |
+
+**Recomiendo Render con las tres en Starter, ~21 USD/mes, y darlas de baja al
+cerrar el piloto.** La diferencia con Fly son unos 12 dólares al mes; el costo
+real de Fly no es el precio sino tener dos plataformas que fallan de maneras
+distintas justo cuando una persona externa está mirando. Si el objetivo fuera
+correr esto un año, la respuesta cambiaría.
+
+Los dominios: `realops.agentpey.com` y `signaldesk.agentpey.com`, con
+`agentpey.com` apuntando a AgentPey. Tres nombres bajo un dominio propio
+cuestan lo mismo que uno y hacen visible que son tres servicios distintos —
+que es exactamente lo que el brief § 2 pide que la persona pueda comprobar.
+
+### 12.2 La cuenta de reserva, y lo que 1 USDC por tenant cambia
+
+**La dirección desde la que fondear es `GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K`**
+— la cuenta de `AGENT_SECRET_KEY`, que es la que `ensureTenantPolicyRail` ya
+usa hoy como reserva. Al escribir esto tiene **19.484 USDC** testnet y 9999.9
+XLM, así que para 20 tenants a 1 USDC falta poco más de medio USDC más un
+margen.
+
+**Dos advertencias antes de transferir nada:**
+
+1. **Confirmá que la `AGENT_SECRET_KEY` del panel de Render es esta misma.**
+   La dirección de arriba se derivó del `.env.local` de tu máquina. La
+   variable de Render es `sync: false` — se cargó a mano y podría ser otra
+   llave. Si son distintas, fondear la local no le sirve de nada al piloto.
+   Se verifica comparando la clave pública en Render con esta.
+2. **1 USDC por tenant no sirve de nada con los límites actuales del rail.**
+   `tenant-rail.ts` despliega cada rail con `per_tx = 0.002` y
+   `per_day = 0.01` USDC — grabados en el contrato, no en la base. Un tenant
+   con 1 USDC adentro y un tope diario de 0.01 tarda cien días en gastarlo, y
+   los productos de SignalDesk tendrían que costar menos de 0.002 para poder
+   comprarse. Los tres números tienen que decidirse juntos. Propongo, para
+   que los diez casos de aceptación sean realizables en una sesión:
+   informe 0.25 USDC, paquete de créditos 0.10 USDC, `per_tx` del rail 0.30 y
+   `per_day` 0.60 — así una segunda compra del informe supera el tope diario
+   (caso 4) sin que haga falta esperar ni inventar nada.
+
+Esos números son una propuesta de T76, no algo ya decidido.
 
 ## 13. Lo que encontré en el código y no estaba previsto
 
 Cuatro cosas que salieron de leer `main`, no de leer la documentación.
 
-### 13.1 El producto no es firmable hoy
+### 13.1 El producto no es firmable hoy — **resuelto en T73**
+
+> Resuelto. El usuario eligió tener el permiso de verdad, y T73 lo construyó:
+> `grant.products`, opcional, verificado en `checkMandate`. Ver `C-75`. Lo que
+> sigue se conserva sin editar porque es el razonamiento que llevó a la
+> decisión.
+
 
 `scopeSchema` (`packages/core/src/credential.ts:46`) es un `z.strictObject`
 con `actions`, `venues`, `assets` y `limits`. `checkScope`

@@ -75,6 +75,8 @@ export const ID_PREFIXES = {
   credential: "crd",
   mandate: "mdt",
   consentSession: "cns",
+  /** A purchase a partner asked for through `POST /v1/purchases` (T73/F9). */
+  purchase: "pur",
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIXES;
