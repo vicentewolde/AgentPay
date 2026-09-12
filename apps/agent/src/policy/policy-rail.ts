@@ -28,7 +28,7 @@ import type { AgentPayMandate } from "@agentpey/mandate";
 
 import type { PurchaseIntent } from "../intent/intent.js";
 import { checkDailyLimit, type DailyLimitRejectionCode } from "../ledger/check-daily-limit.js";
-import type { SpendLedger } from "../ledger/spend-ledger.js";
+import type { LockedSpendLedger, SpendLedger } from "../ledger/spend-ledger.js";
 import { checkMandate, type MandateRejectionCode } from "../mandate/check-mandate.js";
 import { checkScope, type ScopeRejectionCode } from "../scope/scope.js";
 import { reconcileTerms, type PaymentTerms, type TermsRejectionCode } from "./terms.js";
@@ -120,18 +120,25 @@ function refuse(
  *
  * Authorisations are serialised per subject: the read of today's total, the
  * decision, and the recording of the spend happen inside one critical section,
- * closing the TOCTOU that `M-10` deferred to this milestone (`M-15`). The
- * serialisation is a promise chain, so it holds within this process and
- * nowhere else — with a durable ledger behind more than one instance, this has
- * to become a database transaction or a distributed lock, and the chain below
- * helps not at all. That limit is real and is written down rather than
- * discovered.
+ * closing the TOCTOU that `M-10` deferred to this milestone (`M-15`).
+ *
+ * `M-15` originally closed this with an in-memory promise chain and said so
+ * out loud: "it holds within this process and nowhere else — with a durable
+ * ledger behind more than one instance, this has to become a database
+ * transaction or a distributed lock." `pnpm run loadtest:perday` (F8, T64)
+ * measured exactly that gap with four real, separate Node processes: `perDay`
+ * was exceeded even though nothing crashed. This now prefers
+ * `ledger.atomically` when the ledger provides one (`@agentpey/vault`'s
+ * Postgres backend does — a real cross-process critical section, not a
+ * promise chain) and falls back to the original in-process queue otherwise
+ * (the in-memory and file-backed ledgers, which cannot outlive one process
+ * regardless of what serialises calls to them).
  */
 export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
   const { ledger } = deps;
   const clock = deps.now ?? (() => new Date());
 
-  /** subject -> the tail of that subject's queue of authorisations. */
+  /** subject -> the tail of that subject's queue of authorisations (fallback path only). */
   const queues = new Map<string, Promise<unknown>>();
 
   function serialise<T>(subject: string, work: () => Promise<T>): Promise<T> {
@@ -144,6 +151,26 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
       next.catch(() => undefined),
     );
     return next;
+  }
+
+  /**
+   * The critical section, however the ledger backs it: `ledger.atomically`
+   * when present, or the in-process `serialise` queue handing `work` the
+   * ledger's own (unscoped) methods otherwise. Either way `work` sees the
+   * same `LockedSpendLedger` shape, so `authorise()` below never has to know
+   * which one it got.
+   */
+  function criticalSection<T>(subject: string, work: (locked: LockedSpendLedger) => Promise<T>): Promise<T> {
+    if (ledger.atomically) {
+      return ledger.atomically(subject, work);
+    }
+    return serialise(subject, () =>
+      work({
+        spentOn: (s, currency, at) => ledger.spentOn(s, currency, at),
+        hasRecorded: (intentId) => ledger.hasRecorded(intentId),
+        record: (entry) => ledger.record(entry),
+      }),
+    );
   }
 
   return {
@@ -186,9 +213,9 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
       const subject = intent.agent;
 
       // 4. The stateful half, in one critical section (M-15).
-      return serialise(subject, async () => {
+      return criticalSection(subject, async ({ spentOn, hasRecorded, record }) => {
         const at = clock();
-        const spentToday = await ledger.spentOn(subject, currency, at);
+        const spentToday = await spentOn(subject, currency, at);
 
         // A purchase can be authorised more than once for the same intentId
         // — T19's structural check, then T24's real-terms check, are two
@@ -197,7 +224,7 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
         // added `total` on top of a `spentToday` that, on the second call,
         // already includes it — double-counting one purchase against the
         // daily limit (G-8). A re-verification adds nothing new to check.
-        const alreadyRecorded = await ledger.hasRecorded(intent.intentId);
+        const alreadyRecorded = await hasRecorded(intent.intentId);
         const addition = alreadyRecorded ? "0" : total;
 
         // Both limits, against the same running total, each with its own code
@@ -226,7 +253,7 @@ export function createLocalPolicyRail(deps: LocalPolicyRailDeps): PolicyRail {
         // that falls through is fail-closed, under-counting is not (M-15).
         // The ledger de-duplicates by intentId, so authorising the same intent
         // twice counts once.
-        await ledger.record({ subject, intentId: intent.intentId, currency, amount: total, at });
+        await record({ subject, intentId: intent.intentId, currency, amount: total, at });
 
         return {
           authorised: true,

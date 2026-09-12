@@ -3686,3 +3686,58 @@ Pendiente: revisión de seguridad del diff por Claude Code; T64 (harness
 de carga) y T65 (revisión final de F8). Antes del deploy, configurar
 `POSTGRES_CA_CERT` en el entorno del host si se quiere habilitar la
 verificación de CA.
+
+---
+
+## 2026-09-12 (2) — cc/t66-atomic-perday
+
+Agente: Claude Code
+
+Qué: revisé el PR #20 de Codex (T64, harness de carga de `perDay`) en
+worktree aislado — diff limpio, `typecheck`/`build`/`test` en verde, y
+corrí el script yo mismo contra Postgres real: confirmé de forma
+independiente el hallazgo del PR (12.00 USDC grabados contra un límite
+de 10.00, con cuatro procesos reales, sin crashear). Mergeado (PR #20).
+
+Antes de cerrar T65 (revisión final de F8), investigué la causa: T61
+(`C-67`) cerró la carrera de *escritura* dentro del vault, pero la
+*decisión* de si un gasto entra en `perDay` sigue viviendo en
+`createLocalPolicyRail` (`apps/agent`), protegida solo por una cola de
+promesas en memoria (T19, `M-15`) — que su propio comentario ya
+advertía desde entonces que no sobrevive a más de un proceso. F8/T61
+nunca tocó esa función. Con el visto bueno explícito del usuario
+("diseñar el fix ahora"), construí T66: `SpendLedger`/`MandateVault`
+ganan un método opcional `atomically(subject, work)`, y
+`createPostgresMandateVault` lo implementa de verdad (transacción +
+`pg_advisory_xact_lock`, el mismo que `append()` ya usaba, ahora
+sosteniéndolo durante toda la sección crítica). `createLocalPolicyRail`
+lo prefiere cuando existe y cae de vuelta a la cola en memoria cuando
+no — cero cambios en los 29 tests de concurrencia existentes.
+
+Verificado en cuatro niveles: nuevo test de integración contra Postgres
+real, suite completa del monorepo sin regresiones, y el propio harness
+de T64 con un modo nuevo (`--atomic`) — tres corridas reales, procesos
+separados de verdad, siempre dentro del límite (9.00 de 10.00). El modo
+original (`racy`) se dejó intacto como prueba de regresión.
+
+Encontré y arreglé, antes de tomar ninguna corrida como evidencia, un
+bug real en el propio harness: el modo `--atomic` se colgaba y el
+proceso completo salía solo, en silencio, código 0, sin imprimir nada
+— un worker rápido podía salir del todo antes de que el coordinador
+alcanzara a poner un listener de `"exit"` sobre él, y Node no entrega
+un evento a un listener tardío. Arreglado consultando `exitCode` (ya
+grabado por un listener puesto al lanzar cada proceso) en vez de
+escuchar el evento después.
+
+Detalle completo, con las alternativas descartadas, en `C-68` de
+`docs/fase-6-agentguard-comercializacion/DECISIONES.md`.
+
+Por qué: T65 (revisión final de F8) no podía cerrarse dando por bueno
+un enforcement de `perDay` que no aguanta más de un proceso — justo la
+premisa que F8 dijo que iba a probar. Es exactamente el tipo de cambio
+que `CLAUDE.md` pide tratar con más cuidado (enforcement de
+`scope.limits`/`perDay`), así que se hizo en Claude Code, no delegado.
+
+Pendiente: mergear `cc/t66-atomic-perday` a `main` y pushear. T65
+(revisión final de F8 completo, T61–T66 juntos) — mío, no delegable,
+siguiente en esta misma sesión.

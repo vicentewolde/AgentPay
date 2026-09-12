@@ -54,6 +54,35 @@ export interface SpendLedger {
    * amount is already folded into its total (`G-8`).
    */
   hasRecorded(intentId: string): Promise<boolean>;
+  /**
+   * Runs `work` as one critical section for `subject`: no other `atomically`
+   * call for the same subject — in this process, or, for a ledger backed by
+   * shared durable storage, in any other process pointed at the same store —
+   * can read or write `subject`'s totals until `work` resolves.
+   *
+   * This is the piece `checkDailyLimit`'s own docstring names and defers:
+   * "whether `spentOn` and `record` happen atomically... this function only
+   * ever sees numbers it was handed." A caller that reads `spentOn`, decides,
+   * and calls `record` as three separate calls — even serialised in-process
+   * (`M-15`) — leaves a gap between the read and the write that a second
+   * *process* can land in. `work` receives its own `spentOn`/`hasRecorded`/
+   * `record`, scoped to this one critical section, so the whole
+   * read-decide-write sequence is what gets to be atomic — not just the write.
+   *
+   * Optional: a ledger that cannot outlive one process (the in-memory and
+   * file-backed implementations) has nothing further to gain from this over
+   * the in-process serialisation a caller already does, so it may omit this
+   * method entirely. Only a ledger shared across processes (`@agentpey/vault`'s
+   * Postgres backend) needs to implement it for real.
+   */
+  atomically?<T>(subject: string, work: (locked: LockedSpendLedger) => Promise<T>): Promise<T>;
+}
+
+/** The `spentOn`/`hasRecorded`/`record` trio, scoped to one `atomically` critical section. */
+export interface LockedSpendLedger {
+  spentOn(subject: string, currency: string, at: Date): Promise<string>;
+  hasRecorded(intentId: string): Promise<boolean>;
+  record(entry: SpendLedgerEntry): Promise<void>;
 }
 
 /** `YYYY-MM-DD`, in UTC. The bucket a spend counts toward. */

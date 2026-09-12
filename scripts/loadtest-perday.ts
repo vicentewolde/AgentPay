@@ -3,10 +3,20 @@
  * `pnpm run loadtest:perday` — makes independent Node processes compete for
  * one tenant's daily USDC allowance against the live Postgres vault.
  *
- * This deliberately coordinates the instant between `spentOn()` and
- * `record()`: every worker makes its own limit decision, then the parent
- * releases all approved workers together. It is a process-level probe of the
- * race T61 addresses, not an x402 or Bazaar payment load test. The run always
+ * Two modes, same coordinated race window, same reference limit:
+ *
+ *  - default (racy): every worker calls `spentOn()` and `record()` as two
+ *    separate, unlocked calls — the exact shape `LocalPolicyRail.authorise()`
+ *    used before this ticket's fix. This is what found, and still
+ *    reproduces, the gap T61 alone left open (T64).
+ *  - `--atomic`: every worker makes the same decision through
+ *    `vault.atomically()` instead — the fix this ticket's finding led to
+ *    (T65/`C-68`). Run both and diff the summaries: `--atomic` is the proof
+ *    the fix holds under real, separate OS processes, not just the
+ *    integration test's two instances in one process.
+ *
+ * Neither mode is an x402 or Bazaar payment load test — the race lives in
+ * `packages/vault/src/postgres-vault.ts`, measured directly. The run always
  * deletes its own `loadtest-` tenant rows before it exits.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -59,11 +69,21 @@ const WorkerMessageSchema = z.discriminatedUnion("type", [
 type Command = z.infer<typeof CommandSchema>;
 type WorkerMessage = z.infer<typeof WorkerMessageSchema>;
 
+/**
+ * "racy": `spentOn()` then `record()` as two separate, unlocked calls — the
+ * gap this ticket found. "atomic": the same decision through
+ * `vault.atomically()` — the fix. Selected with `--atomic` on the command
+ * line; default is "racy" so `pnpm run loadtest:perday` keeps reproducing
+ * the original finding unless asked otherwise.
+ */
+type LoadtestMode = "racy" | "atomic";
+
 interface WorkerConfiguration {
   readonly connectionString: string;
   readonly tenantId: string;
   readonly subject: string;
   readonly at: string;
+  readonly mode: LoadtestMode;
 }
 
 interface WorkerResult {
@@ -138,10 +158,17 @@ function workerConfiguration(): WorkerConfiguration {
   const tenantId = process.env.LOADTEST_TENANT_ID;
   const subject = process.env.LOADTEST_SUBJECT;
   const at = process.env.LOADTEST_AT;
-  if (connectionString === undefined || tenantId === undefined || subject === undefined || at === undefined) {
+  const mode = process.env.LOADTEST_MODE;
+  if (
+    connectionString === undefined ||
+    tenantId === undefined ||
+    subject === undefined ||
+    at === undefined ||
+    (mode !== "racy" && mode !== "atomic")
+  ) {
     throw new Error("load-test worker did not receive its configuration");
   }
-  return { connectionString, tenantId, subject, at };
+  return { connectionString, tenantId, subject, at, mode };
 }
 
 function writeMessage(message: WorkerMessage): void {
@@ -171,9 +198,37 @@ async function workerMain(): Promise<void> {
     const begin = await nextCommand(commands);
     if (begin.type !== "begin" || begin.round !== round) throw new Error("unexpected coordinator command");
 
-    // This worker alone makes the decision. The coordinator only creates a
-    // repeatable schedule in which separate processes all have the same race
-    // window between this read and their later write.
+    if (configuration.mode === "atomic") {
+      // The read, the decision, and the write all happen inside one
+      // Postgres transaction holding this tenant's advisory lock — no
+      // decision/commit round-trip with the coordinator needed, because
+      // nothing outside this call can observe or act on a half-made decision.
+      const atomically = vault.atomically;
+      if (atomically === undefined) throw new Error("createPostgresMandateVault must implement atomically");
+      const shouldRecord = await atomically(configuration.subject, async (locked) => {
+        const spentToday = parseScaled(await locked.spentOn(configuration.subject, CURRENCY, at));
+        const shouldRecordNow = spentToday + ATTEMPT_AMOUNT <= REFERENCE_PER_DAY;
+        if (shouldRecordNow) {
+          await locked.record({
+            subject: configuration.subject,
+            intentId: `loadtest-${pid}-${round}-${randomUUID()}`,
+            currency: CURRENCY,
+            amount: ATTEMPT_AMOUNT_TEXT,
+            at,
+          });
+        }
+        return shouldRecordNow;
+      });
+      if (shouldRecord) accepted += 1;
+      else rejected += 1;
+      writeMessage({ type: "roundComplete", pid, round });
+      continue;
+    }
+
+    // "racy": this worker alone makes the decision, from a plain unlocked
+    // read. The coordinator only creates a repeatable schedule in which
+    // separate processes all have the same race window between this read
+    // and their later write — this is the gap `atomic` mode above closes.
     const spentToday = parseScaled(await vault.spentOn(configuration.subject, CURRENCY, at));
     const shouldRecord = spentToday + ATTEMPT_AMOUNT <= REFERENCE_PER_DAY;
     writeMessage({ type: "decision", pid, round, shouldRecord });
@@ -208,6 +263,7 @@ function spawnWorker(configuration: WorkerConfiguration): WorkerHandle {
       LOADTEST_TENANT_ID: configuration.tenantId,
       LOADTEST_SUBJECT: configuration.subject,
       LOADTEST_AT: configuration.at,
+      LOADTEST_MODE: configuration.mode,
     },
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -237,12 +293,33 @@ async function waitForAll(
 ): Promise<void> {
   const deadline = Date.now() + 30_000;
   while (!workers.every((worker) => predicate(worker.messages))) {
-    const stopped = workers.find((worker) => worker.exitCode !== null);
+    // Atomic mode has no per-round barrier holding workers back (unlike
+    // racy mode's commit/continue exchange), so a fast worker can finish all
+    // its rounds and exit while a slower one is still mid-round — that is
+    // not a failure as long as the fast one already satisfied `predicate`
+    // before it exited. Only flag a worker that exited *without* satisfying
+    // what this wait is for.
+    const stuck = workers.find((worker) => worker.exitCode !== null && !predicate(worker.messages));
     const fatal = workers.find((worker) => worker.messages.some((message) => message.type === "fatal"));
-    if (stopped !== undefined || fatal !== undefined) {
+    if (stuck !== undefined || fatal !== undefined) {
       throw new Error(`a worker stopped before ${description}`);
     }
     if (Date.now() >= deadline) throw new Error(`timed out waiting for ${description}`);
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+/**
+ * Polls `exitCode` (recorded by the listener `spawnWorker` attaches at spawn
+ * time, so it can never miss the event) instead of attaching a fresh
+ * `.once("exit", ...)` here — a worker can have already exited by the time
+ * this runs, and Node only replays an event to listeners registered before
+ * it fired.
+ */
+async function waitForExit(workers: readonly WorkerHandle[]): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  while (!workers.every((worker) => worker.exitCode !== null)) {
+    if (Date.now() >= deadline) throw new Error("timed out waiting for workers to exit");
     await new Promise<void>((resolve) => setTimeout(resolve, 25));
   }
 }
@@ -260,11 +337,13 @@ function stopWorkers(workers: readonly WorkerHandle[]): void {
 
 async function coordinatorMain(): Promise<number> {
   const connectionString = await readDatabaseUrl();
+  const mode: LoadtestMode = process.argv.includes("--atomic") ? "atomic" : "racy";
   const configuration: WorkerConfiguration = {
     connectionString,
     tenantId: `loadtest-${randomUUID()}`,
     subject: `did:stellar:testnet:loadtest:${randomUUID()}`,
     at: new Date().toISOString(),
+    mode,
   };
   const workers = Array.from({ length: PROCESS_COUNT }, () => spawnWorker(configuration));
   const cleanupPool = createCleanupPool(connectionString);
@@ -273,6 +352,19 @@ async function coordinatorMain(): Promise<number> {
     await waitForAll(workers, (messages) => messages.some((message) => message.type === "ready"), "workers to connect");
     for (let round = 0; round < ATTEMPTS_PER_PROCESS; round += 1) {
       for (const worker of workers) send(worker, { type: "begin", round });
+
+      if (mode === "atomic") {
+        // No decision/commit exchange: each worker's whole read-decide-write
+        // sequence already happened atomically inside `vault.atomically()`
+        // by the time its `roundComplete` arrives.
+        await waitForAll(
+          workers,
+          (messages) => messages.some((message) => message.type === "roundComplete" && message.round === round),
+          `round ${round + 1} (atomic)`,
+        );
+        continue;
+      }
+
       await waitForAll(
         workers,
         (messages) => messages.some((message) => message.type === "decision" && message.round === round),
@@ -291,15 +383,14 @@ async function coordinatorMain(): Promise<number> {
       );
     }
     await waitForAll(workers, (messages) => messages.some((message) => message.type === "result"), "worker results");
-    await new Promise<void>((resolve) => {
-      let remaining = workers.length;
-      for (const worker of workers) {
-        worker.child.once("exit", () => {
-          remaining -= 1;
-          if (remaining === 0) resolve();
-        });
-      }
-    });
+    // Not a `.once("exit", ...)` listener attached here: atomic mode's
+    // workers can finish and exit fast enough that the event already fired
+    // before such a listener would attach, which would then wait forever
+    // (found running this exact harness — the process went quiet and exited
+    // 0 on its own once nothing else was left to keep the event loop alive).
+    // `exitCode` is instead recorded by the listener `spawnWorker` attaches
+    // immediately on spawn, so polling it here can never miss the event.
+    await waitForExit(workers);
 
     const results = workers.map(resultFor);
     if (results.some((result) => result === undefined) || workers.some((worker) => worker.exitCode !== 0)) {
@@ -318,6 +409,7 @@ async function coordinatorMain(): Promise<number> {
     const consistentCount = accepted === recorded.length;
 
     console.log("perDay multi-process load test");
+    console.log(`  mode:            ${mode}`);
     console.log(`  processes:       ${PROCESS_COUNT}`);
     console.log(`  attempts:        ${PROCESS_COUNT * ATTEMPTS_PER_PROCESS}`);
     console.log(`  accepted:        ${accepted}`);

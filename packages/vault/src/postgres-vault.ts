@@ -21,7 +21,12 @@ import { AgentPassError } from "@agentpass/core";
 import { Pool } from "pg";
 
 import { computeHash, scaleAmount, utcDayKey, unscaleAmount } from "./internal/amount.js";
-import type { MandateVault, VaultEntry, VaultRecord } from "./vault.js";
+import type { LockedVaultLedger, MandateVault, VaultEntry, VaultLedgerEntry, VaultRecord } from "./vault.js";
+
+/** What `pool` and a checked-out `client` have in common — the only thing the query helpers below need. */
+interface Queryable {
+  query<Row extends Record<string, unknown>>(text: string, values?: readonly unknown[]): Promise<{ rows: Row[] }>;
+}
 
 export interface PostgresMandateVaultOptions {
   readonly connectionString: string;
@@ -117,48 +122,106 @@ export async function createPostgresMandateVault(options: PostgresMandateVaultOp
     if (record.entry.kind === "granted") seenIntents.add(record.entry.intentId);
   }
 
+  // The one query `spentOn` runs, against either `pool` (a plain read, no
+  // lock needed) or a `client` already holding this tenant's advisory lock
+  // (inside `atomically`) — same SQL either way, so the two never drift.
+  async function spentOnVia(queryable: Queryable, subject: string, currency: string, at: Date): Promise<string> {
+    const { rows } = await queryable.query<{ entry: VaultEntry }>(
+      `select entry from vault_records
+       where tenant_id = $1
+         and entry->>'kind' = 'granted'
+         and entry->>'subject' = $2
+         and entry->>'currency' = $3
+         and left(entry->>'at', 10) = $4`,
+      [tenantId, subject, currency, utcDayKey(at)],
+    );
+    let total = 0n;
+    for (const row of rows) {
+      if (row.entry.kind === "granted") total += scaleAmount(row.entry.amount);
+    }
+    return unscaleAmount(total);
+  }
+
+  // `hasRecorded`'s real check, against either `pool` or a locked `client`.
+  // `seenIntents` alone would only ever tell this instance about intentIds
+  // *this* process has recorded or loaded at construction — exactly the
+  // staleness `spentOn` used to have before G4, for the same reason.
+  async function hasRecordedVia(queryable: Queryable, intentId: string): Promise<boolean> {
+    if (seenIntents.has(intentId)) return true;
+    const { rows } = await queryable.query(
+      "select 1 from vault_records where tenant_id = $1 and entry->>'kind' = 'granted' and entry->>'intentId' = $2 limit 1",
+      [tenantId, intentId],
+    );
+    return rows.length > 0;
+  }
+
   /**
-   * Serialises appends to this tenant's chain across every writer connected
-   * to this Postgres — not just within this process. `seq`/`prevHash` used
-   * to come from this instance's own local `records` array (`records.length`,
-   * `records.at(-1)`), which is exactly what let two live instances of this
-   * same tenant's vault both compute `seq = 0` and collide on the table's own
-   * primary key the moment both tried to append (found writing this ticket's
-   * own test, not by inspection). `pg_advisory_xact_lock` is a Postgres-side
-   * lock keyed by `tenantId`: whichever writer — this process or another one
-   * entirely — asks for it first holds it until its transaction commits or
-   * rolls back, and every other asker (any process) blocks until then. The
-   * `seq`/`prevHash` this reads are the real, current tail of the chain,
-   * always read inside that same lock, so no other writer can move the tail
-   * out from under it between the read and the insert.
+   * The append itself, against a `client` that already holds this tenant's
+   * advisory lock — shared by `append()` below (which takes the lock itself)
+   * and `atomically()` (which already holds it for the whole critical
+   * section). `seq`/`prevHash` used to come from this instance's own local
+   * `records` array (`records.length`, `records.at(-1)`), which is exactly
+   * what let two live instances of this same tenant's vault both compute
+   * `seq = 0` and collide on the table's own primary key the moment both
+   * tried to append (found writing this ticket's own test, not by
+   * inspection). Reading the real, current tail of the chain always happens
+   * inside the lock, so no other writer can move it out from under this
+   * insert.
    */
-  async function append(entry: VaultEntry): Promise<VaultRecord> {
+  async function appendVia(client: Queryable, entry: VaultEntry): Promise<VaultRecord> {
+    const { rows: tail } = await client.query<{ seq: number; hash: string }>(
+      "select seq, hash from vault_records where tenant_id = $1 order by seq desc limit 1",
+      [tenantId],
+    );
+    const seq = (tail[0]?.seq ?? -1) + 1;
+    const prevHash = tail[0]?.hash ?? "";
+    const record: VaultRecord = { seq, prevHash, hash: computeHash(seq, prevHash, entry), entry };
+
+    await client.query(
+      "insert into vault_records (tenant_id, seq, prev_hash, hash, entry) values ($1, $2, $3, $4, $5)",
+      [tenantId, record.seq, record.prevHash, record.hash, JSON.stringify(record.entry)],
+    );
+    records.push(record);
+    return record;
+  }
+
+  /**
+   * Opens its own locked transaction and runs `work` inside it — the shape
+   * every caller but `atomically` wants (which already has one open).
+   */
+  async function withOwnLock<T>(work: (client: Queryable) => Promise<T>): Promise<T> {
     const client = await pool.connect();
     try {
       await client.query("begin");
       await client.query("select pg_advisory_xact_lock(hashtext($1)::bigint)", [tenantId]);
-
-      const { rows: tail } = await client.query<{ seq: number; hash: string }>(
-        "select seq, hash from vault_records where tenant_id = $1 order by seq desc limit 1",
-        [tenantId],
-      );
-      const seq = (tail[0]?.seq ?? -1) + 1;
-      const prevHash = tail[0]?.hash ?? "";
-      const record: VaultRecord = { seq, prevHash, hash: computeHash(seq, prevHash, entry), entry };
-
-      await client.query(
-        "insert into vault_records (tenant_id, seq, prev_hash, hash, entry) values ($1, $2, $3, $4, $5)",
-        [tenantId, record.seq, record.prevHash, record.hash, JSON.stringify(record.entry)],
-      );
+      const result = await work(client);
       await client.query("commit");
-      records.push(record);
-      return record;
+      return result;
     } catch (error) {
       await client.query("rollback").catch(() => undefined);
       throw error;
     } finally {
       client.release();
     }
+  }
+
+  async function append(entry: VaultEntry): Promise<VaultRecord> {
+    return withOwnLock((client) => appendVia(client, entry));
+  }
+
+  /** The `granted`-entry shape `atomically`'s scoped `record` writes — same fields `record()` below builds. */
+  async function recordVia(client: Queryable, entry: VaultLedgerEntry): Promise<void> {
+    if (await hasRecordedVia(client, entry.intentId)) return;
+    scaleAmount(entry.amount); // validates before anything is written, same rule as record() below
+    await appendVia(client, {
+      kind: "granted",
+      subject: entry.subject,
+      intentId: entry.intentId,
+      currency: entry.currency,
+      amount: entry.amount,
+      at: entry.at.toISOString(),
+    });
+    seenIntents.add(entry.intentId);
   }
 
   return {
@@ -170,44 +233,47 @@ export async function createPostgresMandateVault(options: PostgresMandateVaultOp
     // itself is untouched (M-10 / this ticket's own scope): only where the
     // total it is handed comes from changes.
     async spentOn(subject, currency, at) {
-      const { rows } = await pool.query<{ entry: VaultEntry }>(
-        `select entry from vault_records
-         where tenant_id = $1
-           and entry->>'kind' = 'granted'
-           and entry->>'subject' = $2
-           and entry->>'currency' = $3
-           and left(entry->>'at', 10) = $4`,
-        [tenantId, subject, currency, utcDayKey(at)],
-      );
-      let total = 0n;
-      for (const row of rows) {
-        if (row.entry.kind === "granted") total += scaleAmount(row.entry.amount);
-      }
-      return unscaleAmount(total);
+      return spentOnVia(pool, subject, currency, at);
     },
 
-    async record(entry) {
-      if (seenIntents.has(entry.intentId)) return;
-
-      // Validates and throws `InvalidAmount` before anything is written —
-      // same rule as the file backend: a rejected entry stays retryable
-      // under the same intentId, not silently and permanently dropped.
-      scaleAmount(entry.amount);
-
-      await append({
-        kind: "granted",
-        subject: entry.subject,
-        intentId: entry.intentId,
-        currency: entry.currency,
-        amount: entry.amount,
-        at: entry.at.toISOString(),
+    /**
+     * G4-followup: the read of `spentOn`, the caller's limit decision, and
+     * this `record` all happen inside one transaction holding this tenant's
+     * advisory lock — the same lock `append` already takes for the chain's
+     * own integrity, now held for the whole critical section instead of just
+     * the insert. `pnpm run loadtest:perday` is what found that `append`'s
+     * fix alone was not enough: four real, separate Node processes each read
+     * `spentOn` before any of them wrote, so all four decided "under the
+     * limit" and all four recorded — 12.00 against a 10.00 reference limit,
+     * with the chain itself intact throughout (the write collision T61 fixed
+     * stayed fixed; the decision race was a different gap, one layer up).
+     * `LocalPolicyRail.authorise()` (`apps/agent`) is the only caller.
+     */
+    // `subject` is part of the port's shape (an in-memory fallback keys its
+    // queue by it) but unused here: the chain's `seq` is one sequence per
+    // *tenant*, already serialised on `tenantId` by every write, so locking
+    // on that same key — not `subject` — is what `append`'s own lock does too.
+    async atomically(_subject, work) {
+      return withOwnLock((client) => {
+        const locked: LockedVaultLedger = {
+          spentOn: (lockedSubject, currency, at) => spentOnVia(client, lockedSubject, currency, at),
+          hasRecorded: (intentId) => hasRecordedVia(client, intentId),
+          record: (entry) => recordVia(client, entry),
+        };
+        return work(locked);
       });
+    },
 
-      seenIntents.add(entry.intentId);
+    // Dedup and the append share `recordVia`/`appendVia` with `atomically`'s
+    // scoped `record` on purpose: one caller outside a critical section
+    // (this method) and one caller already inside one (`atomically`) must
+    // not risk drifting into two different notions of "already recorded".
+    async record(entry) {
+      await withOwnLock((client) => recordVia(client, entry));
     },
 
     async hasRecorded(intentId) {
-      return seenIntents.has(intentId);
+      return hasRecordedVia(pool, intentId);
     },
 
     async recordRefusal(input, at) {

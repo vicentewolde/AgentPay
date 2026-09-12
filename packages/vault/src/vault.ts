@@ -105,6 +105,27 @@ export interface VaultVerification {
   readonly brokenAtSeq?: number;
 }
 
+/** A `record()` entry, named here so `MandateVault` and `LockedVaultLedger` can share it without importing `apps/agent`'s own type. */
+export interface VaultLedgerEntry {
+  readonly subject: string;
+  readonly intentId: string;
+  readonly currency: string;
+  readonly amount: string;
+  readonly at: Date;
+}
+
+/**
+ * The `spentOn`/`hasRecorded`/`record` trio, scoped to one `atomically`
+ * critical section — mirrors `apps/agent/src/ledger/spend-ledger.ts`'s
+ * `LockedSpendLedger` exactly, satisfied structurally like the rest of this
+ * port (see the file docstring).
+ */
+export interface LockedVaultLedger {
+  spentOn(subject: string, currency: string, at: Date): Promise<string>;
+  hasRecorded(intentId: string): Promise<boolean>;
+  record(entry: VaultLedgerEntry): Promise<void>;
+}
+
 export interface MandateVault {
   // The SpendLedger port (`apps/agent/src/ledger/spend-ledger.ts`), satisfied
   // structurally — see the file docstring.
@@ -117,6 +138,18 @@ export interface MandateVault {
     readonly at: Date;
   }): Promise<void>;
   hasRecorded(intentId: string): Promise<boolean>;
+
+  /**
+   * Closes the gap `SpendLedger.atomically` names: the read of `spentOn`, the
+   * caller's decision, and the `record()` all happen inside one Postgres
+   * transaction holding this tenant's advisory lock (the same lock `record`'s
+   * own internal append already takes), so no other process sharing this
+   * database can move the total out from under the decision. Optional on this
+   * type only because `SpendLedger.atomically` is optional; every
+   * `MandateVault` returned by this package implements it — a durable, shared
+   * vault is exactly the case that needs it.
+   */
+  atomically?<T>(subject: string, work: (locked: LockedVaultLedger) => Promise<T>): Promise<T>;
 
   /** Everything `record` is not: a refusal, kept instead of thrown away. */
   recordRefusal(input: RecordRefusalInput, at?: Date): Promise<void>;

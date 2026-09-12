@@ -20,6 +20,7 @@ import { Pool } from "pg";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { createPostgresMandateVault } from "./postgres-vault.js";
+import type { MandateVault } from "./vault.js";
 
 const ENV_PATH = fileURLToPath(new URL("../../../.env.local", import.meta.url));
 
@@ -243,6 +244,53 @@ describe("createPostgresMandateVault", () => {
       expect(fresh.list().map((r) => r.seq).sort()).toEqual([0, 1]);
       expect(fresh.verify()).toEqual({ ok: true });
       expect(await fresh.spentOn(subject, "USDC", at)).toBe("3.0000000");
+    },
+  );
+
+  it(
+    "atomically: two instances truly racing the same perDay limit never both record — G4-followup, T64/T65",
+    async () => {
+      // The exact scenario `pnpm run loadtest:perday` (T64) measured with
+      // four real, separate Node processes: `record` alone (previous test)
+      // never crashes under concurrency, but nothing stopped two callers
+      // from both reading `spentOn` before either wrote, both deciding
+      // "under the limit", and both recording — exceeding it. `atomically`
+      // is what closes that: the read, the decision, and the write all run
+      // inside one Postgres transaction holding this tenant's advisory lock,
+      // so the second caller's read cannot happen until the first's write
+      // has committed.
+      const tenantId = freshTenantId();
+      const at = new Date("2026-09-09T12:00:00.000Z");
+      const subject = "did:stellar:testnet:GABC";
+      const perDayScaled = 60_000_000n; // 6.00, at the vault's own 7-decimal scale
+      const attemptAmount = "5.00"; // two of these together (10.00) exceed 6.00
+
+      function parseScaled(amount: string): bigint {
+        const [whole, fraction = ""] = amount.split(".");
+        return BigInt(whole ?? "0") * 10_000_000n + BigInt(fraction.padEnd(7, "0"));
+      }
+
+      async function attempt(vault: MandateVault, intentId: string): Promise<boolean> {
+        const atomically = vault.atomically;
+        if (atomically === undefined) throw new Error("createPostgresMandateVault must implement atomically");
+        return atomically(subject, async (locked) => {
+          const spentToday = await locked.spentOn(subject, "USDC", at);
+          const wouldTotal = parseScaled(spentToday) + parseScaled(attemptAmount);
+          if (wouldTotal > perDayScaled) return false;
+          await locked.record({ subject, intentId, currency: "USDC", amount: attemptAmount, at });
+          return true;
+        });
+      }
+
+      const a = await createPostgresMandateVault({ connectionString, tenantId });
+      const b = await createPostgresMandateVault({ connectionString, tenantId });
+      const [acceptedA, acceptedB] = await Promise.all([attempt(a, "a1"), attempt(b, "b1")]);
+
+      expect([acceptedA, acceptedB].filter(Boolean)).toHaveLength(1);
+      const fresh = await createPostgresMandateVault({ connectionString, tenantId });
+      expect(fresh.list().length).toBe(1);
+      expect(await fresh.spentOn(subject, "USDC", at)).toBe("5.0000000");
+      expect(fresh.verify()).toEqual({ ok: true });
     },
   );
 

@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T62/T63 (F8, CA de Postgres y logging seguro, PR #19 de Codex) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T66 (F8, `atomically()` cierra la carrera de decisión de `perDay` entre procesos) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -54,7 +54,16 @@ software, al superar su `per_day` (T58). El camino clásico sin wallet
 sigue exactamente igual que antes, pagando del rail compartido. Y F6
 completa sus tres entregables: `pnpm run check:rail-balances` (T60) lee
 el saldo USDC real de cada rail de tenant, para detectar uno quedándose
-sin fondos antes de que una compra falle contra él.
+sin fondos antes de que una compra falle contra él. Y F8
+(hardening) encontró y cerró un hueco real en el enforcement de
+`perDay`: una prueba de carga con cuatro procesos de Node de verdad
+(T64) mostró que, aunque T61 arregló la escritura, la *decisión* de si
+un gasto entra en el límite diario todavía corría por una cola en
+memoria que un segundo proceso no podía ver — así que el límite se
+podía exceder sin que nada se rompiera. Ahora esa decisión también pasa
+por Postgres, atada al mismo lock que ya protegía la escritura (T66),
+verificado con la misma prueba de carga repitiendo la corrida y
+manteniéndose siempre dentro del límite.
 
 ### Progreso
 
@@ -86,6 +95,9 @@ sin fondos antes de que una compra falle contra él.
 | — | Rename a AgentPey (ejecuta `P-11`): scope de npm, contenido y docs vivos, repo de GitHub. Render, pendiente del usuario | ✅ cerrado 2026-09-11 (sin numerar) |
 | — | Migración del rail compartido al contrato de T57 (`withdraw`/`set_owner`) | ✅ cerrado 2026-09-12 (sin numerar) |
 | T61 | F8: `spentOn` lee Postgres en vivo (no un caché), `append` serializa `seq` con un advisory lock — `perDay` aguanta dos procesos de verdad | ✅ cerrado 2026-09-12 |
+| T62, T63 | F8: verificación de CA de Postgres opcional, logging estructurado sin filtrar datos sensibles | ✅ cerrados 2026-09-12 (Codex, PR #19) |
+| T64 | F8: `scripts/loadtest-perday.ts` — cuatro procesos de Node reales compitiendo por `perDay`; encontró que `perDay` se podía exceder pese a T61 | ✅ cerrado 2026-09-12 (Codex, PR #20) |
+| T66 | F8: `ledger.atomically()` cierra la carrera de decisión que T64 encontró — `perDay` aguanta procesos separados de verdad, no solo la escritura | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -1974,3 +1986,104 @@ T61 — ahora con algo real que medir), T65 (revisión final de F8, corrida
 personal de T64). Configurar `POSTGRES_CA_CERT` en Render es opcional y
 queda para cuando el usuario lo pida — no es parte del criterio de
 "listo" de este hito.
+
+---
+
+## T64 y T66 · La prueba de carga encuentra un hueco real en `perDay`, y se cierra — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** T61 arregló que dos
+procesos pudieran *escribir* al mismo tiempo sin romper la base de
+datos. Lo que faltaba probar era si, entre los dos, podían dejar pasar
+más gasto del permitido — y sí podían: una prueba con cuatro procesos
+de Node de verdad, cada uno con su propia conexión a la base de datos,
+mostró que el límite diario (`perDay`) se podía superar sin que nada se
+rompiera ni se cayera. Ahora esa decisión —¿este gasto entra en el
+límite de hoy?— también pasa por la base de datos de forma protegida,
+igual que la escritura, y la misma prueba repetida se mantiene siempre
+dentro del límite.
+
+**T64 (Codex, PR #20): el hallazgo.** `scripts/loadtest-perday.ts`
+(`pnpm run loadtest:perday`) lanza cuatro procesos de Node reales y
+separados que compiten por el mismo tenant/sujeto/día contra la vault
+real. Corrida real, pegada tal cual salió en la descripción del PR, sin
+ocultar el resultado:
+
+```
+processes: 4    attempts: 12    accepted: 4    rejected: 8
+recorded total: 12.0000000 USDC   reference limit: 10.0000000 USDC
+within limit: NO      chain intact: yes      worker counts: consistent
+```
+
+El límite de 10.00 se excedió — 12.00 grabados — con la cadena de
+hashes íntegra y ningún proceso caído. Codex identificó correctamente
+que esto era un hueco real de T61, no un fallo del harness, y —
+siguiendo la instrucción explícita del prompt de delegación para este
+caso— no avanzó a T65. Revisado en un worktree aislado
+(`/tmp/agentpay-pr20-review`, descartado al terminar):
+`typecheck`/`build`/`test` limpios, sin filas `loadtest-*` sobrantes, y
+la corrida repetida de forma independiente dio exactamente el mismo
+resultado. PR #20 mergeado.
+
+**T66 (mía — enforcement de `perDay`, no delegable): el arreglo.** La
+causa: T61 cerró la carrera de *escritura* dentro de
+`postgres-vault.ts` (`C-67`), pero la decisión de negocio vive un nivel
+más arriba, en `createLocalPolicyRail` (`apps/agent`) — una cola de
+promesas en memoria, por sujeto, construida en T19 y con el límite ya
+anotado en su propio comentario desde entonces ("esto tiene que
+volverse una transacción de base de datos... `M-15`"). F8/T61 nunca
+tocó esa función.
+
+`SpendLedger` y `MandateVault` ganan un método **opcional**,
+`atomically(subject, work)`: `work` recibe su propia terna
+`spentOn`/`hasRecorded`/`record`, con la garantía de que las tres
+corren en una sola sección crítica. `createLocalPolicyRail` lo prefiere
+cuando el ledger lo ofrece, y cae de vuelta a la cola en memoria
+original cuando no — la vault en memoria y la de archivo, que no
+pueden sobrevivir a más de un proceso de todos modos, no ganaron nada
+nuevo ni perdieron nada. Solo `createPostgresMandateVault` implementa
+la versión real, reutilizando el mismo `pg_advisory_xact_lock` que
+`append()` ya tomaba, ahora sosteniéndolo durante toda la sección
+crítica en vez de solo durante la escritura. De paso se cerró un hueco
+relacionado que `C-67` había dejado anotado a propósito como fuera de
+alcance: `hasRecorded` (deduplicación de compras repetidas) tenía la
+misma ceguera entre procesos que `spentOn` tenía antes de T61.
+
+**Verificado en cuatro niveles:**
+
+1. Nuevo test de integración contra Postgres real: dos instancias,
+   `Promise.all`, compitiendo de verdad por un límite — nunca ambas
+   graban.
+2. Los 29 tests existentes de concurrencia de `policy-rail.test.ts`
+   pasan sin ningún cambio (el fallback preserva el comportamiento
+   exacto de antes).
+3. Suite completa del monorepo sin regresiones.
+4. El mismo harness de T64, con un modo nuevo (`--atomic`) que hace que
+   cada worker use `vault.atomically()` en vez de llamadas sueltas.
+   Tres corridas reales, mismo resultado repetido:
+
+   ```
+   processes: 4    attempts: 12    accepted: 3    rejected: 9
+   recorded total: 9.0000000 USDC   reference limit: 10.0000000 USDC
+   within limit: yes      chain intact: yes      worker counts: consistent
+   ```
+
+   El modo original (`racy`, sigue siendo el default) se dejó intacto
+   como prueba de regresión — sigue reproduciendo el hallazgo de T64
+   exactamente igual.
+
+**Un bug de la propia herramienta, no del arreglo.** Construyendo el
+modo `--atomic` del harness, la primera versión se colgó y el proceso
+completo terminó saliendo solo, en silencio, sin imprimir nada: al no
+tener el intercambio de mensajes que mantenía a los workers al mismo
+ritmo entre rondas, uno rápido podía terminar y salir del todo antes de
+que el coordinador alcanzara a poner un listener sobre su salida — y
+Node no entrega un evento a un listener que llegó tarde. Arreglado
+consultando el código de salida ya grabado por un listener puesto al
+lanzar cada proceso, en vez de escuchar el evento después. Encontrado y
+arreglado antes de tomar ninguna corrida como evidencia.
+
+Detalle técnico completo, incluidas las alternativas descartadas, en
+`docs/fase-6-agentguard-comercializacion/DECISIONES.md` → `C-68`.
+
+Pendiente: T65 — revisión final de F8 completo (T61 a T66 juntos, sin
+nada suelto) y marcar F8 completa en `PLATAFORMA-PARTNERS.md`.

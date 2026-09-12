@@ -2135,3 +2135,148 @@ Documentación tocada: `PLATAFORMA-PARTNERS.md` (fila `T61` cerrada),
 `packages/vault/src/postgres-vault.integration.test.ts` (+3 tests).
 
 ---
+
+### C-68 · T64/T66: `atomically()` cierra la carrera de decisión que T61 dejó abierta — `perDay` aguanta procesos separados de verdad · `Vigente`
+**Fecha:** 2026-09-12
+
+T64 (Codex, PR #20) construyó `scripts/loadtest-perday.ts`: cuatro
+procesos de Node reales y separados, cada uno con su propia conexión a
+Postgres, compitiendo por el mismo `tenantId`/`subject`/día contra la
+vault real. Corrida real, pegada tal cual salió, sin ocultar el
+resultado (como el prompt de delegación pedía explícitamente si esto
+pasaba):
+
+```
+processes: 4    attempts: 12    accepted: 4    rejected: 8
+recorded total: 12.0000000 USDC   reference limit: 10.0000000 USDC
+within limit: NO      chain intact: yes      worker counts: consistent
+```
+
+El `perDay` de referencia se excedió — 12.00 contra 10.00 — con la
+cadena de hashes íntegra y ningún proceso caído. Codex identificó
+correctamente que esto era evidencia de un hueco en T61, no un fallo
+del harness, y no avanzó a T65 como el propio prompt de delegación le
+pedía en ese caso exacto.
+
+**Revisado y confirmado de forma independiente**, en un worktree
+aislado (`/tmp/agentpay-pr20-review`, descartado al terminar):
+`typecheck`/`build`/`test` limpios, sin filas `loadtest-*` sobrantes al
+terminar (el harness limpia las suyas), y la misma corrida repetida
+contra Postgres real reprodujo exactamente el mismo resultado —
+`12.0000000` contra el límite de `10.0000000`. PR #20 mergeado
+(`gh pr merge --merge`).
+
+**La causa raíz, no solo el síntoma.** `C-67` (T61) cerró la carrera de
+**escritura**: `append()` ahora sirve `seq`/`prevHash` reales dentro de
+un `pg_advisory_xact_lock` por `tenantId`, así que dos procesos nunca
+más chocan al insertar. Pero la decisión de negocio —¿este gasto entra
+en el `perDay`?— vive un nivel más arriba, en
+`apps/agent/src/policy/policy-rail.ts`, dentro de `createLocalPolicyRail`.
+Esa función serializa `authorise()` con una cola de promesas **en
+memoria, por sujeto** — construida en T19 (`M-15`), con el límite ya
+escrito en su propio comentario desde entonces: "la serialización es
+una cadena de promesas, así que sostiene dentro de este proceso y en
+ningún otro lado... esto tiene que volverse una transacción de base de
+datos o un lock distribuido". F8/T61 nunca tocó esa función — arregló
+un bug real y distinto (la colisión de `seq`), no el que `M-15` ya
+había anotado como pendiente. El harness de T64, que habla directo con
+la vault (como pedía su propio alcance, sin levantar `apps/web`), midió
+exactamente ese gap: cuatro procesos leyendo `spentOn()` antes de que
+ninguno escribiera, los cuatro decidiendo "dentro del límite", los
+cuatro grabando.
+
+**La corrección (T66, mía — enforcement de `perDay`, no delegable):**
+`SpendLedger` (`apps/agent/src/ledger/spend-ledger.ts`) y `MandateVault`
+(`packages/vault/src/vault.ts`) ganan un método nuevo, **opcional**:
+`atomically(subject, work)`, donde `work` recibe su propia terna
+`spentOn`/`hasRecorded`/`record` — ya no la del ledger completo — con
+la garantía de que las tres corren dentro de una sola sección crítica.
+`createLocalPolicyRail` ahora prefiere `ledger.atomically` cuando existe
+y cae de vuelta a la cola de promesas original cuando no
+(`apps/agent/src/policy/policy-rail.ts`, `criticalSection`) — la vault
+en memoria y la de archivo no ganaron nada nuevo: ninguna puede
+sobrevivir a más de un proceso de todos modos, así que la cola en
+memoria sigue siendo exactamente lo que ya eran. Solo
+`createPostgresMandateVault` implementa la versión real: abre una
+transacción, toma el mismo `pg_advisory_xact_lock(tenantId)` que
+`append()` ya usaba, y dentro de esa transacción entrega versiones de
+`spentOn`/`hasRecorded`/`record` atadas al mismo cliente — la lectura,
+la decisión del llamador, y la escritura ya no pueden intercalarse con
+las de otro proceso, porque el segundo bloquea en el lock hasta que el
+primero hace `commit`.
+
+**Un hallazgo lateral, cerrado con el mismo lock:** `hasRecorded`
+(deduplicación por `intentId`) tenía el mismo tipo de hueco que
+`spentOn` tenía antes de `C-67` — `seenIntents` se construye una sola
+vez, al crear la instancia, así que un `intentId` grabado por otro
+proceso después de ese momento era invisible. `C-67` lo dejó anotado
+explícitamente como fuera de su alcance. La versión con lock de
+`hasRecorded` ahora consulta Postgres en vivo (igual que `spentOn`), y
+de paso el `hasRecorded`/`record` de fuera de una sección crítica
+también pasaron a usar esa misma consulta en vivo en vez de
+`seenIntents` — mismo patrón que `G4`, mismo arreglo.
+
+**Verificado en cuatro niveles, no solo con un test unitario:**
+
+1. Nuevo test de integración contra Postgres real
+   (`postgres-vault.integration.test.ts`): dos instancias, `Promise.all`,
+   compitiendo de verdad por un límite de 6.00 con intentos de 5.00 cada
+   una — nunca ambas graban, la cadena queda íntegra.
+2. Los 29 tests existentes de `policy-rail.test.ts` (incluidos los de
+   concurrencia de `M-15`) pasan sin ningún cambio — el diseño con
+   fallback preserva el comportamiento exacto de la cola en memoria
+   cuando el ledger no ofrece `atomically`.
+3. Suite completa del monorepo (`typecheck`/`build`/`test`) sin
+   regresiones.
+4. **El mismo harness de T64, con un modo nuevo.**
+   `scripts/loadtest-perday.ts` ahora acepta `--atomic`: en vez de que
+   cada worker llame `spentOn`/`record` sueltos, llama
+   `vault.atomically()`. Tres corridas reales, procesos separados de
+   verdad, mismo resultado repetido:
+
+   ```
+   processes: 4    attempts: 12    accepted: 3    rejected: 9
+   recorded total: 9.0000000 USDC   reference limit: 10.0000000 USDC
+   within limit: yes      chain intact: yes      worker counts: consistent
+   ```
+
+   El modo original (`racy`, default) se dejó intacto y sigue
+   reproduciendo el hallazgo de T64 sin cambios — sirve como prueba de
+   regresión de que el problema seguiría ahí si `atomically` se dejara
+   de usar.
+
+**Un bug de la propia herramienta, encontrado construyendo la
+verificación — no del fix.** El primer intento de `--atomic` se colgó y
+el proceso terminó saliendo solo, en silencio, con código 0 y sin
+imprimir nada: el modo atómico no tiene el intercambio
+decisión/commit que mantenía a los workers al mismo ritmo entre rondas,
+así que un worker rápido podía terminar sus tres rondas y salir del
+todo antes de que el coordinador llegara a registrar un listener de
+`"exit"` sobre ese proceso — y Node solo entrega un evento a los
+listeners que ya estaban puestos cuando el evento ocurrió. Sin nada más
+manteniendo vivo el bucle de eventos, el proceso completo se apagó solo,
+abandonando a mitad de camino la función que todavía esperaba ese
+listener. Arreglado consultando `exitCode` — que sí queda grabado de
+forma confiable por un listener puesto al lanzar cada proceso — en vez
+de intentar escuchar el evento tarde. Encontrado y arreglado antes de
+tomar ninguna corrida como evidencia válida.
+
+**Alternativa descartada:** hacer `atomically` obligatorio en el puerto
+`SpendLedger`, forzando a la vault en memoria y a la de archivo a
+implementarlo también. Se descartó: ninguna de las dos puede ofrecer
+una garantía real entre procesos (no tienen almacenamiento compartido),
+así que forzar una implementación ahí sería una promesa falsa —
+opcional-con-fallback deja explícito que solo un backend compartido
+(Postgres) puede cumplir la garantía fuerte, sin tocar ningún test
+existente que construye un `SpendLedger` a mano.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (fila `T64` con la
+corrida real, fila `T66` nueva), `BITACORA.md`. Archivos tocados:
+`apps/agent/src/ledger/spend-ledger.ts`,
+`apps/agent/src/policy/policy-rail.ts`, `packages/vault/src/vault.ts`,
+`packages/vault/src/postgres-vault.ts`,
+`packages/vault/src/postgres-vault.integration.test.ts` (+1 test),
+`scripts/loadtest-perday.ts` (modo `--atomic` + arreglo de
+`waitForExit`).
+
+---
