@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T65 (revisión final, **F8 completa**) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T68 (`G12`: `PendingWriteStore` sobre Postgres en `apps/web`) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -2200,4 +2200,59 @@ reconstruye `agentpass` en cada request en vez de mantener la misma
 instancia viva entre pasos), T69 (los otros stores en memoria del
 flujo de wallet — desafíos, sesiones pendientes — también a Postgres).
 Plan completo de los tres hitos en
+`/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.
+
+---
+
+## T68 · `PendingWriteStore` llega a `apps/web`, sobre Postgres — `G12`, segundo hito — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** T67 le dio a la pieza
+que habla con el contrato la *capacidad* de no depender de la misma
+instancia en memoria. Este hito la usa de verdad: ahora, cuando una
+wallet firma su consentimiento y después firma el anclaje —dos pasos
+separados, con la posibilidad real de que caigan en dos instancias
+distintas de `apps/web`— el servidor guarda lo necesario en Postgres
+en vez de en la memoria de un solo proceso, y arma una pieza nueva
+para hablar con el contrato en cada uno de esos dos pasos en lugar de
+guardar la misma de antes.
+
+**Evidencia técnica** (`C-70`):
+
+- Módulo nuevo `apps/web/src/pending-write-store.ts`, mismo patrón que
+  la vault de Postgres de la Fase 5: una tabla chica, la misma
+  configuración de seguridad de conexión que ya se usa en el resto del
+  proyecto, y una sola sentencia SQL para "leer y borrar a la vez" —
+  para que dos intentos de terminar el mismo anclaje al mismo tiempo
+  no puedan los dos creer que les tocó a ellos.
+- Los cuatro lugares del código que antes reutilizaban la misma pieza
+  guardada ahora arman una nueva en cada pedido, apoyada en esa tabla.
+- **Verificado con el servidor real corriendo, no solo con tests**: un
+  script hizo de wallet de verdad —una cuenta nueva, fondeada en
+  testnet, firmando exactamente como lo haría la extensión del
+  navegador— y completó las cinco llamadas del flujo completo contra
+  el servidor real: conectar, empezar sesión, firmar el consentimiento,
+  firmar el anclaje. Terminó con un Mandato anclado de verdad y
+  confirmado activo. Sin nada sobrante en la base al terminar.
+- De paso, revisando el propio arnés de pruebas, encontré que la suite
+  rápida de `apps/web` (la que corre sin necesitar la base de datos)
+  no tenía la exclusión que el resto del proyecto sí tiene para sus
+  pruebas contra Postgres real — sin arreglarlo, agregar la primera
+  prueba de este tipo en `apps/web` habría hecho que la suite rápida
+  dejara de ser rápida (y de funcionar sin la base). Corregido.
+
+Por qué: seguía el plan aprobado en el hito anterior — con `Registry`
+ya no atado a una instancia, faltaba conectar esa capacidad a algo que
+sobreviva de verdad entre procesos.
+
+Documentación tocada: `DECISIONES.md` (`C-70`), este archivo. Archivos
+tocados: `apps/web/src/pending-write-store.ts` (nuevo),
+`apps/web/src/pending-write-store.integration.test.ts` (nuevo),
+`apps/web/src/server.ts`, `apps/web/vitest.config.ts`,
+`apps/web/vitest.integration.config.ts` (nuevo),
+`apps/web/package.json`.
+
+Pendiente: T69 — los otros cuatro stores en memoria del flujo de
+wallet (desafíos, sesiones pendientes de wallet y de consentimiento
+hospedado, dirección de wallet por sesión) también a Postgres. Plan
+completo en
 `/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.

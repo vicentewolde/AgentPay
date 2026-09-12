@@ -3824,3 +3824,45 @@ pushear. T68 (`apps/web`: `PendingWriteStore` sobre Postgres,
 `agentpass` reconstruido por request) y T69 (los otros stores del
 flujo de wallet a Postgres) siguen, uno por uno, con su propia
 revisión antes de cada uno.
+
+---
+
+## 2026-09-12 (5) — cc/t68-pending-write-postgres
+
+Agente: Claude Code
+
+Qué: T68 (segundo hito de G12) — nuevo módulo
+`apps/web/src/pending-write-store.ts`, un `PendingWriteStore` (T67)
+sobre Postgres, mismo patrón que la vault de la Fase 5. Los cuatro
+puntos del flujo de wallet que leían `pending.agentpass`
+(`/api/session/wallet-consent`, `/api/session/wallet-anchor`,
+`/api/consent/{id}/wallet-consent`, `/api/consent/{id}/wallet-anchor`)
+ahora construyen un `AgentPass` nuevo por request vía
+`createWalletAgentPass(env)`. `agentpass` salió de
+`PendingWalletSession`/`PendingConsentSession` — ya nadie lo lee de
+ahí.
+
+Verificado en tres niveles: 4 tests de integración nuevos contra
+Postgres real (guardar en una instancia del store, leer en otra),
+suite completa del monorepo sin regresiones, y una corrida real de
+punta a punta contra el servidor levantado de verdad — un script
+temporal (borrado después) hizo de wallet real (cuenta fondeada por
+Friendbot, firmando SEP-0053 y la transacción de anclaje como lo
+haría Freighter) y completó las cinco llamadas HTTP del flujo
+completo, terminando con un Mandato anclado en testnet real y
+`agentStatus: "Active"`.
+
+Encontré y arreglé, de paso, un hallazgo no relacionado con G12: la
+suite rápida de `apps/web` (`pnpm test`) no tenía el `exclude` de
+`*.integration.test.ts` que `packages/vault`/`apps/status-dashboard`
+sí tienen — sin arreglarlo, el primer test de integración de
+`apps/web` habría entrado en la corrida rápida y roto cualquier
+entorno sin `DATABASE_URL`.
+
+Por qué: seguía el plan aprobado — T67 le dio a `Registry` la
+capacidad de no depender de la misma instancia; T68 la conecta a algo
+que sobrevive de verdad entre procesos.
+
+Pendiente: mergear `cc/t68-pending-write-postgres` a `main` y
+pushear. T69 (los otros cuatro stores en memoria del flujo de wallet a
+Postgres) sigue, con su propia revisión antes de cerrar.

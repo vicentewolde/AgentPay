@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx src/server.ts",
     "start": "tsx src/server.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@agentpass/core": "workspace:*",
@@ -17,6 +18,10 @@
     "@agentpey/partner-api": "workspace:*",
     "@agentpey/tenancy": "workspace:*",
     "@agentpey/vault": "workspace:*",
-    "@stellar/stellar-sdk": "^17.0.1"
+    "@stellar/stellar-sdk": "^17.0.1",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.0"
   }
 }

@@ -2389,3 +2389,87 @@ nada secreto que perder). Plan completo en
 `/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.
 
 ---
+
+### C-70 · T68: el `PendingWriteStore` de T67 llega a `apps/web`, sobre Postgres — `G12`, segundo hito · `Vigente`
+**Fecha:** 2026-09-12
+
+T67 (`C-69`) le dio a `Registry` (`packages/sdk`) un puerto opcional
+para no depender de la misma instancia entre `prepareAnchor`/
+`prepareRevoke` y `submitSigned`. Este hito lo conecta de verdad en
+`apps/web`: una implementación de ese puerto sobre Postgres, y los
+cuatro puntos del flujo de wallet que antes leían `pending.agentpass`
+ahora construyen un `AgentPass` nuevo en cada request.
+
+**El módulo nuevo**, `apps/web/src/pending-write-store.ts`: mismo
+patrón que `@agentpey/vault`'s `createPostgresMandateVault` — un
+`Pool`, la misma postura de TLS que T62 (`POSTGRES_CA_CERT` opcional),
+una tabla (`sdk_pending_writes`), errores logueados con `logError`
+(T63) y relanzados como `ConfigError` tipado. `take` es un único
+`delete ... returning`, no un `select` seguido de un `delete`: dos
+llamadas a `submitSigned` con el mismo `requestId` al mismo tiempo no
+deben poder leer la misma fila las dos — la propia sentencia SQL es la
+garantía de un solo uso, no algo que un llamador tenga que coordinar.
+
+**El cableado en `server.ts`.** `createWalletAgentPass(env)`, una
+función nueva, construye un `AgentPass` fresco con el store de
+Postgres inyectado — usada en los cuatro lugares que antes leían
+`pending.agentpass`: `/api/session/wallet-consent`,
+`/api/session/wallet-anchor`, `/api/consent/{id}/wallet-consent`,
+`/api/consent/{id}/wallet-anchor`. Como ningún llamador vuelve a leer
+`agentpass` de la sesión pendiente, se sacó el campo de
+`PendingWalletSession`/`PendingConsentSession` — no quedó ahí sin usar,
+esperando a T69.
+
+**Verificado en tres niveles, el último contra el servidor real:**
+1. Cuatro tests de integración nuevos contra Postgres real
+   (`pending-write-store.integration.test.ts`): guardar desde una
+   instancia del store, leer desde **otra instancia distinta** — la
+   misma prueba que T67 hizo a nivel `Registry`, ahora a nivel de la
+   implementación real que `apps/web` usa.
+2. Suite completa del monorepo sin regresiones (112 tests de
+   `apps/web`, sin cambios de comportamiento en ningún otro paquete).
+3. **Corrida real de punta a punta contra el servidor real.** Un
+   script temporal (borrado después, mismo criterio que
+   `t22-fee-probe.ts`) hizo de wallet de verdad — Keypair generado,
+   fondeado por Friendbot, firmando el desafío SEP-0053 y la
+   transacción de anclaje exactamente como lo haría Freighter — y
+   recorrió las cinco llamadas HTTP reales del flujo completo:
+   `/api/wallet/challenge` → `/api/wallet/verify` →
+   `/api/session/start` → `/api/session/wallet-consent` →
+   `/api/session/wallet-anchor`. Terminó con un Mandato anclado de
+   verdad en testnet, `agentStatus: "Active"`. Confirmado también que
+   la fila del `PendingWriteStore` se borró sola al consumirse — cero
+   filas sobrantes en Postgres al terminar.
+
+**Un hallazgo real, no relacionado con G12, encontrado revisando el
+propio arnés de verificación.** `apps/web/vitest.config.ts` (la suite
+"offline", `pnpm test`) no tenía el `exclude` de
+`src/**/*.integration.test.ts` que `packages/vault` y
+`apps/status-dashboard` sí tienen — así que al agregar el primer test
+de integración de `apps/web`, `pnpm test` empezó a correrlo también, y
+habría fallado en cualquier entorno sin `DATABASE_URL` (por ejemplo,
+CI, si alguna vez existe). Corregido agregando el mismo `exclude` que
+ya usan los otros dos paquetes — no era parte del alcance de T68, pero
+apareció mientras se verificaba, y dejarlo así habría sido un problema
+real para la próxima persona que corriera `pnpm test` sin `.env.local`.
+
+**Qué NO cambió, a propósito.** Este hito no toca todavía
+`walletChallenges`/`pendingWalletSessions`/`pendingConsentSessions`/
+`walletAddressBySession` — esos cuatro siguen en memoria, en
+`ExpiringStore`s de proceso, exactamente como antes. Eso es T69: con
+`agentpass` ya fuera de la ecuación, lo único que falta es que esos
+datos (ya confirmado que ninguno es secreto — `C-69`) crucen también a
+Postgres.
+
+Documentación tocada: `BITACORA.md` (nuevo hito). Archivos tocados:
+`apps/web/src/pending-write-store.ts` (nuevo),
+`apps/web/src/pending-write-store.integration.test.ts` (nuevo, 4
+tests), `apps/web/src/server.ts`, `apps/web/vitest.config.ts` (fix del
+`exclude`), `apps/web/vitest.integration.config.ts` (nuevo),
+`apps/web/package.json` (`pg`/`@types/pg`, script `test:integration`).
+
+Pendiente: T69 — los otros cuatro stores en memoria del flujo de
+wallet, a Postgres. Plan completo en
+`/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.
+
+---

@@ -42,7 +42,7 @@ import {
   stellarAddressToDid,
   verifyStellarMessage,
 } from "@agentpass/core";
-import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
+import { createAgentPass, type AgentPass, type CredStatus, type PendingWriteStore } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 import { createDirectory, type ConsentSessionRecord, type Directory, type MandateRecord } from "@agentpey/directory";
@@ -81,6 +81,7 @@ import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
 import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
 import { logError } from "./logging.js";
 import { routePartnerRequest } from "./partner-routes.js";
+import { createPostgresPendingWriteStore } from "./pending-write-store.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
 import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
@@ -201,7 +202,6 @@ const walletAddressBySession = new Map<string, string>();
  * request/response — the browser has to be asked, twice).
  */
 interface PendingWalletSession {
-  readonly agentpass: AgentPass;
   readonly issuedCredentialJws: string;
   readonly credentialHash: string;
   /** The credential's own anchor transaction (`IssuedCredential.transactionHash`) — needed to persist it (T39). */
@@ -244,7 +244,6 @@ const pendingWalletSessions = createExpiringStore<PendingWalletSession>(PENDING_
  * site.
  */
 interface PendingConsentSession {
-  readonly agentpass: AgentPass;
   readonly issuedCredentialJws: string;
   readonly credentialHash: string;
   readonly credentialAnchorTx: string;
@@ -373,6 +372,37 @@ let directoryPromise: Promise<Directory> | undefined;
 function getDirectory(env: ReadonlyMap<string, string>): Promise<Directory> {
   directoryPromise ??= createDirectory({ connectionString: requireEnv(env, "DATABASE_URL") });
   return directoryPromise;
+}
+
+/**
+ * Same memoised-pool shape as `getDirectory` — one `Pool` per process,
+ * reused across requests. Unlike `agentpass` itself (rebuilt per request,
+ * see below), this is what actually needs to persist: it is the shared
+ * storage that lets a `prepareAnchor`/`prepareRevoke` on one process finish
+ * with `submitSigned` on another (T67/T68, G12).
+ */
+let pendingWriteStorePromise: Promise<PendingWriteStore> | undefined;
+function getPendingWriteStore(env: ReadonlyMap<string, string>): Promise<PendingWriteStore> {
+  pendingWriteStorePromise ??= createPostgresPendingWriteStore({ connectionString: requireEnv(env, "DATABASE_URL") });
+  return pendingWriteStorePromise;
+}
+
+/**
+ * A fresh `AgentPass` for the wallet two-phase write (`prepareAnchor`/
+ * `prepareRevoke`/`submitSigned`) — deliberately not the same instance
+ * `startSession`/`startConsentSession` built when the flow began. G12: the
+ * old code kept that original instance alive in `PendingWalletSession`/
+ * `PendingConsentSession` for exactly this reason, which is what tied the
+ * whole flow to one process. With a shared `PendingWriteStore` behind it,
+ * any instance built from the same config can finish what another started.
+ */
+async function createWalletAgentPass(env: ReadonlyMap<string, string>): Promise<AgentPass> {
+  const contractId = requireEnv(env, "AGENT_REGISTRY_CONTRACT_ID");
+  const pendingWriteStore = await getPendingWriteStore(env);
+  return createAgentPass(
+    { contractId, rpcUrl: TESTNET.rpcUrl, networkPassphrase: TESTNET.passphrase, network: TESTNET.network },
+    { pendingWriteStore },
+  );
 }
 
 interface FinishSessionParams {
@@ -597,7 +627,6 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
 
     pendingWalletSessions.set(sessionId, {
-      agentpass,
       issuedCredentialJws: issued.jws,
       credentialHash: issued.hash,
       credentialAnchorTx: issued.transactionHash,
@@ -745,7 +774,6 @@ async function startConsentSession(consentSessionId: string): Promise<StartConse
   await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
 
   pendingConsentSessions.set(consentSessionId, {
-    agentpass,
     issuedCredentialJws: issued.jws,
     credentialHash: issued.hash,
     credentialAnchorTx: issued.transactionHash,
@@ -1284,7 +1312,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const prepared = await prepareWalletAnchor(pending.agentpass, {
+      const env = await readEnv();
+      const agentpass = await createWalletAgentPass(env);
+      const prepared = await prepareWalletAnchor(agentpass, {
         mandate: pending.mandate,
         signature,
       });
@@ -1316,8 +1346,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const transactionHash = await pending.agentpass.submitSigned(requestId, signedXdr);
       const env = await readEnv();
+      const agentpass = await createWalletAgentPass(env);
+      const transactionHash = await agentpass.submitSigned(requestId, signedXdr);
 
       // T39: persist now that both documents are genuinely anchored — before
       // `finishSession`, so an unrelated failure wiring the live session
@@ -1363,7 +1394,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const session = await finishSession({
         sessionId,
         env,
-        agentpass: pending.agentpass,
+        agentpass,
         agentKeypair: pending.agentKeypair,
         paymentSecret: pending.paymentSecret,
         demoScope: pending.demoScope,
@@ -1521,7 +1552,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const prepared = await prepareWalletAnchor(pending.agentpass, { mandate: pending.mandate, signature });
+      const env = await readEnv();
+      const agentpass = await createWalletAgentPass(env);
+      const prepared = await prepareWalletAnchor(agentpass, { mandate: pending.mandate, signature });
       pending.signature = signature;
       pending.requestId = prepared.requestId;
       sendJson(res, 200, { ok: true, requestId: prepared.requestId, xdr: prepared.xdr });
@@ -1551,8 +1584,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const transactionHash = await pending.agentpass.submitSigned(requestId, signedXdr);
       const env = await readEnv();
+      const agentpass = await createWalletAgentPass(env);
+      const transactionHash = await agentpass.submitSigned(requestId, signedXdr);
       const directory = await getDirectory(env);
       const masterMnemonic = requireEnv(env, "MASTER_MNEMONIC");
       // Idempotent re-resolve, same pattern `/api/session/wallet-anchor`
