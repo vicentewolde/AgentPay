@@ -4218,3 +4218,64 @@ límites del rail y los precios de SignalDesk juntos (hoy `per_tx` 0.002 /
 `per_day` 0.01 hacen inusable 1 USDC por tenant — propuesta en
 `PILOTO-F9.md` § 12.2). Siguiente hito: **T75**, cablear `POST /v1/purchases`
 a este módulo con persistencia de la compra e idempotencia real.
+
+---
+
+## 2026-09-12 (12) — main / cc/t75-purchases-route
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t74-tenant-purchase` a `main` (fast-forward) con
+confirmación del usuario. Antes, se resolvió la duda abierta de T74: la
+`AGENT_SECRET_KEY` del panel de Render **es la misma cuenta** que se fondeó
+(`GAK6E5E7L63ZY…`), que ahora tiene 39.484 USDC testnet. No hubo que mover
+fondos ni cambiar variables. Queda anotado que esa clave secreta pasó por el
+chat: es testnet y no controla nada con valor, no se rota ahora, pero es
+deuda antes de cualquier cosa cercana a mainnet.
+
+Misma sesión, **T75**: `POST /v1/purchases` y `GET /v1/purchases/{id}`
+cableados al módulo de T74 y persistidos en `directory_purchases` (esquema
+versión 6).
+
+Tres cosas que valen más que el cableado:
+
+1. **Un rechazo es una fila, no una ausencia.** Guardar solo éxitos dejaría
+   sin respuesta "¿por qué mi agente no compró esto?". Y no duplica el
+   vault: el vault anota decisiones sobre intents, esto anota pedidos de un
+   partner — un pedido rechazado antes de que exista ningún intent (venue no
+   registrado, tenant sin Mandato) no deja rastro en el vault.
+2. **La ruta no sabe nada de Stellar.** La ejecución entra como puerto
+   inyectado (`ExecutePurchase`); semilla maestra, llave de reserva, RPC y
+   Postgres viven del otro lado. Las once pruebas de la ruta corren sin
+   servidor HTTP, sin Postgres y sin red.
+3. **`201` para las dos salidas**, y la respuesta real sí se cachea contra la
+   clave de idempotencia — al revés que el `501` de T73. Un test cuenta las
+   llamadas al puerto para probar que repetir la clave no compra dos veces.
+
+Dos ajustes aditivos al contrato congelado en T73, los dos descubiertos al
+cablear: `route_params` en el cuerpo (la ruta pagada del bazaar declara
+`pair`/`amount`/`side` obligatorios y no había forma de aportarlos) y
+`delivery.delivery_id` pasa a nullable (el comercio de referencia devuelve el
+cuerpo del recurso y ningún id de entrega).
+
+Verificado: **977 tests** (eran 972), `typecheck` y `build` limpios, OpenAPI
+regenerado. Sin corrida contra testnet todavía — el pago real de punta a
+punta se prueba cuando exista SignalDesk.
+
+Documentación tocada: `DECISIONES.md` (`C-79`), `BITACORA.md` (hito T75 +
+tabla + estado actual). Archivos de código:
+`packages/directory/src/{schema-sql,entities,directory,index}.ts`,
+`packages/partner-api/src/resources/purchases.ts` (+ index),
+`apps/web/src/{partner-routes,server,tenant-purchase}.ts` (+ tests),
+`packages/core/src/errors.ts`, `scripts/generate-openapi.ts`.
+
+Pendiente: **mergear `cc/t75-purchases-route`** (espera confirmación).
+`GET /v1/tenants/{id}/activity` sigue en `501` y pasa a ser **T76**: necesita
+el uso de `perDay`, el saldo del rail y los rechazos del vault, que hoy se
+calculan dentro de `apps/status-dashboard` y hay que compartir sin duplicar
+(`C-73` prohíbe una segunda implementación del mismo cálculo). El resto del
+plan de `PILOTO-F9.md` § 9 corre un número. Del lado del usuario: falta
+decidir juntos los límites del rail y los precios de SignalDesk (hoy `per_tx`
+0.002 / `per_day` 0.01 hacen inusable 1 USDC por tenant — propuesta en
+`PILOTO-F9.md` § 12.2), y falta pagar la instancia de `agentpey-web` en
+Render (medido: 38.8 s de arranque en frío estando dormida).

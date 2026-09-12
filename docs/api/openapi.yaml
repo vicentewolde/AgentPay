@@ -222,9 +222,6 @@ paths:
                 $ref: "#/components/schemas/PurchaseSuccessResponse"
         "400":
           $ref: "#/components/responses/ErrorResponse"
-        "501":
-          description: Not wired yet — frozen in T73, implemented in T75.
-          $ref: "#/components/responses/ErrorResponse"
   /v1/purchases/{id}:
     get:
       operationId: getPurchase
@@ -247,9 +244,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/PurchaseSuccessResponse"
         "400":
-          $ref: "#/components/responses/ErrorResponse"
-        "501":
-          description: Not wired yet — frozen in T73, implemented in T75.
           $ref: "#/components/responses/ErrorResponse"
   /v1/tenants/{id}/activity:
     get:
@@ -279,7 +273,7 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
         "501":
-          description: Not wired yet — frozen in T73, implemented in T75.
+          description: Not wired yet — frozen in T73, implemented in T76.
           $ref: "#/components/responses/ErrorResponse"
 components:
   responses:
@@ -663,6 +657,15 @@ components:
         max_total:
           type: string
           pattern: ^\d+(?:\.\d{1,7})?$
+        route_params:
+          type: object
+          propertyNames:
+            type: string
+            minLength: 1
+          additionalProperties:
+            type:
+              - string
+              - number
       required:
         - tenant_id
         - venue
@@ -680,8 +683,10 @@ components:
           type: string
           pattern: ^ptn_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}:[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
         agent_id:
-          type: string
-          pattern: ^agt_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
+          anyOf:
+            - type: string
+              pattern: ^agt_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
+            - type: "null"
         outcome:
           type: string
           enum:
@@ -740,8 +745,10 @@ components:
             - type: object
               properties:
                 delivery_id:
-                  type: string
-                  minLength: 1
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
                 artifact_url:
                   anyOf:
                     - type: string
@@ -752,6 +759,7 @@ components:
                     - type: string
                       pattern: ^[0-9a-f]{64}$
                     - type: "null"
+                resource: {}
               required:
                 - delivery_id
                 - artifact_url
@@ -928,8 +936,10 @@ components:
                 type: string
                 pattern: ^ptn_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}:[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
               agent_id:
-                type: string
-                pattern: ^agt_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
+                anyOf:
+                  - type: string
+                    pattern: ^agt_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
+                  - type: "null"
               outcome:
                 type: string
                 enum:
@@ -988,8 +998,10 @@ components:
                   - type: object
                     properties:
                       delivery_id:
-                        type: string
-                        minLength: 1
+                        anyOf:
+                          - type: string
+                            minLength: 1
+                          - type: "null"
                       artifact_url:
                         anyOf:
                           - type: string
@@ -1000,6 +1012,7 @@ components:
                           - type: string
                             pattern: ^[0-9a-f]{64}$
                           - type: "null"
+                      resource: {}
                     required:
                       - delivery_id
                       - artifact_url

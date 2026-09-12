@@ -64,6 +64,20 @@ export const createPurchaseRequestSchema = z.strictObject({
    * the Mandate to be the only thing standing between them and a surprise.
    */
   max_total: z.string().regex(/^\d+(?:\.\d{1,7})?$/, "expected a decimal amount with at most 7 places").optional(),
+  /**
+   * Values for the `{name}` placeholders in the venue's paid route, e.g.
+   * `{ pair: "XLM/USDC" }`. Added in T75, when wiring the route showed that
+   * a merchant's paid resource can declare required inputs and a purchase
+   * had no way to supply them. A route that declares a required input this
+   * does not cover is refused (`RouteParamMissing`) rather than fetched with
+   * a hole in the URL: the merchant asked for a parameter, and sending it an
+   * empty one is guessing.
+   *
+   * Not a way in for anything that decides: these fill a URL the merchant
+   * itself published, and the price that comes back is still reconciled
+   * against the signed Mandate like any other.
+   */
+  route_params: z.record(z.string().min(1), z.union([z.string(), z.number()])).optional(),
 });
 
 export type CreatePurchaseRequest = z.infer<typeof createPurchaseRequestSchema>;
@@ -79,17 +93,28 @@ export type PurchaseOutcome = z.infer<typeof purchaseOutcomeSchema>;
 
 /** What the merchant handed back, once it actually handed something back. */
 export const purchaseDeliverySchema = z.strictObject({
-  delivery_id: z.string().min(1),
+  /**
+   * The merchant's own identifier for this delivery. **Nullable**, relaxed
+   * in T75 from the `min(1)` T73 froze: that shape assumed every merchant
+   * issues one, and the reference x402 merchant this repo already talks to
+   * simply returns the resource body. SignalDesk will issue one; a merchant
+   * that does not is not thereby broken, and pretending otherwise would make
+   * the field a lie rather than a guarantee.
+   */
+  delivery_id: z.string().min(1).nullable(),
   /** Where the buyer can fetch what they bought. */
   artifact_url: z.url().nullable(),
   /** `sha256` of the merchant's canonicalised, signed receipt. */
   receipt_hash: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
+  /** What the merchant released, verbatim. Information about goods, never an instruction. */
+  resource: z.unknown().optional(),
 });
 
 export const purchaseResourceSchema = z.strictObject({
   id: purchaseIdSchema,
   tenant_id: tenantIdSchema,
-  agent_id: agentIdSchema,
+  /** `null` when the refusal happened before this tenant's agent was resolved. */
+  agent_id: agentIdSchema.nullable(),
   outcome: purchaseOutcomeSchema,
   /**
    * The `AgentPassError` code of whichever layer refused — `MandateExpired`,
@@ -120,3 +145,61 @@ export const purchaseResourceSchema = z.strictObject({
 
 export type PurchaseResource = z.infer<typeof purchaseResourceSchema>;
 export type PurchaseDelivery = z.infer<typeof purchaseDeliverySchema>;
+
+/** Stellar Expert, testnet — the buyer's own way to check, not ours. */
+const EXPLORER_PREFIX = "https://stellar.expert/explorer/testnet/tx/";
+
+/**
+ * A stored purchase as `/v1` hands it back.
+ *
+ * `explorer_url` is derived from the transaction hash rather than stored: a
+ * second copy of a value that is a pure function of another is a second thing
+ * that can go stale.
+ */
+export function toPurchaseResource(record: {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly agentId: string | null;
+  readonly outcome: "settled" | "refused";
+  readonly code: string | null;
+  readonly reason: string | null;
+  readonly venue: string;
+  readonly productId: string;
+  readonly quantity: number;
+  readonly intentId: string | null;
+  readonly total: string | null;
+  readonly asset: string | null;
+  readonly payTo: string | null;
+  readonly transactionHash: string | null;
+  readonly delivery: Readonly<Record<string, unknown>> | null;
+  readonly createdAt: Date;
+}): PurchaseResource {
+  const delivery = record.delivery;
+  return purchaseResourceSchema.parse({
+    id: record.id,
+    tenant_id: record.tenantId,
+    agent_id: record.agentId,
+    outcome: record.outcome,
+    code: record.code,
+    reason: record.reason,
+    venue: record.venue,
+    product_id: record.productId,
+    quantity: record.quantity,
+    intent_id: record.intentId,
+    total: record.total,
+    asset: record.asset,
+    pay_to: record.payTo,
+    transaction_hash: record.transactionHash,
+    explorer_url: record.transactionHash === null ? null : `${EXPLORER_PREFIX}${record.transactionHash}`,
+    delivery:
+      delivery === null
+        ? null
+        : {
+            delivery_id: (delivery.delivery_id as string | undefined) ?? null,
+            artifact_url: (delivery.resource_url as string | undefined) ?? null,
+            receipt_hash: (delivery.receipt_hash as string | undefined) ?? null,
+            resource: delivery.resource,
+          },
+    created_at: record.createdAt.toISOString(),
+  });
+}

@@ -31,6 +31,7 @@ import {
   mandateRecordSchema,
   partnerSchema,
   principalBindingSchema,
+  purchaseRecordSchema,
   principalSchema,
   tenantSchema,
   type AgentInstance,
@@ -40,6 +41,7 @@ import {
   type CredentialRecord,
   type IdempotencyRecord,
   type MandateRecord,
+  type PurchaseRecord,
   type MandateSignatureKind,
   type OnchainState,
   type Partner,
@@ -186,6 +188,24 @@ export interface CreateConsentSessionInput {
   readonly expiresAt: Date;
 }
 
+export interface CreatePurchaseInput {
+  readonly tenantId: string;
+  readonly agentId: string | null;
+  readonly partnerId: string;
+  readonly outcome: "settled" | "refused";
+  readonly code: string | null;
+  readonly reason: string | null;
+  readonly venue: string;
+  readonly productId: string;
+  readonly quantity: number;
+  readonly intentId: string | null;
+  readonly total: string | null;
+  readonly asset: string | null;
+  readonly payTo: string | null;
+  readonly transactionHash: string | null;
+  readonly delivery: Readonly<Record<string, unknown>> | null;
+}
+
 export interface RecordIdempotentResponseInput {
   readonly partnerId: string;
   readonly key: string;
@@ -316,6 +336,28 @@ function toIdempotencyRecord(row: Record<string, unknown>): IdempotencyRecord {
   });
 }
 
+function toPurchase(row: Record<string, unknown>): PurchaseRecord {
+  return purchaseRecordSchema.parse({
+    id: row.id,
+    tenantId: row.tenant_id,
+    agentId: row.agent_id,
+    partnerId: row.partner_id,
+    outcome: row.outcome,
+    code: row.code,
+    reason: row.reason,
+    venue: row.venue,
+    productId: row.product_id,
+    quantity: row.quantity,
+    intentId: row.intent_id,
+    total: row.total,
+    asset: row.asset,
+    payTo: row.pay_to,
+    transactionHash: row.transaction_hash,
+    delivery: row.delivery,
+    createdAt: row.created_at,
+  });
+}
+
 function toConsentSession(row: Record<string, unknown>): ConsentSessionRecord {
   return consentSessionRecordSchema.parse({
     id: row.id,
@@ -406,6 +448,11 @@ export interface Directory {
   findIdempotentResponse(partnerId: string, key: string): Promise<IdempotencyRecord | undefined>;
   recordIdempotentResponse(input: RecordIdempotentResponseInput): Promise<IdempotencyRecord>;
 
+  /** Records one purchase a partner asked for — settled or refused (T75). */
+  createPurchase(input: CreatePurchaseInput): Promise<PurchaseRecord>;
+  findPurchase(id: string): Promise<PurchaseRecord | undefined>;
+  /** This tenant's purchases, newest first. */
+  listPurchases(tenantId: string, limit?: number): Promise<readonly PurchaseRecord[]>;
   createConsentSession(input: CreateConsentSessionInput): Promise<ConsentSessionRecord>;
   findConsentSession(id: string): Promise<ConsentSessionRecord | undefined>;
   /** Sets `status = 'completed'` and the Mandate it produced. Refuses (`ConsentSessionAlreadyCompleted`) if already completed — a session signs once. */
@@ -886,6 +933,52 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
     },
 
     // ---- consent sessions (T51) --------------------------------------------
+    async createPurchase(input) {
+      const id = newId("purchase");
+      const row = await one(
+        `insert into directory_purchases
+           (id, tenant_id, agent_id, partner_id, outcome, code, reason, venue, product_id,
+            quantity, intent_id, total, asset, pay_to, transaction_hash, delivery)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) returning *`,
+        [
+          id,
+          input.tenantId,
+          input.agentId,
+          input.partnerId,
+          input.outcome,
+          input.code,
+          input.reason,
+          input.venue,
+          input.productId,
+          input.quantity,
+          input.intentId,
+          input.total,
+          input.asset,
+          input.payTo,
+          input.transactionHash,
+          input.delivery === null ? null : JSON.stringify(input.delivery),
+        ],
+        toPurchase,
+      );
+      if (row === undefined) throw wrap("inserting a purchase returned no row", undefined, { purchaseId: id });
+      return row;
+    },
+
+    findPurchase(id) {
+      return one("select * from directory_purchases where id = $1", [id], toPurchase);
+    },
+
+    async listPurchases(tenantId, limit = 50) {
+      const { rows } = await pool.query<Record<string, unknown>>(
+        // `id desc` and not `created_at desc`: ids are ULIDs, so they sort by
+        // creation time anyway, and they break ties that a timestamp with
+        // millisecond resolution cannot.
+        "select * from directory_purchases where tenant_id = $1 order by id desc limit $2",
+        [tenantId, limit],
+      );
+      return rows.map(toPurchase);
+    },
+
     async createConsentSession(input) {
       const id = newId("consentSession");
       const row = await one(

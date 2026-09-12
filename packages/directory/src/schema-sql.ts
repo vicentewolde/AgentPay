@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 5;
+export const DIRECTORY_SCHEMA_VERSION = 6;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -192,4 +192,40 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   // is the normal state for the overwhelming majority of agents — same
   // reasoning `onchain_state` already carries for the classic account.
   `alter table directory_agents add column if not exists policy_rail_contract_id text`,
+
+  // Schema version 6 (T75/F9): what a partner asked for through
+  // `POST /v1/purchases`, and what happened. Refusals are rows too — see
+  // `purchaseRecordSchema` for why storing only successes would make the
+  // most important question about this system unanswerable.
+  //
+  // `partner_id` is stored rather than joined through the tenant: reading a
+  // purchase checks ownership on every request, and a check that needs a
+  // join is a check that can be written without one by mistake.
+  //
+  // `delivery` is `json`, not `jsonb` — `C-5` again. Nothing hashes it, and
+  // nothing gains from Postgres reordering something handed back verbatim.
+  `create table if not exists directory_purchases (
+     id               text        primary key,
+     tenant_id        text        not null references directory_tenants(id),
+     -- Nullable on purpose: a request refused before this platform even
+     -- resolves the tenant's agent (an unregistered venue, say) still has to
+     -- be recorded, and inventing an agent id for it would be a lie.
+     agent_id         text        references directory_agents(id),
+     partner_id       text        not null references directory_partners(id),
+     outcome          text        not null,
+     code             text,
+     reason           text,
+     venue            text        not null,
+     product_id       text        not null,
+     quantity         integer     not null,
+     intent_id        text,
+     total            text,
+     asset            text,
+     pay_to           text,
+     transaction_hash text,
+     delivery         json,
+     created_at       timestamptz not null default now()
+   )`,
+
+  `create index if not exists directory_purchases_tenant_idx on directory_purchases (tenant_id, created_at desc)`,
 ];

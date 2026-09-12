@@ -136,6 +136,8 @@ export type AgentPassErrorCode =
   | "TenantAlreadyExists"
   /** No agent instance in the directory has that id. */
   | "AgentNotFound"
+  /** No purchase in the directory has that id. */
+  | "PurchaseNotFound"
   /** A `/v1` request carried no `Authorization` header at all. */
   | "MissingApiKey"
   /**

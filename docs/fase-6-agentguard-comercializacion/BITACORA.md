@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T74 (el runner de compra, fuera de la sesión-cookie) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T75 (la ruta de compra, cableada y persistida) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -125,6 +125,7 @@ ninguna ruta nueva capaz de escribir.
 | T72 | F9: propuesta de arquitectura y plan del piloto externo público ([PILOTO-F9.md](PILOTO-F9.md)) — solo documentación, sin código | ✅ cerrado 2026-09-12 |
 | T73 | F9: contrato de ejecución congelado — permiso por producto en el grant firmado, tres scopes y tres rutas `/v1` nuevas respondiendo `501` hasta T75 | ✅ cerrado 2026-09-12 |
 | T74 | F9: el runner de compra sale de la sesión-cookie a un módulo por tenant (`tenant-purchase.ts`), sin producto ni venue hardcodeados | ✅ cerrado 2026-09-12 |
+| T75 | F9: `POST /v1/purchases` y `GET /v1/purchases/{id}` cableados y persistidos — los rechazos se guardan igual que las compras | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2740,3 +2741,58 @@ funcione es trabajo posterior, anotado y sin construir.
 
 **Qué sigue.** T75: cablear `POST /v1/purchases` a este módulo, con
 persistencia de la compra e idempotencia real.
+
+---
+
+## T75 · La ruta de compra, cableada y persistida — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Una plataforma con su API key
+ya puede pedirle a AgentPey que compre algo para uno de sus usuarios, y leer
+después qué pasó. Si la compra se hizo, la respuesta trae el monto, la
+transacción y un enlace para verla en el explorador de Stellar. Si no se
+hizo, trae el motivo en dos formas: un código para el que integra y una
+frase para la persona.
+
+Lo más importante es que **un rechazo se guarda igual que una compra**. Un
+sistema que solo guardara los éxitos dejaría sin respuesta la pregunta que
+más importa: "¿por qué mi agente no compró esto?". Y guardar el pedido no es
+lo mismo que lo que ya guardaba el vault: el vault anota decisiones sobre
+intenciones firmadas, esto anota pedidos. Se diferencian justo donde hace
+falta, porque un pedido rechazado antes de que exista ninguna intención —un
+comercio no registrado, un usuario sin Mandato— no deja rastro en el vault, y
+ese es exactamente el rechazo que alguien necesita poder ver.
+
+Y pedir dos veces lo mismo con la misma clave de idempotencia devuelve la
+misma compra, sin comprar dos veces. Hay un test que cuenta las llamadas para
+probarlo, no solo que la respuesta sea igual.
+
+**Evidencia técnica.**
+
+- Tabla `directory_purchases` (esquema versión 6), con `agent_id` nullable a
+  propósito: un rechazo puede ocurrir antes de que se resuelva el agente, e
+  inventarle un id sería mentir.
+- `partner-routes.ts` recibe la ejecución como puerto inyectado, no como
+  import: semilla maestra, llave de reserva, RPC y Postgres viven del otro
+  lado de esa función. Las once pruebas de la ruta corren sin servidor HTTP,
+  sin Postgres y sin red.
+- `201` para liquidada y para rechazada. La respuesta real sí se cachea
+  contra la clave de idempotencia — al revés que el `501` de T73, que
+  explícitamente no se cacheaba para no envenenar la clave.
+- `GET /v1/purchases/{id}` responde `404`, nunca `403`, ante una compra de
+  otro partner — la misma regla que toda ruta desde T49.
+- **977 tests verdes** (eran 972), `typecheck` y `build` limpios, OpenAPI
+  regenerado.
+
+**Dos ajustes al contrato de T73**, aditivos, descubiertos al cablear:
+`route_params` en el cuerpo del pedido (la ruta pagada de un comercio puede
+declarar inputs obligatorios y no había forma de aportarlos) y
+`delivery.delivery_id` pasa a nullable (la forma congelada asumía que todo
+comercio emite un id de entrega, y el comercio de referencia que ya usamos
+devuelve el cuerpo del recurso y nada más).
+
+**Decisión nueva:** `C-79`.
+
+**Qué sigue.** `GET /v1/tenants/{id}/activity` sigue en `501`: necesita el
+uso de `perDay`, el saldo del rail y los rechazos del vault, que hoy se
+calculan dentro de `apps/status-dashboard` y hay que compartir sin duplicar
+(`C-73`). Pasa a ser **T76**, y el resto del plan corre un número.

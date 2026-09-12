@@ -88,6 +88,7 @@ import { buildSessionDocuments } from "./session-documents.js";
 import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
 import { ensureTenantAgent } from "./tenant-agent.js";
 import { ensureTenantPolicyRail } from "./tenant-rail.js";
+import { executeTenantPurchase } from "./tenant-purchase.js";
 import {
   createPostgresWalletSessionStore,
   type PendingConsentSessionPayload,
@@ -1126,6 +1127,18 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       body: await readJsonBody(req),
       directory,
       baseUrl: resolveBaseUrl(req, env),
+      executePurchase: async (purchase) =>
+        executeTenantPurchase(
+          {
+            directory,
+            agentpass: await createWalletAgentPass(env),
+            masterMnemonic: requireEnv(env, "MASTER_MNEMONIC"),
+            databaseUrl: requireEnv(env, "DATABASE_URL"),
+            reserve: requireSecretKey(env, "AGENT_SECRET_KEY"),
+            policyRailWasmHash: requireEnv(env, "POLICY_RAIL_WASM_HASH"),
+          },
+          purchase,
+        ),
     });
     sendJson(res, result.status, result.body);
     return;

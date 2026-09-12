@@ -88,6 +88,8 @@ export interface TenantPurchaseRequest {
 
 export interface PurchaseSettled {
   readonly kind: "settled";
+  /** The tenant's own agent row that acted — recorded with the purchase. */
+  readonly agentId: string;
   readonly intentId: string;
   readonly total: string;
   readonly asset: string;
@@ -100,6 +102,8 @@ export interface PurchaseSettled {
 
 export interface PurchaseRefused {
   readonly kind: "refused";
+  /** `null` when the refusal happened before this tenant's agent was resolved. */
+  readonly agentId: string | null;
   /** The typed code of whichever layer said no. */
   readonly code: string;
   readonly reason: string;
@@ -132,8 +136,14 @@ export interface TenantPurchaseDeps {
   readonly now?: Date;
 }
 
-function refuse(code: string, reason: string, details: Readonly<Record<string, unknown>> = {}, intentId?: string): PurchaseRefused {
-  return { kind: "refused", code, reason, details, intentId };
+function refuse(
+  code: string,
+  reason: string,
+  details: Readonly<Record<string, unknown>> = {},
+  intentId?: string,
+  agentId: string | null = null,
+): PurchaseRefused {
+  return { kind: "refused", agentId, code, reason, details, intentId };
 }
 
 /**
@@ -145,9 +155,9 @@ function refuse(code: string, reason: string, details: Readonly<Record<string, u
  * same clothes. The first is an answer; the second is an outage. Only a typed
  * `AgentPassError` becomes an answer.
  */
-function asRefusal(error: unknown, intentId?: string): PurchaseRefused {
+function asRefusal(error: unknown, intentId?: string, agentId: string | null = null): PurchaseRefused {
   if (!isAgentPassError(error)) throw error;
-  return refuse(error.code, error.message, error.details ?? {}, intentId);
+  return refuse(error.code, error.message, error.details ?? {}, intentId, agentId);
 }
 
 /**
@@ -290,11 +300,12 @@ export async function executeTenantPurchase(
     deps.directory.findLatestCredential(request.tenantId),
     deps.directory.listActiveMandates(request.tenantId, now),
   ]);
+  const agentId = tenantAgent.instance.id;
   if (credential === undefined) {
-    return refuse("CredentialNotFound", "this tenant has no credential to act with", { tenantId: request.tenantId });
+    return refuse("CredentialNotFound", "this tenant has no credential to act with", { tenantId: request.tenantId }, undefined, agentId);
   }
   if (credential.revokedAt !== null) {
-    return refuse("CredentialRevoked", "this tenant's credential was revoked", { tenantId: request.tenantId });
+    return refuse("CredentialRevoked", "this tenant's credential was revoked", { tenantId: request.tenantId }, undefined, agentId);
   }
   // Strictly this agent's own mandate. There is no fallback to "some other
   // active mandate of this tenant": a tenant may hold several agents, and a
@@ -304,11 +315,13 @@ export async function executeTenantPurchase(
   // the wrong one and hope.
   const mandateRecord = activeMandates.find((row) => row.agentId === tenantAgent.instance.id);
   if (mandateRecord === undefined) {
-    return refuse("MandateNotFound", "this agent has no active mandate — nothing authorises a purchase", {
-      tenantId: request.tenantId,
-      agentId: tenantAgent.instance.id,
-      otherActiveMandates: activeMandates.length,
-    });
+    return refuse(
+      "MandateNotFound",
+      "this agent has no active mandate — nothing authorises a purchase",
+      { tenantId: request.tenantId, agentId, otherActiveMandates: activeMandates.length },
+      undefined,
+      agentId,
+    );
   }
 
   let mandateSource: MandateSource;
@@ -317,7 +330,7 @@ export async function executeTenantPurchase(
     mandateSource = mandateSourceFrom(mandateRecord);
     scope = scopeFromCredential(credential);
   } catch (error) {
-    return asRefusal(error);
+    return asRefusal(error, undefined, agentId);
   }
 
   // 3. The same engine `finishSession` builds, assembled per tenant. The
@@ -341,7 +354,7 @@ export async function executeTenantPurchase(
       now,
     });
   } catch (error) {
-    return asRefusal(error);
+    return asRefusal(error, undefined, agentId);
   }
 
   // 4. The intent. This is where `checkScope`, `checkMandate` — including the
@@ -355,7 +368,7 @@ export async function executeTenantPurchase(
       quantity: request.quantity,
     })) as typeof intentResult;
   } catch (error) {
-    return asRefusal(error);
+    return asRefusal(error, undefined, agentId);
   }
 
   // 5. The partner's own ceiling, if it set one. Only ever refuses earlier
@@ -366,6 +379,7 @@ export async function executeTenantPurchase(
       "the venue's total is above the ceiling this purchase declared",
       { total: intentResult.total_amount, maxTotal: request.maxTotal },
       intentResult.intent_id,
+      agentId,
     );
   }
 
@@ -377,7 +391,7 @@ export async function executeTenantPurchase(
     requireRouteParams(route, request.routeParams ?? {});
     resourceUrl = fillRouteTemplate(baseUrl, route, request.routeParams ?? {});
   } catch (error) {
-    return asRefusal(error, intentResult.intent_id);
+    return asRefusal(error, intentResult.intent_id, agentId);
   }
 
   // 7. Who pays: this tenant's own `policy_rail`, deployed and funded from
@@ -397,7 +411,7 @@ export async function executeTenantPurchase(
     const principalAddress = didToStellarAddress(parsedMandate.issuer);
     const agentInstance = await deps.directory.findAgent(tenantAgent.instance.id);
     if (agentInstance === undefined) {
-      return refuse("AgentNotFound", "this tenant has no agent row to own a rail", { tenantId: request.tenantId }, intentResult.intent_id);
+      return refuse("AgentNotFound", "this tenant has no agent row to own a rail", { tenantId: request.tenantId }, intentResult.intent_id, agentId);
     }
     const contractId = await ensureTenantPolicyRail(
       deps.directory,
@@ -408,7 +422,7 @@ export async function executeTenantPurchase(
     );
     payer = { contractId, ownerSecret: tenantAgent.keypair.secret() };
   } catch (error) {
-    return asRefusal(error, intentResult.intent_id);
+    return asRefusal(error, intentResult.intent_id, agentId);
   }
 
   // 8. The payment itself: the 402 challenge, `reconcileTerms` against the
@@ -425,11 +439,12 @@ export async function executeTenantPurchase(
       { resourceUrl, intent: verified.intent, scope, mandate: parsedMandate, venueId },
     );
   } catch (error) {
-    return asRefusal(error, intentResult.intent_id);
+    return asRefusal(error, intentResult.intent_id, agentId);
   }
 
   return {
     kind: "settled",
+    agentId: tenantAgent.instance.id,
     intentId: intentResult.intent_id,
     total: intentResult.total_amount,
     asset: intentResult.asset,

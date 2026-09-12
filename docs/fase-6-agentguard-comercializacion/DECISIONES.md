@@ -2985,3 +2985,64 @@ puede servirlo. Quedan dos plomerías hacia el mismo pago — pero **una sola
 capa de enforcement**: las dos pasan por `checkMandate`, así que el permiso
 por producto de `C-75` rige en ambas. Retirar la demo cuando el flujo de F9
 funcione es trabajo posterior, anotado y sin construir.
+
+---
+
+### C-79 · T75: la compra se persiste, el rechazo también, y la ruta no sabe nada de Stellar · `Vigente`
+**Fecha:** 2026-09-12
+
+T75 conecta `POST /v1/purchases` y `GET /v1/purchases/{id}` al módulo de
+T74. Tres decisiones que valen más que el cableado.
+
+**1. Un rechazo es una fila, no una ausencia.** `directory_purchases`
+(versión 6 del esquema) guarda las compras rechazadas igual que las
+liquidadas. La alternativa —guardar solo éxitos— haría que "¿por qué mi
+agente no compró esto?" fuera incontestable, que es justamente la pregunta
+que un sistema así más necesita poder responder. Y no duplica el vault: el
+vault registra decisiones sobre *intents* (Fase 5), esta tabla registra
+*pedidos* de un partner. Difieren exactamente donde importa — un pedido
+rechazado antes de que exista ningún intent (un venue no registrado, un
+tenant sin Mandato) no deja registro en el vault, y esos son precisamente los
+rechazos que un integrador necesita ver.
+
+`agent_id` es nullable por lo mismo: un rechazo puede ocurrir antes de que se
+resuelva el agente del tenant, e inventarle un id sería mentir.
+
+**2. La ruta no sabe nada de Stellar, y eso es deliberado.** `partner-routes.ts`
+recibe la ejecución como un puerto inyectado (`ExecutePurchase`), no como un
+import. Todo lo que la implementación real necesita —semilla maestra, llave
+de la reserva, cliente RPC, Postgres— vive del otro lado de esa única
+función, y nada de eso se filtra a la capa de ruteo. Es la misma costura que
+el archivo ya usaba para `Directory` desde T49, y es lo que permite que las
+once pruebas de esta ruta corran sin servidor HTTP, sin Postgres y sin red.
+
+**3. `201` para las dos salidas, y la idempotencia guarda las dos.** Un
+Mandato diciendo que no es el sistema funcionando; reportarlo como `4xx`
+archivaría "tu consentimiento no cubre esto" junto a "tu JSON está mal
+formado". Y a diferencia del `501` de T73 —que explícitamente **no** se
+cacheaba, para no envenenar la clave— la respuesta real sí se guarda contra
+la clave de idempotencia: repetir la clave devuelve la misma compra sin
+volver a comprar, con un test que cuenta las llamadas al puerto para
+probarlo.
+
+**Dos ajustes al contrato congelado en T73**, los dos aditivos y los dos
+descubiertos al cablear:
+
+- **`route_params` se agrega al cuerpo del pedido.** La ruta pagada de un
+  comercio puede declarar inputs obligatorios (el bazaar los tiene:
+  `pair`, `amount`, `side`) y la petición no tenía forma de aportarlos. No es
+  una entrada para nada que decida: rellenan una URL que el comercio mismo
+  publicó, y el precio que vuelve se reconcilia contra el Mandato igual que
+  siempre.
+- **`delivery.delivery_id` pasa a ser nullable.** La forma congelada asumía
+  que todo comercio emite un identificador de entrega, y el comercio de
+  referencia que este repo ya usa simplemente devuelve el cuerpo del recurso.
+  SignalDesk sí emitirá uno; un comercio que no lo haga no está roto por eso,
+  y fingir lo contrario convertiría el campo en una mentira en vez de en una
+  garantía.
+
+`GET /v1/tenants/{id}/activity` **sigue congelada en `501`**: necesita el uso
+de `perDay`, el saldo del rail y los rechazos del vault, que hoy se calculan
+dentro de `apps/status-dashboard` y hay que compartir sin duplicar (`C-73`).
+Pasa a ser su propio hito, T76, y el resto del plan de `PILOTO-F9.md` § 9
+corre un número.

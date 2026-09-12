@@ -249,7 +249,6 @@ const document = {
         },
         responses: {
           "201": { description: "The decision, settled or refused.", ...jsonContent("PurchaseSuccessResponse") },
-          "501": { description: "Not wired yet — frozen in T73, implemented in T75.", $ref: "#/components/responses/ErrorResponse" },
           ...errorResponses,
         },
       },
@@ -270,7 +269,6 @@ const document = {
         ],
         responses: {
           "200": { description: "The purchase.", ...jsonContent("PurchaseSuccessResponse") },
-          "501": { description: "Not wired yet — frozen in T73, implemented in T75.", $ref: "#/components/responses/ErrorResponse" },
           ...errorResponses,
         },
       },
@@ -292,7 +290,7 @@ const document = {
         ],
         responses: {
           "200": { description: "The tenant's activity.", ...jsonContent("TenantActivitySuccessResponse") },
-          "501": { description: "Not wired yet — frozen in T73, implemented in T75.", $ref: "#/components/responses/ErrorResponse" },
+          "501": { description: "Not wired yet — frozen in T73, implemented in T76.", $ref: "#/components/responses/ErrorResponse" },
           ...errorResponses,
         },
       },

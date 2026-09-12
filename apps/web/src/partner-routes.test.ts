@@ -10,11 +10,12 @@ import {
   type IdempotencyRecord,
   type MandateRecord,
   type Tenant,
+  type PurchaseRecord,
 } from "@agentpey/directory";
 import { Keypair } from "@stellar/stellar-sdk";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { routePartnerRequest, statusForError, type PartnerRoutesDirectory } from "./partner-routes.js";
+import { routePartnerRequest, statusForError, type ExecutePurchase, type PartnerRoutesDirectory } from "./partner-routes.js";
 
 const PARTNER_A = newId("partner");
 const PARTNER_B = newId("partner");
@@ -54,8 +55,10 @@ function createFakeDirectory(): FakeDirectory {
   const mandatesByTenant = new Map<string, MandateRecord[]>();
   const idempotency = new Map<string, IdempotencyRecord>();
   const consentSessions = new Map<string, ConsentSessionRecord>();
+  const purchases = new Map<string, PurchaseRecord>();
   let createTenantCalls = 0;
   let createConsentSessionCalls = 0;
+  let purchaseSeq = 0;
 
   return {
     get createTenantCalls() {
@@ -64,6 +67,35 @@ function createFakeDirectory(): FakeDirectory {
 
     get createConsentSessionCalls() {
       return createConsentSessionCalls;
+    },
+
+    async createPurchase(input) {
+      purchaseSeq += 1;
+      const record: PurchaseRecord = {
+        id: `pur_0000000000000000000000000${purchaseSeq}`.slice(0, 30),
+        tenantId: input.tenantId,
+        agentId: input.agentId,
+        partnerId: input.partnerId,
+        outcome: input.outcome,
+        code: input.code,
+        reason: input.reason,
+        venue: input.venue,
+        productId: input.productId,
+        quantity: input.quantity,
+        intentId: input.intentId,
+        total: input.total,
+        asset: input.asset,
+        payTo: input.payTo,
+        transactionHash: input.transactionHash,
+        delivery: input.delivery === null ? null : { ...input.delivery },
+        createdAt: new Date("2026-09-12T00:00:00.000Z"),
+      };
+      purchases.set(record.id, record);
+      return record;
+    },
+
+    async findPurchase(id) {
+      return purchases.get(id);
     },
 
     revoke(secret) {
@@ -240,6 +272,19 @@ beforeEach(() => {
   directory = createFakeDirectory();
 });
 
+/** A purchase port that settles — the default for tests not about refusals. */
+const settlingPurchase: ExecutePurchase = async () => ({
+  kind: "settled",
+  agentId: "agt_00000000000000000000000001",
+  intentId: "8b0851b3-94e9-45b0-ba36-d6e9e32541d2",
+  total: "0.2500000",
+  asset: "USDC:CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+  payTo: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K",
+  transactionHash: "b".repeat(64),
+  resourceUrl: "https://signaldesk.example/api/x402/market-brief",
+  resource: { title: "XLM/USDC demo brief" },
+});
+
 function baseRequest(overrides: Partial<Parameters<typeof routePartnerRequest>[0]> = {}) {
   return {
     method: "GET",
@@ -250,6 +295,8 @@ function baseRequest(overrides: Partial<Parameters<typeof routePartnerRequest>[0
     body: undefined,
     directory,
     baseUrl: "https://agentpay.example",
+    // The default port settles. Tests that care about a refusal override it.
+    executePurchase: settlingPurchase,
     ...overrides,
   };
 }
@@ -263,6 +310,7 @@ describe("statusForError", () => {
     expect(statusForError(new AgentPassError("IdempotencyKeyConflict", "x"))).toBe(409);
     expect(statusForError(new AgentPassError("TenantNotFound", "x"))).toBe(404);
     expect(statusForError(new AgentPassError("NotImplemented", "x"))).toBe(501);
+    expect(statusForError(new AgentPassError("PurchaseNotFound", "x"))).toBe(404);
     // A code this layer never anticipated must not masquerade as a client mistake.
     expect(statusForError(new AgentPassError("VaultCorrupted", "x"))).toBe(500);
     expect(statusForError(new Error("plain"))).toBe(500);
@@ -536,35 +584,123 @@ describe("routePartnerRequest — GET /v1/consent_sessions/{id}", () => {
   });
 });
 
-describe("routePartnerRequest — the execution routes T73 froze (T75 implements them)", () => {
+describe("routePartnerRequest — POST /v1/purchases", () => {
   const VENUE = "signaldesk:CCL57L4ZDBRRWL2PKHZCYQZRDV4A37LOZRWMSCRQQ5JYRKMJW6I3TM7F";
 
   function purchaseBody(tenantId: string, overrides: Record<string, unknown> = {}) {
     return { tenant_id: tenantId, venue: VENUE, product_id: "signaldesk:market-brief-xlm-usdc", quantity: 1, ...overrides };
   }
 
-  it("answers 501, not 404 — the route exists, it just cannot act yet", async () => {
+  const refusingPurchase: ExecutePurchase = async () => ({
+    kind: "refused",
+    agentId: "agt_00000000000000000000000001",
+    code: "MandateProductNotAllowed",
+    reason: "tu Mandato no permite este producto",
+    details: { productId: "otro" },
+    intentId: "8b0851b3-94e9-45b0-ba36-d6e9e32541d2",
+  });
+
+  it("settles, and hands back the transaction plus a link the buyer can check themselves", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_A });
     const result = await routePartnerRequest(
       baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-1" }),
     );
-    expect(result.status).toBe(501);
-    expect((result.body as { code: string }).code).toBe("NotImplemented");
+    expect(result.status).toBe(201);
+    const data = (result.body as { data: { outcome: string; transaction_hash: string; explorer_url: string; delivery: unknown } }).data;
+    expect(data.outcome).toBe("settled");
+    expect(data.explorer_url).toBe(`https://stellar.expert/explorer/testnet/tx/${"b".repeat(64)}`);
+    expect(data.delivery).toMatchObject({ artifact_url: "https://signaldesk.example/api/x402/market-brief" });
   });
 
-  it("refuses a key without payments:authorize before anything else happens", async () => {
+  it("answers 201 for a refusal too — a Mandate saying no is this system working", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const result = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        body: purchaseBody(tenant.id),
+        idempotencyKeyHeader: "pur-2",
+        executePurchase: refusingPurchase,
+      }),
+    );
+    expect(result.status).toBe(201);
+    const data = (result.body as { data: { outcome: string; code: string; reason: string; total: string | null } }).data;
+    expect(data.outcome).toBe("refused");
+    expect(data.code).toBe("MandateProductNotAllowed");
+    expect(data.reason).toContain("no permite este producto");
+    expect(data.total).toBeNull();
+  });
+
+  it("records the refusal, so a rejected attempt is readable afterwards", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    const created = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        body: purchaseBody(tenant.id),
+        idempotencyKeyHeader: "pur-3",
+        executePurchase: refusingPurchase,
+      }),
+    );
+    const id = (created.body as { data: { id: string } }).data.id;
+    const read = await routePartnerRequest(baseRequest({ pathname: `/v1/purchases/${id}` }));
+    expect(read.status).toBe(200);
+    expect((read.body as { data: { code: string } }).data.code).toBe("MandateProductNotAllowed");
+  });
+
+  it("replays the stored response for a repeated Idempotency-Key, without buying twice", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    let calls = 0;
+    const counting: ExecutePurchase = async (request) => {
+      calls += 1;
+      return settlingPurchase(request);
+    };
+    const body = purchaseBody(tenant.id);
+    const first = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body, idempotencyKeyHeader: "pur-4", executePurchase: counting }),
+    );
+    const second = await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body, idempotencyKeyHeader: "pur-4", executePurchase: counting }),
+    );
+    expect(calls).toBe(1);
+    expect(second.status).toBe(first.status);
+    expect((second.body as { data: { id: string } }).data.id).toBe((first.body as { data: { id: string } }).data.id);
+  });
+
+  it("409s the same key with a different body, rather than answering for the wrong purchase", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    await routePartnerRequest(
+      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-5" }),
+    );
+    const second = await routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        body: purchaseBody(tenant.id, { quantity: 9 }),
+        idempotencyKeyHeader: "pur-5",
+      }),
+    );
+    expect(second.status).toBe(409);
+  });
+
+  it("refuses a key without payments:authorize before the purchase port is ever called", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    let called = false;
     const result = await routePartnerRequest(
       baseRequest({
         method: "POST",
         pathname: "/v1/purchases",
         authorizationHeader: `Bearer ${SECRET_B}`,
         body: purchaseBody(tenant.id),
-        idempotencyKeyHeader: "pur-2",
+        idempotencyKeyHeader: "pur-6",
+        executePurchase: async (request) => {
+          called = true;
+          return settlingPurchase(request);
+        },
       }),
     );
     expect(result.status).toBe(403);
-    expect((result.body as { code: string }).code).toBe("ScopeNotGranted");
+    expect(called).toBe(false);
   });
 
   it("still requires an Idempotency-Key — a purchase is never safe to replay blindly", async () => {
@@ -576,57 +712,96 @@ describe("routePartnerRequest — the execution routes T73 froze (T75 implements
     expect((result.body as { code: string }).code).toBe("IdempotencyKeyRequired");
   });
 
-  it("404s another partner's tenant without revealing whether the body was valid", async () => {
+  it("404s another partner's tenant, and never reaches the purchase port", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    let called = false;
     const result = await routePartnerRequest(
-      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-3" }),
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        body: purchaseBody(tenant.id),
+        idempotencyKeyHeader: "pur-7",
+        executePurchase: async (request) => {
+          called = true;
+          return settlingPurchase(request);
+        },
+      }),
     );
     expect(result.status).toBe(404);
-    expect((result.body as { code: string }).code).toBe("TenantNotFound");
-  });
-
-  it("400s a malformed body, so the frozen shape is enforced from today", async () => {
-    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
-    const result = await routePartnerRequest(
-      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id, { quantity: 0 }), idempotencyKeyHeader: "pur-4" }),
-    );
-    expect(result.status).toBe(400);
+    expect(called).toBe(false);
   });
 
   it("400s a body carrying a field this route does not know", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_A });
     const result = await routePartnerRequest(
-      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id, { pay_to: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K" }), idempotencyKeyHeader: "pur-5" }),
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        body: purchaseBody(tenant.id, { pay_to: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K" }),
+        idempotencyKeyHeader: "pur-8",
+      }),
     );
     expect(result.status).toBe(400);
   });
 
-  it("does not cache the 501 against the idempotency key, so T75 is not poisoned by it", async () => {
+  it("passes route params through to the purchase port, verbatim", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    let seen: unknown;
     await routePartnerRequest(
-      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id), idempotencyKeyHeader: "pur-6" }),
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/purchases",
+        body: purchaseBody(tenant.id, { route_params: { pair: "XLM/USDC", amount: 100 } }),
+        idempotencyKeyHeader: "pur-9",
+        executePurchase: async (request) => {
+          seen = request.routeParams;
+          return settlingPurchase(request);
+        },
+      }),
     );
-    // Reusing the key with a *different* body is the probe: had the 501 been
-    // stored, this would come back `IdempotencyKeyConflict` (409). Nothing
-    // was stored, so it simply fails the same way again.
-    const second = await routePartnerRequest(
-      baseRequest({ method: "POST", pathname: "/v1/purchases", body: purchaseBody(tenant.id, { quantity: 7 }), idempotencyKeyHeader: "pur-6" }),
-    );
-    expect(second.status).toBe(501);
+    expect(seen).toEqual({ pair: "XLM/USDC", amount: 100 });
+  });
+});
+
+describe("routePartnerRequest — GET /v1/purchases/{id}", () => {
+  it("404s a purchase belonging to another partner, never 403", async () => {
+    const tenantB = directory.seedTenant({ partnerId: PARTNER_B });
+    const record = await directory.createPurchase({
+      tenantId: tenantB.id,
+      agentId: null,
+      partnerId: PARTNER_B,
+      outcome: "refused",
+      code: "VenueNotRegistered",
+      reason: "no",
+      venue: "x:CCL57L4ZDBRRWL2PKHZCYQZRDV4A37LOZRWMSCRQQ5JYRKMJW6I3TM7F",
+      productId: "p",
+      quantity: 1,
+      intentId: null,
+      total: null,
+      asset: null,
+      payTo: null,
+      transactionHash: null,
+      delivery: null,
+    });
+    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/purchases/${record.id}` }));
+    expect(result.status).toBe(404);
+    expect((result.body as { code: string }).code).toBe("PurchaseNotFound");
   });
 
-  it("GET /v1/purchases/{id} answers 501 behind payments:read", async () => {
+  it("404s an id that does not exist", async () => {
     const result = await routePartnerRequest(baseRequest({ pathname: "/v1/purchases/pur_01JB0000000000000000000003" }));
-    expect(result.status).toBe(501);
+    expect(result.status).toBe(404);
   });
+});
 
-  it("GET /v1/tenants/{id}/activity answers 501 behind vault:read", async () => {
+describe("routePartnerRequest — GET /v1/tenants/{id}/activity (still frozen, T76 implements it)", () => {
+  it("answers 501 behind vault:read", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_A });
     const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity` }));
     expect(result.status).toBe(501);
   });
 
-  it("GET /v1/tenants/{id}/activity 404s another partner's tenant", async () => {
+  it("404s another partner's tenant", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_B });
     const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity` }));
     expect(result.status).toBe(404);

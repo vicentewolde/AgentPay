@@ -15,7 +15,7 @@
  * it" rule `InvalidApiKey` already applies to a revoked key.
  */
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
-import type { AgentInstance, ConsentSessionRecord, Directory, MandateRecord, Tenant } from "@agentpey/directory";
+import type { AgentInstance, ConsentSessionRecord, Directory, MandateRecord, PurchaseRecord, Tenant } from "@agentpey/directory";
 import {
   authorizeRequest,
   createConsentSessionRequestSchema,
@@ -27,14 +27,18 @@ import {
   toConsentSessionResource,
   toErrorEnvelope,
   toMandateResource,
+  toPurchaseResource,
   toTenantResource,
   createPurchaseRequestSchema,
   type ApiScope,
+  type PurchaseResource,
 } from "@agentpey/partner-api";
 import { z } from "zod";
 
 export type PartnerRoutesDirectory = Pick<
   Directory,
+  | "createPurchase"
+  | "findPurchase"
   | "authenticate"
   | "createTenant"
   | "findTenant"
@@ -48,6 +52,45 @@ export type PartnerRoutesDirectory = Pick<
   | "findConsentSession"
 >;
 
+/**
+ * What a purchase needs, as this layer sees it: one call, one answer.
+ *
+ * Injected rather than imported so `partner-routes.ts` stays what its own
+ * docstring promises — pure apart from narrowly-typed dependencies, testable
+ * with a fake and no HTTP server, no Postgres, no Stellar. Everything the
+ * real implementation needs (a master seed, a reserve key, an RPC client)
+ * lives on the far side of this one function, and none of it leaks into the
+ * routing layer.
+ */
+export type ExecutePurchase = (request: {
+  readonly tenantId: string;
+  readonly venue: string;
+  readonly productId: string;
+  readonly quantity: number;
+  readonly maxTotal?: string;
+  readonly routeParams?: Readonly<Record<string, string | number>>;
+}) => Promise<
+  | {
+      readonly kind: "settled";
+      readonly agentId: string;
+      readonly intentId: string;
+      readonly total: string;
+      readonly asset: string;
+      readonly payTo: string | undefined;
+      readonly transactionHash: string | undefined;
+      readonly resourceUrl: string;
+      readonly resource: unknown;
+    }
+  | {
+      readonly kind: "refused";
+      readonly agentId: string | null;
+      readonly code: string;
+      readonly reason: string;
+      readonly details: Readonly<Record<string, unknown>>;
+      readonly intentId: string | undefined;
+    }
+>;
+
 export interface PartnerRouteRequest {
   readonly method: string;
   readonly pathname: string;
@@ -58,6 +101,8 @@ export interface PartnerRouteRequest {
   readonly directory: PartnerRoutesDirectory;
   /** This deployment's own origin, e.g. `https://agentpay-web.onrender.com` — used to build a `consent_url`. Only read by `POST /v1/consent_sessions`. */
   readonly baseUrl: string;
+  /** Runs one purchase. Only read by `POST /v1/purchases`. */
+  readonly executePurchase: ExecutePurchase;
   readonly now?: Date;
 }
 
@@ -83,6 +128,7 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ConsentSessionNotFound: 404,
   ConsentSessionExpired: 410,
   ConsentSessionAlreadyCompleted: 409,
+  PurchaseNotFound: 404,
   /**
    * T73 froze the execution routes before T75 implements them. `501` and not
    * `404`: the route exists, is authenticated, and validates its body — what
@@ -299,22 +345,59 @@ async function handleCreatePurchase(input: PartnerRouteRequest, now: Date): Prom
   });
   if (outcome.kind === "replay") return { status: outcome.record.responseStatus, body: outcome.record.responseBody };
 
-  const request = parseBody(createPurchaseRequestSchema, input.body);
-  await requireOwnedTenant(input.directory, request.tenant_id, auth.partnerId);
+  return respondOrCache(input.directory, auth.partnerId, input.idempotencyKeyHeader!, input.body, async () => {
+    const request = parseBody(createPurchaseRequestSchema, input.body);
+    await requireOwnedTenant(input.directory, request.tenant_id, auth.partnerId);
 
-  // Deliberately *not* cached through `respondOrCache`: caching a "not
-  // implemented" against this partner's idempotency key would make the same
-  // key keep replaying a 501 after T75 makes the route work.
-  throw new AgentPassError("NotImplemented", "executing a purchase is not wired yet — T73 froze this contract, T75 implements it", {
-    details: { tenantId: request.tenant_id, venue: request.venue, productId: request.product_id },
+    const result = await input.executePurchase({
+      tenantId: request.tenant_id,
+      venue: request.venue,
+      productId: request.product_id,
+      quantity: request.quantity,
+      maxTotal: request.max_total,
+      routeParams: request.route_params,
+    });
+
+    // Settled or refused, the attempt is recorded. A design that only stored
+    // successes would make "why did my agent not buy this?" unanswerable —
+    // the question a system like this most needs to answer.
+    const record = await input.directory.createPurchase({
+      tenantId: request.tenant_id,
+      agentId: result.agentId,
+      partnerId: auth.partnerId,
+      outcome: result.kind,
+      code: result.kind === "refused" ? result.code : null,
+      reason: result.kind === "refused" ? result.reason : null,
+      venue: request.venue,
+      productId: request.product_id,
+      quantity: request.quantity,
+      intentId: result.intentId ?? null,
+      total: result.kind === "settled" ? result.total : null,
+      asset: result.kind === "settled" ? result.asset : null,
+      payTo: result.kind === "settled" ? (result.payTo ?? null) : null,
+      transactionHash: result.kind === "settled" ? (result.transactionHash ?? null) : null,
+      delivery:
+        result.kind === "settled"
+          ? { resource_url: result.resourceUrl, resource: result.resource }
+          : null,
+    });
+
+    // `201` for both outcomes. A Mandate saying no is this system working;
+    // reporting it as a client error would file "your consent does not cover
+    // this" alongside "your JSON is malformed".
+    return { status: 201, body: successEnvelope(toPurchaseResource(record)) };
   });
 }
 
 async function handleGetPurchase(input: PartnerRouteRequest, id: string): Promise<PartnerRouteResponse> {
-  await authorizeRequest(input.authorizationHeader, "payments:read" satisfies ApiScope, input.directory.authenticate);
-  throw new AgentPassError("NotImplemented", "reading a purchase is not wired yet — T73 froze this contract, T75 implements it", {
-    details: { purchaseId: id },
-  });
+  const auth = await authorizeRequest(input.authorizationHeader, "payments:read" satisfies ApiScope, input.directory.authenticate);
+  const record = await input.directory.findPurchase(id);
+  // `404`, never `403`, for another partner's purchase — the rule this file
+  // has applied to every resource since T49.
+  if (record === undefined || record.partnerId !== auth.partnerId) {
+    throw new AgentPassError("PurchaseNotFound", "no purchase with that id", { details: { purchaseId: id } });
+  }
+  return { status: 200, body: successEnvelope(toPurchaseResource(record)) };
 }
 
 /**

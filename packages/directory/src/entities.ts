@@ -226,6 +226,48 @@ export const consentSessionRecordSchema = z.strictObject({
 });
 
 /**
+ * One purchase a partner asked for, and what happened — settled or refused
+ * (T75/F9).
+ *
+ * **A refusal is a row, not an absence.** `PILOTO-F9.md` §6 requires that a
+ * person can see their rejected attempts with an understandable reason, and
+ * §7 requires every acceptance case to leave durable evidence. A design that
+ * only stored successes would make "why did my agent not buy this?"
+ * unanswerable, which is the question a system like this most needs to
+ * answer.
+ *
+ * The vault already records refusals the *authorisation* layers produced
+ * (Fase 5). This table is not a duplicate of that: the vault records
+ * decisions about intents, this records requests a partner made. They differ
+ * exactly where it matters — a request refused before any intent existed (an
+ * unregistered venue, a tenant with no mandate) leaves no vault record at
+ * all, and those are precisely the refusals an integrator needs to see.
+ */
+export const purchaseRecordSchema = z.strictObject({
+  id: purchaseIdSchema,
+  tenantId: tenantIdSchema,
+  /** `null` when the refusal happened before this tenant's agent was resolved. */
+  agentId: agentIdSchema.nullable(),
+  /** Which partner asked, so a purchase can never be read across the boundary. */
+  partnerId: partnerIdSchema,
+  outcome: z.enum(["settled", "refused"]),
+  /** The typed `AgentPassError` code of whichever layer refused. `null` when settled. */
+  code: z.string().nullable(),
+  reason: z.string().nullable(),
+  venue: z.string().min(1),
+  productId: z.string().min(1),
+  quantity: z.number().int().min(1),
+  intentId: z.string().nullable(),
+  total: z.string().nullable(),
+  asset: z.string().nullable(),
+  payTo: z.string().nullable(),
+  transactionHash: z.string().nullable(),
+  /** What the merchant released, as it released it. `json`, same `C-5` reasoning. */
+  delivery: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.date(),
+});
+
+/**
  * A cached `/v1` response, keyed by `(partnerId, key)` — the storage side of
  * `@agentpey/partner-api`'s `resolveIdempotency`. Field names match that
  * package's own `IdempotencyRecord` exactly (not imported — the dependency
@@ -258,3 +300,4 @@ export type MandateSignatureKind = z.infer<typeof mandateSignatureKindSchema>;
 export type IdempotencyRecord = z.infer<typeof idempotencyRecordSchema>;
 export type ConsentSessionRecord = z.infer<typeof consentSessionRecordSchema>;
 export type ConsentSessionStatus = z.infer<typeof consentSessionStatusSchema>;
+export type PurchaseRecord = z.infer<typeof purchaseRecordSchema>;

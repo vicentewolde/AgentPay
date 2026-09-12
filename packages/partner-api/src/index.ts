@@ -79,6 +79,7 @@ export {
   purchaseIdSchema,
   purchaseOutcomeSchema,
   purchaseResourceSchema,
+  toPurchaseResource,
   venueIdSchema,
   type CreatePurchaseRequest,
   type PurchaseDelivery,
