@@ -76,3 +76,9 @@ services:
       # re-uploading it — one upload, many `createCustomContract` calls.
       - key: POLICY_RAIL_WASM_HASH
         value: 8690d1f5ce18e6ef6209a400918d095450c01d7a8621ac795f404e11ea7e3175
+      # T77 — the public address of the sponsoring reserve (the public key of
+      # AGENT_SECRET_KEY above). Not a secret: it only ever has its balance
+      # read, and keeping it separate from the secret is what stops a
+      # read-only surface from needing a signing key.
+      - key: RESERVE_ADDRESS
+        value: GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K

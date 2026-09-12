@@ -70,6 +70,7 @@ function agentRow(overrides: Partial<AgentInstance> = {}): AgentInstance {
     status: "active",
     onchainState: "funded",
     policyRailContractId: RAIL,
+    policyRailFundedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   PERDAY_WARNING_RATIO,
+  SPONSORED_RAILS_WARNING_HEADROOM,
+  readSponsoredCreditStatus,
   activeMandate,
   readPerDayUsage,
   readRailBalances,
@@ -156,6 +158,7 @@ describe("readRailBalances", () => {
       status: "active",
       onchainState: "funded",
       policyRailContractId: RAIL,
+      policyRailFundedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       ...overrides,
@@ -178,5 +181,34 @@ describe("readRailBalances", () => {
     });
     expect(balances[0]?.usdc).toContain("error");
     expect(balances[0]?.low).toBe(false);
+  });
+});
+
+describe("readSponsoredCreditStatus", () => {
+  it("reports what is left against both the cap and the balance, whichever binds first", async () => {
+    const directory = { countFundedRails: async () => 4 };
+    const status = await readSponsoredCreditStatus(directory, "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K", async () => "100.0000000");
+    // The cap binds: 16 tenants left of 20, even though the balance affords 100.
+    expect(status).toMatchObject({ funded: 4, cap: 20, remaining: 16, nearExhaustion: false });
+  });
+
+  it("reports the balance as the binding constraint when it is the smaller one", async () => {
+    const directory = { countFundedRails: async () => 0 };
+    const status = await readSponsoredCreditStatus(directory, "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K", async () => "3.0000000");
+    expect(status.remaining).toBe(3);
+    expect(status.nearExhaustion).toBe(true);
+  });
+
+  it("warns with headroom left, not at exhaustion", async () => {
+    const directory = { countFundedRails: async () => 15 };
+    const status = await readSponsoredCreditStatus(directory, "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K", async () => "100.0000000");
+    expect(status.remaining).toBe(SPONSORED_RAILS_WARNING_HEADROOM);
+    expect(status.nearExhaustion).toBe(true);
+  });
+
+  it("never reports a negative remainder", async () => {
+    const directory = { countFundedRails: async () => 25 };
+    const status = await readSponsoredCreditStatus(directory, "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K", async () => "100.0000000");
+    expect(status.remaining).toBe(0);
   });
 });

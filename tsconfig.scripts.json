@@ -9,6 +9,7 @@
     "paths": {
       "@agentpass/core": ["./packages/core/src/index.ts"],
       "@agentpass/sdk": ["./packages/sdk/src/index.ts"],
+      "@agentpey/activity": ["./packages/activity/src/index.ts"],
       "@agentpey/agent": ["./apps/agent/src/index.ts"],
       "@agentpey/directory": ["./packages/directory/src/index.ts"],
       "@agentpey/mandate": ["./packages/mandate/src/index.ts"],

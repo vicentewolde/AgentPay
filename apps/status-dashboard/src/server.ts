@@ -14,6 +14,8 @@ import {
   readMandatesStatus,
   readPerDayUsage,
   readRailBalances,
+  readSponsoredCreditStatus,
+  type SponsoredCreditStatus,
   readVaultStatus,
   recentRefusals,
   type PerDayUsage,
@@ -33,6 +35,13 @@ export interface StatusDashboardDependencies {
   readonly vaultFactory: VaultReaderFactory;
   /** T71: a SEP-41 `balance()` simulation of one rail's address — never a `transfer`. */
   readonly readRailBalance: (railContractId: string) => Promise<string>;
+  /**
+   * T77: the account that sponsors each tenant's first rail. Reading its
+   * balance here is the point of the whole feature — the rails were already
+   * visible, but the pool they are funded *from* was not, so it could only be
+   * discovered empty by a purchase failing.
+   */
+  readonly reserveAddress: string;
 }
 
 type Json = null | boolean | number | string | Json[] | { readonly [key: string]: Json };
@@ -88,6 +97,18 @@ function railBalancesJson(balances: readonly RailBalance[]): Json[] {
   return balances.map(({ agentId, contractId, usdc, low }) => ({ agentId, contractId, usdc, low }));
 }
 
+/**
+ * The sponsored reserve, as an operator needs to read it: how many tenants
+ * have been sponsored, how many more the pilot will sponsor, and what is
+ * actually left in the account. `remaining` is whichever of the two binds
+ * first, so a full reserve with a reached cap reads as zero rather than as
+ * plenty.
+ */
+function renderReserve(status: SponsoredCreditStatus): string {
+  const tone = status.nearExhaustion ? ' style="color:#b00"' : "";
+  return `<h3>Sponsored testnet credit</h3><p${tone}>${escapeHtml(String(status.remaining))} more tenant(s) can be sponsored — ${escapeHtml(String(status.funded))} of ${escapeHtml(String(status.cap))} used, reserve holds ${escapeHtml(status.reserveUsdc)} USDC.${status.nearExhaustion ? " Running low." : ""}</p>`;
+}
+
 function renderMetrics(perDay: PerDayUsage | undefined, refusals: readonly RefusalSummary[], railBalances: readonly RailBalance[]): string {
   const perDaySection =
     perDay === undefined
@@ -114,6 +135,7 @@ function renderPage(
   vault: Awaited<ReturnType<typeof readVaultStatus>> | undefined,
   perDay: PerDayUsage | undefined,
   railBalances: readonly RailBalance[],
+  reserve: SponsoredCreditStatus,
 ): string {
   const mandateRows = mandates?.mandates
     .map(
@@ -128,7 +150,10 @@ function renderPage(
     .join("") ?? "";
   const health = vault === undefined ? "—" : vault.verification.ok ? "healthy" : `broken at sequence ${vault.verification.brokenAtSeq}`;
   const tenant = tenantId === undefined ? "" : escapeHtml(tenantId);
-  const metrics = tenantId === undefined ? "" : renderMetrics(perDay, recentRefusals(vault?.records ?? []), railBalances);
+  // The reserve is shown whether or not a tenant is selected: it is the
+  // pilot's, not a tenant's, and an operator should not have to pick someone
+  // to find out the faucet is dry.
+  const metrics = renderReserve(reserve) + (tenantId === undefined ? "" : renderMetrics(perDay, recentRefusals(vault?.records ?? []), railBalances));
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AgentPey status</title>
@@ -223,33 +248,43 @@ export function createStatusServer(dependencies: StatusDashboardDependencies): S
       }
       if (metricsMatch !== null) {
         const tenantId = tenantIdFromPath(metricsMatch[1] ?? "");
-        const [vault, perDay, railBalances] = await Promise.all([
+        const [vault, perDay, railBalances, reserve] = await Promise.all([
           readVaultStatus(dependencies.directory, dependencies.vaultFactory, tenantId),
           readPerDayUsage(dependencies.directory, dependencies.vaultFactory, tenantId),
           readRailBalances(dependencies.directory, tenantId, dependencies.readRailBalance),
+          readSponsoredCreditStatus(dependencies.directory, dependencies.reserveAddress, dependencies.readRailBalance),
         ]);
         sendJson(response, 200, {
           tenant: { id: vault.tenant.id, label: vault.tenant.label ?? null, status: vault.tenant.status },
           perDay: perDayJson(perDay),
           rejections: refusalsJson(recentRefusals(vault.records)),
           railBalances: railBalancesJson(railBalances),
+          // Not scoped to this tenant, and said so by its name: the reserve is
+          // the pilot's, shared by every tenant it has sponsored.
+          sponsoredCredit: { ...reserve },
         });
         return;
       }
 
       const tenantId = url.searchParams.get("tenantId");
       if (tenantId === null) {
-        sendHtml(response, 200, renderPage(undefined, undefined, undefined, undefined, []));
+        const reserve = await readSponsoredCreditStatus(
+          dependencies.directory,
+          dependencies.reserveAddress,
+          dependencies.readRailBalance,
+        );
+        sendHtml(response, 200, renderPage(undefined, undefined, undefined, undefined, [], reserve));
         return;
       }
       const parsedTenantId = parseTenantId(tenantId);
-      const [mandates, vault, perDay, railBalances] = await Promise.all([
+      const [mandates, vault, perDay, railBalances, reserve] = await Promise.all([
         readMandatesStatus(dependencies.directory, parsedTenantId),
         readVaultStatus(dependencies.directory, dependencies.vaultFactory, parsedTenantId),
         readPerDayUsage(dependencies.directory, dependencies.vaultFactory, parsedTenantId),
         readRailBalances(dependencies.directory, parsedTenantId, dependencies.readRailBalance),
+        readSponsoredCreditStatus(dependencies.directory, dependencies.reserveAddress, dependencies.readRailBalance),
       ]);
-      sendHtml(response, 200, renderPage(parsedTenantId, mandates, vault, perDay, railBalances));
+      sendHtml(response, 200, renderPage(parsedTenantId, mandates, vault, perDay, railBalances, reserve));
     } catch (error) {
       errorResponse(response, error);
     }
@@ -269,6 +304,25 @@ async function databaseUrl(): Promise<string> {
   return match[1];
 }
 
+/**
+ * The public key of the account that sponsors each tenant's first rail
+ * (`AGENT_SECRET_KEY`). Read as a *public* address, never as a secret: this
+ * dashboard reads balances and must never be in a position to move one, so
+ * it is configured with the address alone.
+ */
+async function reserveAddress(): Promise<string> {
+  const fromProcess = process.env.RESERVE_ADDRESS;
+  if (fromProcess !== undefined && fromProcess !== "") return fromProcess;
+  const file = await readFile(ENV_PATH, "utf8").catch(() => "");
+  const match = /^RESERVE_ADDRESS=(.*)$/m.exec(file);
+  if (match?.[1] === undefined || match[1] === "") {
+    throw new AgentPassError("ConfigError", "RESERVE_ADDRESS is missing from .env.local and process.env", {
+      details: { envPath: ENV_PATH, key: "RESERVE_ADDRESS" },
+    });
+  }
+  return match[1].trim();
+}
+
 async function main(): Promise<void> {
   const connectionString = await databaseUrl();
   const directory: Directory = await createDirectory({ connectionString });
@@ -276,6 +330,7 @@ async function main(): Promise<void> {
     directory,
     vaultFactory: (tenantId) => createPostgresMandateVault({ connectionString, tenantId }),
     readRailBalance: readRailUsdcBalance,
+    reserveAddress: await reserveAddress(),
   });
   server.listen(PORT, () => console.log(`Status dashboard listening on http://localhost:${PORT} (repo: ${REPO_ROOT})`));
 }

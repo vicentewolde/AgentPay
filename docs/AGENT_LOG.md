@@ -4334,3 +4334,73 @@ números de `C-80` — mismo archivo, mismo tema. Anotado como tarea operativa
 de T77: un barrido que devuelva a la reserva el USDC acumulado en SignalDesk.
 Del lado del usuario sigue pendiente pagar la instancia de `agentpey-web` en
 Render (38.8 s de arranque en frío medidos).
+
+---
+
+## 2026-09-12 (14) — main / cc/t77-sponsored-credit
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t76-activity-route` a `main` con confirmación
+del usuario. Misma sesión, **T77**: los controles del crédito patrocinado.
+
+**El arreglo del doble fondeo** (`C-82`), que es el defecto real que
+`PILOTO-F9.md` § 13.2 había encontrado leyendo el código. El orden era
+desplegar → fondear → persistir, así que una caída entre fondear y persistir
+—o dos primeras compras concurrentes, sin ninguna caída— dejaba un rail con
+el USDC de la reserva y sin fila apuntándole, y la próxima compra desplegaba y
+fondeaba otro. Ahora es desplegar → **persistir** → reclamar → fondear:
+`claimRailFunding` es un `update` condicional (la reclamación *es* la
+escritura, sin ventana entre leer y escribir), `releaseRailFunding` revierte
+una transferencia fallida, y un rail desplegado-pero-sin-fondear se fondea en
+la llamada siguiente en vez de redesplegarse. El peor caso pasó de un
+contrato con plata perdida a un contrato vacío que costó unos stroops.
+Deliberadamente **no** se decide mirando el saldo on-chain: un rail que gastó
+hasta cero es indistinguible de uno nunca fondeado.
+
+**El pre-chequeo de la reserva** (`C-83`), con dos condiciones separadas a
+propósito —tope alcanzado (una decisión) y saldo insuficiente (un hecho)—
+porque los remedios son opuestos, y el `details` lo dice con `remedy`. Corre
+antes del Friendbot y del deploy, así que refuza sin gastar un fee. Los
+números (`SPONSORED_FUNDING_PER_TENANT`, `MAX_SPONSORED_RAILS`, el umbral de
+aviso) viven en `@agentpey/activity`, no junto al deploy — mismo criterio que
+`C-81`: el chequeo que refuza y el panel que muestra leen lo mismo.
+
+**La reserva entra al panel**, visible aunque no haya tenant elegido, y
+configurada con `RESERVE_ADDRESS` —la dirección **pública**, variable nueva
+separada de `AGENT_SECRET_KEY`— porque una superficie de solo lectura no debe
+necesitar una llave capaz de firmar. Hay script equivalente:
+`pnpm run check:sponsored-credit`.
+
+Y los rails nuevos ya se despliegan con los números de `C-80`: `per_tx` 0.30,
+`per_day` 0.60, 1 USDC de crédito inicial.
+
+Verificado: **1010 tests** (eran 1001), `typecheck` y `build` limpios, y
+—esto no es con fakes— el script corrido contra testnet y Postgres reales
+devolvió `39.4840000` USDC en la reserva, `0 de 20` rails fondeados, `20`
+tenants disponibles.
+
+Nota honesta registrada en `C-82`: los rails de prueba anteriores a T77 no
+cuentan contra el tope (su columna quedó en `null`). No se hace backfill a
+propósito — un `update` idempotente en el SQL de esquema correría en cada
+arranque y marcaría como fondeado un rail legítimamente a la espera de su
+transferencia, que es un error peor que contar de menos unos tenants de
+prueba.
+
+Documentación tocada: `DECISIONES.md` (`C-82`, `C-83`), `BITACORA.md` (hito
+T77 + tabla + estado actual). Archivos de código:
+`packages/directory/src/{schema-sql,entities,directory}.ts`,
+`packages/activity/src/index.ts` (+ test),
+`apps/web/src/{tenant-rail,tenant-purchase,server}.ts` (+ tests),
+`apps/status-dashboard/src/{status,server}.ts` (+ test),
+`apps/agent/src/policy/rail-balance.ts`, `packages/core/src/errors.ts`,
+`scripts/check-sponsored-credit.ts` (nuevo), `tsconfig.scripts.json`,
+`.env.example`, `render.yaml`, `package.json`.
+
+Pendiente: **mergear `cc/t77-sponsored-credit`** (espera confirmación). Del
+lado del usuario: setear `RESERVE_ADDRESS` en Render (ya está en
+`render.yaml` con el valor correcto, Render lo va a pedir igual) y pagar la
+instancia de `agentpey-web`. Anotado y sin construir: un barrido que devuelva
+a la reserva el USDC que SignalDesk acumule — necesita que SignalDesk exista
+primero. Siguiente hito **T78**: índice de descubrimiento público y adaptador
+de catálogo sobre Periplo, con su fallback.

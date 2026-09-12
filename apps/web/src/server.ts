@@ -764,6 +764,7 @@ async function resolveRailPayer(current: DemoSession): Promise<PolicyRailPayer> 
       current.walletAddress,
       reserve,
       wasmHash,
+      readRailUsdcBalance,
     );
     // The tenant's own key is both the Mandato's agent and this rail's
     // `owner` — never `paymentSecret` (`AGENT_SECRET_KEY`), which the
@@ -1147,6 +1148,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
             databaseUrl: requireEnv(env, "DATABASE_URL"),
             reserve: requireSecretKey(env, "AGENT_SECRET_KEY"),
             policyRailWasmHash: requireEnv(env, "POLICY_RAIL_WASM_HASH"),
+            readUsdcBalance: readRailUsdcBalance,
           },
           purchase,
         ),

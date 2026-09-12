@@ -1,5 +1,7 @@
 import type { AddressInfo } from "node:net";
 
+const RESERVE_ADDRESS = "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K";
+
 import { stellarAddressToDid } from "@agentpass/core";
 import type { AgentInstance, MandateRecord, Tenant } from "@agentpey/directory";
 import type { VaultRecord } from "@agentpey/vault";
@@ -114,6 +116,9 @@ const railedAgent: AgentInstance = {
 
 function readOnlyDirectory(): StatusDirectory {
   return {
+    async countFundedRails() {
+      return 3;
+    },
     findTenant: async (id) => (id === tenant.id ? tenant : undefined),
     listMandates: async (id) => (id === tenant.id ? [mandate, richMandate] : []),
     listAgents: async (id) => (id === tenant.id ? [railedAgent] : []),
@@ -127,6 +132,7 @@ async function start() {
     directory: readOnlyDirectory(),
     vaultFactory: async () => vault,
     readRailBalance: async (contractId) => (contractId === railedAgent.policyRailContractId ? "0.0010000" : "1.0000000"),
+    reserveAddress: RESERVE_ADDRESS,
   });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -181,6 +187,10 @@ describe("status dashboard HTTP server", () => {
       },
       rejections: [{ at: "2026-09-11T12:01:00.000Z", intentId: "intent-refused", code: "MandateAmountExceeded", reason: "amount exceeds per-transaction limit" }],
       railBalances: [{ agentId: railedAgent.id, contractId: railedAgent.policyRailContractId, usdc: "0.0010000", low: true }],
+      // T77: the pilot's own reserve, not this tenant's. Three rails already
+      // sponsored, and the fake reserve reads `1.0000000` USDC — enough for
+      // exactly one more tenant, so the cap is not what binds here.
+      sponsoredCredit: { funded: 3, cap: 20, remaining: 1, reserveUsdc: "1.0000000", nearExhaustion: true },
     });
 
     const page = await fetch(`${baseUrl}/?tenantId=${tenant.id}`);

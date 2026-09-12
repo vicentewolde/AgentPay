@@ -282,6 +282,7 @@ function toAgent(row: Record<string, unknown>): AgentInstance {
     status: row.status,
     onchainState: row.onchain_state,
     policyRailContractId: row.policy_rail_contract_id,
+    policyRailFundedAt: row.policy_rail_funded_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -447,6 +448,19 @@ export interface Directory {
   /** `/v1`'s idempotency store — `resolveIdempotency` (`@agentpey/partner-api`) reads through this. */
   findIdempotentResponse(partnerId: string, key: string): Promise<IdempotencyRecord | undefined>;
   recordIdempotentResponse(input: RecordIdempotentResponseInput): Promise<IdempotencyRecord>;
+
+  /**
+   * Claims the right to fund this agent's rail, exactly once (T77).
+   * `true` means this caller may transfer the sponsored balance; `false`
+   * means someone else already did, or is doing it right now. A caller whose
+   * transfer then fails must call {@link releaseRailFunding}, or the rail
+   * stays deployed and empty forever.
+   */
+  claimRailFunding(agentId: string): Promise<boolean>;
+  /** Undoes a claim whose funding transfer failed, so the next attempt can retry. */
+  releaseRailFunding(agentId: string): Promise<void>;
+  /** How many rails the reserve has funded, across every tenant — the sponsored-credit cap counts against this. */
+  countFundedRails(): Promise<number>;
 
   /** Records one purchase a partner asked for — settled or refused (T75). */
   createPurchase(input: CreatePurchaseInput): Promise<PurchaseRecord>;
@@ -933,6 +947,32 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
     },
 
     // ---- consent sessions (T51) --------------------------------------------
+    async claimRailFunding(agentId) {
+      // The claim *is* the conditional update: two processes racing here, one
+      // wins the row and the other is told `false`, with no read-then-write
+      // gap in between for both to pass through.
+      const { rowCount } = await pool.query(
+        `update directory_agents set policy_rail_funded_at = now(), updated_at = now()
+         where id = $1 and policy_rail_contract_id is not null and policy_rail_funded_at is null`,
+        [agentId],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+
+    async releaseRailFunding(agentId) {
+      await pool.query(
+        "update directory_agents set policy_rail_funded_at = null, updated_at = now() where id = $1",
+        [agentId],
+      );
+    },
+
+    async countFundedRails() {
+      const { rows } = await pool.query<{ count: string }>(
+        "select count(*)::text as count from directory_agents where policy_rail_funded_at is not null",
+      );
+      return Number(rows[0]?.count ?? "0");
+    },
+
     async createPurchase(input) {
       const id = newId("purchase");
       const row = await one(

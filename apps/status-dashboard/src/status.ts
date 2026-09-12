@@ -51,11 +51,16 @@ export async function readVaultStatus(
  */
 export {
   LOW_USDC_WARNING,
+  MAX_SPONSORED_RAILS,
   PERDAY_WARNING_RATIO,
+  SPONSORED_FUNDING_PER_TENANT,
+  SPONSORED_RAILS_WARNING_HEADROOM,
   readPerDayUsage,
   readRailBalances,
+  readSponsoredCreditStatus,
   recentRefusals,
   type PerDayUsage,
   type RailBalance,
   type RefusalSummary,
+  type SponsoredCreditStatus,
 } from "@agentpey/activity";

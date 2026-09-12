@@ -22,13 +22,22 @@ interface SacBalance {
   balance(args: { readonly id: string }): Promise<contract.AssembledTransaction<bigint>>;
 }
 
-/** Reads a rail's USDC balance by simulating `balance()` on the SEP-41 asset contract — no signing, no transfer. */
-export async function readRailUsdcBalance(railContractId: string): Promise<string> {
+/**
+ * Reads an address's USDC balance by simulating `balance()` on the SEP-41
+ * asset contract — no signing, no transfer.
+ *
+ * `address` is a rail contract (`C…`) in every caller through T76, and from
+ * T77 also the reserve account (`G…`) that sponsors those rails: SEP-41
+ * `balance()` answers for either, so the pre-flight check on the reserve and
+ * the panel's reading of a rail are the same call rather than two ways of
+ * asking the same question.
+ */
+export async function readRailUsdcBalance(address: string): Promise<string> {
   const client = await contract.Client.from<SacBalance>({
     contractId: BAZAAR_USDC_ISSUER,
     rpcUrl: RPC_URL,
     networkPassphrase: NETWORK_PASSPHRASE,
   });
-  const assembled = await client.balance({ id: railContractId });
+  const assembled = await client.balance({ id: address });
   return fromScaledAmount(assembled.result);
 }

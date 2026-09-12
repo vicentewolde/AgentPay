@@ -142,6 +142,14 @@ export const agentInstanceSchema = z.strictObject({
    * spend enough to justify one.
    */
   policyRailContractId: stellarContractIdSchema.nullable(),
+  /**
+   * When this rail actually received its sponsored balance (T77). `null` for
+   * a rail that has been deployed but not yet funded — a state that exists
+   * for a few seconds normally, and for longer if a funding transfer failed.
+   * Distinct from a zero balance on purpose: "never funded" and "spent it
+   * all" must not be confused, or the reserve would pay twice.
+   */
+  policyRailFundedAt: z.date().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 });

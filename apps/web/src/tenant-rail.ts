@@ -35,6 +35,7 @@
  * never checks back.
  */
 import { AgentPassError } from "@agentpass/core";
+import { MAX_SPONSORED_RAILS, SPONSORED_FUNDING_PER_TENANT } from "@agentpey/activity";
 import { BAZAAR_USDC_ISSUER, fromScaledAmount, toScaledAmount } from "@agentpey/agent";
 import type { Directory } from "@agentpey/directory";
 import { Keypair, Networks, StrKey, contract } from "@stellar/stellar-sdk";
@@ -46,19 +47,40 @@ const NETWORK_PASSPHRASE = Networks.TESTNET;
 const FRIENDBOT_URL = "https://friendbot.stellar.org";
 
 /**
- * Same limits the shared rail deploys with (`scripts/deploy-policy-rail.ts`).
- * Making these configurable per tenant or partner is a product decision for
- * later — out of scope here.
+ * The pilot's numbers, decided with the user in `C-80` and chosen together
+ * rather than one at a time: the funding, the two on-chain limits and
+ * SignalDesk's prices only make sense as a set.
+ *
+ * They are picked so that **a second purchase of the report exceeds the daily
+ * cap within one sitting** — acceptance case 4 of the F9 brief becomes
+ * something an external tester can actually reach, instead of something that
+ * needs a contrived amount or a day of waiting. The report costs `0.25` and
+ * the credit pack `0.10`; a `0.60` daily cap allows two reports and refuses
+ * the third.
+ *
+ * These are written into the contract at construction, so a rail already
+ * deployed keeps whatever it was built with — the handful created in T58
+ * still carry the old `0.002`/`0.01` and are not worth migrating.
  */
-const PER_TX = "0.0020000";
-const PER_DAY = "0.0100000";
+const PER_TX = "0.3000000";
+const PER_DAY = "0.6000000";
 const VALID_DAYS = 365;
 
-/** How much USDC a freshly deployed tenant rail starts with. */
-const INITIAL_FUNDING = "0.0500000";
+/**
+ * How much USDC a freshly deployed tenant rail starts with, and how many
+ * tenants the pilot will sponsor at all (`C-80`) — imported from
+ * `@agentpey/activity`, not declared here. The check that refuses to sponsor
+ * and the panel that shows the credit running out read the same two numbers,
+ * for the same reason every spending figure in this codebase comes from one
+ * place.
+ */
+const INITIAL_FUNDING = SPONSORED_FUNDING_PER_TENANT;
 
 /** The slice of {@link Directory} this depends on. */
-export type TenantRailDirectory = Pick<Directory, "setAgentPolicyRail">;
+export type TenantRailDirectory = Pick<
+  Directory,
+  "setAgentPolicyRail" | "claimRailFunding" | "releaseRailFunding" | "countFundedRails"
+>;
 
 interface UsdcContract {
   transfer(
@@ -159,14 +181,82 @@ async function fundRailBalance(rail: { readonly contractId: string; readonly fun
 }
 
 /**
- * Finds this tenant's own `policy_rail`, deploying and funding it on the
- * first call. Idempotent by lookup, same shape as `ensureTenantAgent`: a
- * race between two concurrent first payments resolves in
- * `setAgentPolicyRail` itself (first write wins), not here.
+ * Refuses, typed, before anything is deployed, when the pilot cannot afford
+ * to sponsor another tenant.
  *
- * @param reserve The account that funds a freshly deployed rail's initial
- * USDC balance — the same account (`AGENT_SECRET_KEY`) that funds the shared
- * rail today.
+ * Two separate conditions, deliberately not collapsed into one: the **cap**
+ * is a decision (`C-80` — twenty testers is a pilot, an uncapped faucet is a
+ * way to wake up with an empty reserve), and the **balance** is a fact. An
+ * operator reading the refusal needs to know which of the two stopped it,
+ * because the remedies are opposite: raise the cap, or add funds.
+ *
+ * @throws AgentPassError `SponsoredCreditExhausted`
+ */
+async function requireSponsoredCredit(
+  directory: TenantRailDirectory,
+  reserve: Keypair,
+  readUsdcBalance: (address: string) => Promise<string>,
+): Promise<void> {
+  const funded = await directory.countFundedRails();
+  if (funded >= MAX_SPONSORED_RAILS) {
+    throw new AgentPassError("SponsoredCreditExhausted", "the pilot has already sponsored as many tenants as it allows", {
+      details: { funded, cap: MAX_SPONSORED_RAILS, remedy: "raise the cap" },
+    });
+  }
+
+  const reserveUsdc = await readUsdcBalance(reserve.publicKey());
+  if (Number(reserveUsdc) < Number(INITIAL_FUNDING)) {
+    throw new AgentPassError("SponsoredCreditExhausted", "the pilot's reserve cannot cover another sponsored tenant", {
+      details: { reserveUsdc, needed: INITIAL_FUNDING, reserve: reserve.publicKey(), remedy: "fund the reserve" },
+    });
+  }
+}
+
+/**
+ * Funds a deployed rail exactly once, ever.
+ *
+ * **This is the fix for a real defect** (`PILOTO-F9.md` §13.2). The original
+ * order was deploy → fund → persist, so a crash between funding and
+ * persisting left the reserve's money in a contract no row pointed at, and
+ * the next purchase deployed and funded a second one. Two concurrent first
+ * purchases did the same thing with no crash at all: `setAgentPolicyRail`
+ * resolves the race for the *row*, but both had already funded a rail by
+ * then.
+ *
+ * The order is now deploy → persist → claim → fund. `claimRailFunding` is a
+ * conditional update, so exactly one caller is told to fund; a failed
+ * transfer releases the claim so the next attempt retries rather than
+ * leaving a rail deployed and empty forever.
+ *
+ * Note what it does *not* do: decide by reading the rail's balance. A rail
+ * that legitimately spent down to zero looks identical to one never funded,
+ * and topping that one up would sponsor the same tenant twice.
+ */
+async function fundRailOnce(
+  directory: TenantRailDirectory,
+  agentId: string,
+  contractId: string,
+  reserve: Keypair,
+): Promise<void> {
+  if (!(await directory.claimRailFunding(agentId))) return;
+  try {
+    await fundRailBalance({ contractId, funder: reserve });
+  } catch (error) {
+    await directory.releaseRailFunding(agentId).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
+ * Finds this tenant's own `policy_rail`, deploying and funding it on the
+ * first call. Idempotent in both halves: a rail already deployed is returned
+ * as is, and a rail deployed but not yet funded is funded on this call
+ * rather than redeployed.
+ *
+ * @param reserve The account that funds a freshly deployed rail's sponsored
+ * balance — `AGENT_SECRET_KEY`, the same account that funds the shared rail.
+ * @param readUsdcBalance Reads an account's USDC, for the pre-flight check.
+ * Injected, so this module stays testable without a network.
  */
 export async function ensureTenantPolicyRail(
   directory: TenantRailDirectory,
@@ -174,18 +264,38 @@ export async function ensureTenantPolicyRail(
   principalAddress: string,
   reserve: Keypair,
   wasmHash: string,
+  readUsdcBalance: (address: string) => Promise<string>,
 ): Promise<string> {
+  const agentId = tenantAgent.instance.id;
   const existing = tenantAgent.instance.policyRailContractId;
-  if (existing !== null) return existing;
+  if (existing !== null) {
+    // Deployed already. It may still be unfunded — a transfer that failed, or
+    // a process that died between persisting and funding — and this is where
+    // that is finished rather than discovered later as an empty balance.
+    if (tenantAgent.instance.policyRailFundedAt === null) {
+      await fundRailOnce(directory, agentId, existing, reserve);
+    }
+    return existing;
+  }
+
+  // Before anything is deployed or any fee is spent: can the pilot afford to
+  // sponsor one more tenant at all?
+  await requireSponsoredCredit(directory, reserve, readUsdcBalance);
 
   await fundWithFriendbot(tenantAgent.keypair.publicKey());
-  const contractId = await deployRailContract({
-    owner: tenantAgent.keypair,
-    principalAddress,
-    wasmHash,
-  });
-  await fundRailBalance({ contractId, funder: reserve });
+  const contractId = await deployRailContract({ owner: tenantAgent.keypair, principalAddress, wasmHash });
 
-  const persisted = await directory.setAgentPolicyRail(tenantAgent.instance.id, contractId);
-  return persisted.policyRailContractId ?? contractId;
+  // Persist **before** funding. If this process dies here, the next attempt
+  // finds the rail and funds it; the worst case is an orphaned, *empty*
+  // contract costing a few stroops of fee, instead of an orphaned contract
+  // holding the reserve's USDC.
+  const persisted = await directory.setAgentPolicyRail(agentId, contractId);
+  const actual = persisted.policyRailContractId ?? contractId;
+
+  // `actual` may be a *different* rail than the one just deployed: a
+  // concurrent first purchase can win the row. Funding follows the row, never
+  // the local variable, so the money goes to the rail the tenant will
+  // actually pay from.
+  await fundRailOnce(directory, agentId, actual, reserve);
+  return actual;
 }

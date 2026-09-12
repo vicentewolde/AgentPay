@@ -24,7 +24,8 @@
     "test:integration": "pnpm --filter @agentpass/sdk run test:integration && pnpm --filter @agentpey/mandate run test:integration",
     "typecheck": "tsc -b && tsc -p tsconfig.scripts.json",
     "check": "pnpm typecheck && pnpm test",
-    "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo"
+    "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo",
+    "check:sponsored-credit": "tsx --tsconfig tsconfig.scripts.json scripts/check-sponsored-credit.ts"
   },
   "devDependencies": {
     "@stellar/stellar-sdk": "^17.0.1",

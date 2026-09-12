@@ -129,6 +129,58 @@ export function recentRefusals(records: readonly VaultRecord[], limit = 20): rea
     .map(({ at, intentId, code, reason }) => ({ at, intentId, code, reason }));
 }
 
+// ---- Sponsored testnet credit (T77) ----------------------------------------
+
+/**
+ * The pilot's sponsored-credit policy, in one place (`C-80`).
+ *
+ * These live here and not next to the code that deploys a rail for the same
+ * reason `readPerDayUsage` does: the pre-flight check that *refuses* to
+ * sponsor another tenant and the panel that *shows* how much credit is left
+ * have to agree, and two copies of "twenty" is two numbers that can drift
+ * apart in exactly the situation where being wrong is expensive.
+ */
+export const SPONSORED_FUNDING_PER_TENANT = "1.0000000";
+export const MAX_SPONSORED_RAILS = 20;
+/** Warn while there is still credit for this many more tenants, not at exhaustion. */
+export const SPONSORED_RAILS_WARNING_HEADROOM = 5;
+
+export interface SponsoredCreditStatus {
+  readonly funded: number;
+  readonly cap: number;
+  /** Whichever binds first: the cap, or what the reserve can actually afford. */
+  readonly remaining: number;
+  readonly reserveUsdc: string;
+  readonly nearExhaustion: boolean;
+}
+
+/** How many rails the reserve has funded, across every tenant. */
+export interface SponsoredCreditDirectory {
+  countFundedRails(): Promise<number>;
+}
+
+/**
+ * How much sponsored credit is left, changing nothing. `readUsdcBalance` is
+ * injected — a SEP-41 `balance()` simulation, never a transfer — the same
+ * seam every other read here uses.
+ */
+export async function readSponsoredCreditStatus(
+  directory: SponsoredCreditDirectory,
+  reserveAddress: string,
+  readUsdcBalance: (address: string) => Promise<string>,
+): Promise<SponsoredCreditStatus> {
+  const [funded, reserveUsdc] = await Promise.all([directory.countFundedRails(), readUsdcBalance(reserveAddress)]);
+  const affordable = Math.floor(Number(reserveUsdc) / Number(SPONSORED_FUNDING_PER_TENANT));
+  const remaining = Math.max(0, Math.min(MAX_SPONSORED_RAILS - funded, affordable));
+  return {
+    funded,
+    cap: MAX_SPONSORED_RAILS,
+    remaining,
+    reserveUsdc,
+    nearExhaustion: remaining <= SPONSORED_RAILS_WARNING_HEADROOM,
+  };
+}
+
 export interface RailBalance {
   readonly agentId: string;
   readonly contractId: string;

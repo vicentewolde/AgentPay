@@ -43,6 +43,7 @@ function fakeAgentRow(overrides: Partial<AgentInstance> = {}): AgentInstance {
     status: "active",
     onchainState: "derived",
     policyRailContractId: null,
+    policyRailFundedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -114,6 +115,15 @@ function fakeDirectory(state: FakeState): TenantPurchaseDirectory & { reads: num
     async setAgentPolicyRail() {
       throw new Error("no rail should be deployed in these tests");
     },
+    async claimRailFunding() {
+      throw new Error("no rail should be funded in these tests");
+    },
+    async releaseRailFunding() {
+      throw new Error("no rail should be funded in these tests");
+    },
+    async countFundedRails() {
+      return 0;
+    },
     async findAgent() {
       return row;
     },
@@ -138,6 +148,7 @@ function deps(state: FakeState): TenantPurchaseDeps {
     databaseUrl: "postgres://unused",
     reserve: Keypair.random(),
     policyRailWasmHash: "e".repeat(64),
+    readUsdcBalance: async () => "100.0000000",
     registry,
   };
 }

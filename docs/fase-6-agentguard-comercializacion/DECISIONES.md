@@ -3143,3 +3143,101 @@ cuenta y armara la proyección. No habría duplicado la *suma*, pero sí el
 umbral del 80% y la regla de qué Mandato cuenta como activo — dos reglas que
 dos pantallas pueden empezar a contestar distinto, que es justo el modo de
 falla que `C-73` describe.
+
+---
+
+### C-82 · T77: el rail se persiste antes de fondearse, y el fondeo se reclama una sola vez · `Vigente`
+**Fecha:** 2026-09-12
+
+El arreglo del defecto que `PILOTO-F9.md` § 13.2 encontró al leer el código
+para escribir la propuesta.
+
+**El defecto.** `ensureTenantPolicyRail` hacía: desplegar → fondear →
+persistir. Si el proceso moría entre fondear y persistir, la próxima compra
+no encontraba rail, desplegaba otro y **lo volvía a fondear**: la reserva
+pagaba dos veces y el primer contrato quedaba con la plata y sin ninguna fila
+apuntándole. Y lo mismo pasaba **sin ninguna caída**, con dos primeras
+compras concurrentes: `setAgentPolicyRail` resuelve la carrera por la *fila*
+—es un `update ... where policy_rail_contract_id is null`, primero gana— pero
+para cuando resuelve, las dos ya habían fondeado un rail cada una.
+
+Con 1 USDC testnet por tenant es simbólico. Con fondos reales sería un
+incidente, y del tipo que no se detecta hasta auditar saldos.
+
+**El arreglo: desplegar → persistir → reclamar → fondear.**
+
+- **Persistir antes de fondear** invierte cuál es el peor caso. Si el proceso
+  muere ahora, lo que queda huérfano es un contrato **vacío** que costó unos
+  stroops de fee, no un contrato con el USDC de la reserva adentro.
+- **`claimRailFunding(agentId)`** es un `update ... set policy_rail_funded_at
+  = now() where policy_rail_contract_id is not null and policy_rail_funded_at
+  is null`: la reclamación *es* la escritura condicional, sin ninguna ventana
+  entre leer y escribir por la que dos procesos puedan pasar. Exactamente uno
+  recibe `true`.
+- **`releaseRailFunding`** deshace la reclamación si la transferencia falla,
+  para que el próximo intento reintente en vez de dejar un rail desplegado y
+  vacío para siempre.
+- **Un rail ya desplegado pero sin fondear se fondea en la llamada
+  siguiente**, no se redespliega. Ese estado —que antes era invisible— es
+  justo lo que dejaba una caída a mitad de camino, y antes de T77 solo se
+  descubría cuando una compra fallaba contra un saldo vacío sin explicación.
+
+**Por qué la columna y no leer el saldo on-chain.** Decidir "¿hay que
+fondear?" mirando el balance del rail parece más simple y es incorrecto: un
+rail que gastó legítimamente hasta cero es indistinguible de uno que nunca se
+fondeó, y recargarlo sería patrocinar al mismo tenant dos veces. El estado
+"se fondeó alguna vez" es un hecho del sistema, no de la cadena.
+
+**Nota honesta sobre los rails anteriores.** Los rails desplegados antes de
+T77 (los de prueba de T58) tienen `policy_rail_funded_at` en `null`, así que
+**no cuentan contra el tope de 20**. No se hace backfill a propósito: un
+`update` idempotente en el SQL de esquema que marcara como fondeado todo rail
+con contrato correría en cada arranque, y marcaría como fondeado un rail que
+legítimamente estuviera esperando su transferencia. Que unos pocos tenants de
+prueba no cuenten es un error de conteo inofensivo; marcar como fondeado algo
+que no lo está no lo es.
+
+---
+
+### C-83 · T77: la reserva se chequea antes de gastar un fee, y se muestra donde se decide · `Vigente`
+**Fecha:** 2026-09-12
+
+Dos controles nuevos sobre el crédito patrocinado, y una regla sobre dónde
+viven sus números.
+
+**El pre-chequeo corre antes de desplegar nada.** `requireSponsoredCredit`
+refuza con `SponsoredCreditExhausted` antes del Friendbot, antes del deploy y
+antes de cualquier fee, por dos condiciones **deliberadamente separadas**:
+
+- el **tope** de 20 tenants patrocinados está alcanzado — que es una decisión
+  (`C-80`);
+- la **reserva** no alcanza para un tenant más — que es un hecho.
+
+No se colapsan en un solo error porque los remedios son opuestos: subir el
+tope, o fondear la cuenta. Un operador que lee el rechazo necesita saber
+cuál de las dos lo paró, y el `details` lo dice con la palabra `remedy`.
+
+**Los números viven en `@agentpey/activity`, no junto al deploy.** Mismo
+criterio que `C-81` aplicó a `perDay`: el chequeo que *refuza* patrocinar y
+el panel que *muestra* cuánto queda tienen que coincidir, y dos copias de
+"veinte" son dos números que pueden separarse justo en la situación donde
+equivocarse cuesta plata. `SPONSORED_FUNDING_PER_TENANT`,
+`MAX_SPONSORED_RAILS` y `SPONSORED_RAILS_WARNING_HEADROOM` están en el
+paquete compartido; `tenant-rail.ts` los importa.
+
+**La reserva entra al panel, y se muestra aunque no haya tenant elegido.** Es
+del piloto, no de un tenant, y un operador no debería tener que elegir a
+alguien para enterarse de que la canilla está seca. `remaining` es el menor
+entre lo que permite el tope y lo que la reserva puede pagar, así que una
+reserva llena con el tope alcanzado se lee como cero y no como abundancia.
+
+**El panel se configura con la dirección pública, nunca con el secreto.**
+`RESERVE_ADDRESS` es una variable nueva, separada de `AGENT_SECRET_KEY` a
+propósito: una superficie de solo lectura no debe necesitar una llave capaz
+de firmar. Lo mismo vale para `pnpm run check:sponsored-credit`, el script de
+operador equivalente.
+
+**Pendiente anotado, sin construir:** un barrido que devuelva a la reserva el
+USDC que SignalDesk acumule. El dinero que un tenant gasta no se pierde —va a
+un comercio que también construye el proyecto— pero recuperarlo necesita que
+SignalDesk exista primero.

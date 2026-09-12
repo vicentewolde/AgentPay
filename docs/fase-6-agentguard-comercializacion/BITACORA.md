@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T76 (la ruta de actividad del tenant, sobre cálculo compartido) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T77 (controles del crédito patrocinado) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -127,6 +127,7 @@ ninguna ruta nueva capaz de escribir.
 | T74 | F9: el runner de compra sale de la sesión-cookie a un módulo por tenant (`tenant-purchase.ts`), sin producto ni venue hardcodeados | ✅ cerrado 2026-09-12 |
 | T75 | F9: `POST /v1/purchases` y `GET /v1/purchases/{id}` cableados y persistidos — los rechazos se guardan igual que las compras | ✅ cerrado 2026-09-12 |
 | T76 | F9: `GET /v1/tenants/{id}/activity` — nace `@agentpey/activity`, y el panel interno y la vista del usuario comparten el mismo cálculo | ✅ cerrado 2026-09-12 |
+| T77 | F9: controles del crédito patrocinado — arreglo del doble fondeo, pre-chequeo tipado de la reserva, y los números de `C-80` en el rail | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2855,3 +2856,74 @@ usuario: 1 USDC por tenant, rail 0.30/0.60, informe 0.25, créditos 0.10) y
 patrocinio, el arreglo del doble fondeo, y el cambio de las constantes de
 `tenant-rail.ts` a los números de `C-80`. Es el mismo archivo y el mismo
 tema, por eso van juntos.
+
+---
+
+## T77 · Los controles del crédito patrocinado — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Tres cosas, y la primera es el
+arreglo de un error real que encontramos leyendo el código, no usándolo.
+
+**Ya no se puede pagar dos veces por el mismo tenant.** Antes, el sistema
+desplegaba el contrato del visitante, le mandaba la plata y recién después
+anotaba en la base que existía. Si se caía en el medio, la próxima compra
+desplegaba otro contrato y le mandaba plata otra vez: la reserva pagaba dos
+veces y el primer contrato quedaba con el dinero adentro y sin nada que
+apuntara a él. Lo mismo pasaba sin ninguna caída, con dos compras
+simultáneas. Ahora el orden es: desplegar, anotar, pedir permiso para
+fondear, fondear. El permiso lo da la base de datos a exactamente uno, y si
+la transferencia falla lo devuelve para que el próximo intento reintente. El
+peor caso pasó de ser un contrato con plata perdida a ser un contrato vacío
+que costó unas monedas de comisión.
+
+**El sistema se niega antes de gastar un centavo cuando no puede pagar.** Si
+ya se patrocinaron los 20 tenants del piloto, o si la reserva no alcanza para
+uno más, la respuesta llega antes de desplegar nada. Y son dos mensajes
+distintos a propósito, porque la solución es opuesta: subir el tope, o poner
+plata.
+
+**La reserva se ve en el panel.** Antes se veían los contratos de cada
+visitante pero no la cuenta de la que salen los fondos, así que solo se podía
+descubrir vacía cuando una compra fallaba. Ahora está a la vista aunque no
+haya ningún tenant seleccionado: es del piloto, no de nadie en particular, y
+nadie debería tener que elegir a alguien para enterarse de que la canilla está
+seca. El panel se configura con la dirección pública de esa cuenta y nunca con
+su llave: una pantalla que solo lee no tiene por qué poder firmar.
+
+Y los rails nuevos ya se despliegan con los números acordados: 0.30 por
+compra, 0.60 por día, 1 USDC de crédito inicial.
+
+**Evidencia técnica.**
+
+- Esquema versión 7: `policy_rail_funded_at`. `claimRailFunding` es un
+  `update` condicional —la reclamación *es* la escritura, sin ventana entre
+  leer y escribir— con `releaseRailFunding` para el caso de transferencia
+  fallida.
+- Un rail desplegado pero sin fondear se fondea en la llamada siguiente, no
+  se redespliega. Ese estado antes era invisible.
+- No se decide leyendo el saldo on-chain: un rail que gastó hasta cero es
+  indistinguible de uno nunca fondeado, y recargarlo sería patrocinar dos
+  veces al mismo tenant.
+- `SPONSORED_FUNDING_PER_TENANT`, `MAX_SPONSORED_RAILS` y el umbral de aviso
+  viven en `@agentpey/activity`, no junto al deploy: el chequeo que refuza y
+  el panel que muestra leen los mismos números.
+- `RESERVE_ADDRESS` es variable nueva (pública, separada de la llave) en
+  `.env.example` y `render.yaml`, y hay un script de operador:
+  `pnpm run check:sponsored-credit`.
+- **1010 tests verdes** (eran 1001), `typecheck` y `build` limpios.
+- **Verificación real**, no solo con fakes: el script corrido contra testnet y
+  Postgres reales devolvió `39.4840000` USDC en la reserva, `0 de 20` rails
+  fondeados, `20` tenants disponibles.
+
+**Nota honesta:** los rails de prueba desplegados antes de T77 no cuentan
+contra el tope, porque su columna quedó en `null`. No se hace backfill a
+propósito — ver `C-82`: un `update` que corriera en cada arranque marcaría
+como fondeado un rail que legítimamente estuviera esperando su transferencia,
+y ese error es peor que contar de menos unos tenants de prueba.
+
+**Decisiones nuevas:** `C-82` (persistir antes de fondear, reclamar una sola
+vez) y `C-83` (pre-chequeo tipado, y los números donde se decide).
+
+**Qué sigue.** Con la plataforma lista de este lado, **T78**: el índice de
+descubrimiento público y el adaptador de catálogo sobre Periplo, con su
+fallback. Después SignalDesk (T79) y RealOps (T80–T81).

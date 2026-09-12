@@ -131,6 +131,12 @@ export interface TenantPurchaseDeps {
   /** Funds a freshly deployed rail — the sponsored testnet credit of F9 §6. */
   readonly reserve: Keypair;
   readonly policyRailWasmHash: string;
+  /**
+   * Reads an address's USDC — used for the reserve's pre-flight check before
+   * a new rail is sponsored. Injected so this module, and the tests below it,
+   * never need a network.
+   */
+  readonly readUsdcBalance: (address: string) => Promise<string>;
   /** Defaults to `venues.json`. Injected so a test can register its own venue. */
   readonly registry?: VenueRegistry;
   readonly now?: Date;
@@ -419,6 +425,7 @@ export async function executeTenantPurchase(
       principalAddress,
       deps.reserve,
       deps.policyRailWasmHash,
+      deps.readUsdcBalance,
     );
     payer = { contractId, ownerSecret: tenantAgent.keypair.secret() };
   } catch (error) {

@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 6;
+export const DIRECTORY_SCHEMA_VERSION = 7;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -228,4 +228,18 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
    )`,
 
   `create index if not exists directory_purchases_tenant_idx on directory_purchases (tenant_id, created_at desc)`,
+
+  // Schema version 7 (T77/F9): whether a deployed rail has actually received
+  // its sponsored balance.
+  //
+  // Before this, `ensureTenantPolicyRail` deployed, funded, and only then
+  // persisted the contract id — so a crash between funding and persisting
+  // made the next purchase deploy and fund a *second* rail, and the first
+  // one was left with the reserve's money and no row pointing at it. Two
+  // concurrent first purchases did the same thing without any crash. This
+  // column is what lets funding be claimed exactly once and retried safely:
+  // deploy, persist, claim, fund. A rail whose funding failed releases the
+  // claim and is funded on the next attempt, and a rail that spent its
+  // balance down to zero is never mistaken for one that was never funded.
+  `alter table directory_agents add column if not exists policy_rail_funded_at timestamptz`,
 ];
