@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T71 (panel completo de métricas/alertas en el status-dashboard) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T72 (propuesta de arquitectura y plan de F9, el piloto externo público) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -122,6 +122,7 @@ ninguna ruta nueva capaz de escribir.
 | T69 | `G12`, tercer hito: los últimos cuatro stores en memoria del flujo de wallet (desafíos, sesiones pendientes, dirección por sesión) pasan a Postgres — **`G12` completo** | ✅ cerrado 2026-09-12 |
 | T70 | Limpieza activa: barrido periódico borra filas vencidas de `wallet_challenges`/`pending_wallet_sessions`/`pending_consent_sessions`/`sdk_pending_writes`, que antes solo dejaban de leerse | ✅ cerrado 2026-09-12 |
 | T71 | Panel completo de métricas/alertas en `status-dashboard`: uso de `perDay` hoy, rechazos recientes, saldo USDC del `policy_rail` de cada tenant — todo de solo lectura | ✅ cerrado 2026-09-12 |
+| T72 | F9: propuesta de arquitectura y plan del piloto externo público ([PILOTO-F9.md](PILOTO-F9.md)) — solo documentación, sin código | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2542,3 +2543,70 @@ Documentación tocada: `DECISIONES.md` (`C-73`), `PLATAFORMA-PARTNERS.md`
 
 Pendiente: nada de métricas/alertas. F9 sigue sin arrancar — el partner
 real y la métrica de éxito del piloto siguen sin decidir.
+
+---
+
+## T72 · Propuesta de arquitectura y plan de F9 — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Nada todavía: este hito no
+escribió una línea de código a propósito. Lo que quedó es **el plano** del
+piloto externo — cómo se conectan la plataforma de agentes (RealOps Agent),
+el comercio (SignalDesk) y AgentPey para que una persona que no sabe nada del
+proyecto entre con un enlace, se registre, elija un agente, firme con su
+wallet lo que ese agente puede gastar, le dé una instrucción, y vea la compra
+entregada — o vea, con una razón entendible, por qué no se hizo.
+
+Lo más importante del plano es una sola regla: **RealOps pide, AgentPey
+decide.** La plataforma puede interpretar una frase y buscar en un catálogo
+público, pero no puede autorizar nada. AgentPey vuelve a resolver el comercio
+contra su propia tabla, le pide él mismo la factura, y compara precio, activo
+y cuenta cobradora contra el Mandato firmado antes de pagar. Una plataforma
+comprometida puede pedir compras que serán rechazadas, y nada más.
+
+El documento vive en [PILOTO-F9.md](PILOTO-F9.md) y responde los once puntos
+que el brief del usuario pidió, más las siete recomendaciones que pedía
+justificar.
+
+**Lo que salió de leer el código y no estaba previsto** (§ 13 del documento):
+
+1. **El producto no se puede firmar hoy.** El Mandato permite comercio,
+   activo y montos, pero no existe ningún campo que diga *qué producto*. Una
+   UI que muestre "solo puede comprar el informe" como permiso firmado estaría
+   mintiendo. Se proponen tres salidas y no se elige ninguna — es decisión del
+   usuario.
+2. **El crédito patrocinado puede fondear dos veces.** `ensureTenantPolicyRail`
+   despliega, fondea y recién después persiste; una caída entre el fondeo y la
+   escritura hace que la próxima compra despliegue y fondee otro rail, dejando
+   el primero huérfano con saldo. Simbólico en testnet, incidente con fondos
+   reales.
+3. **`buy()` solo sabe comprar una cosa** — está atada a un producto fijo del
+   bazaar y a una sesión de cookie. Sacarla de ahí sin aflojar ningún control
+   es el hito de más riesgo de toda la fase.
+4. **No hay lista blanca de URLs de retorno** después de firmar. Con un solo
+   partner de confianza no se notaba; con un flujo público que invita a
+   desconocidos a firmar con su wallet, es el paso que un phishing necesita.
+
+**Sobre Periplo.** El brief lo nombraba como candidato a catálogo x402
+público. Se buscó y **no se pudo verificar que exista**: no aparece en
+búsqueda web abierta, ni en `stellar/x402-stellar`, ni en la documentación
+oficial de x402 en Stellar. La propuesta no lo descarta — pide la URL exacta
+al usuario — pero no lo convierte en dependencia dura del piloto, y propone
+un índice de descubrimiento propio como camino principal, diciendo en voz
+alta su limitación: un índice propio prueba el mecanismo, no el
+descubrimiento abierto.
+
+**Decisión nueva registrada:** ninguna todavía. El documento propone `C-74`
+(F9 cambia de "incorporar un partner real" a "probar la integración completa
+con plataforma y comercio propios") y ocho decisiones más, pero ninguna se
+registra en `DECISIONES.md` hasta que el usuario las confirme — la regla 2 de
+`CLAUDE.md` aplica especialmente cuando la propuesta es mía.
+
+**Evidencia.** No hay salidas crudas que guardar: el hito es un documento. La
+verificación fue leer `main` en `7a7baff` y comprobar cada afirmación sobre
+capacidades existentes contra el código, no contra la documentación — de ahí
+salieron los cuatro hallazgos de arriba.
+
+**Qué sigue.** T73, congelar el contrato de ejecución (`POST /v1/purchases`,
+los scopes nuevos, la lista blanca de retorno), que es la única puerta que
+permite delegarle algo a Codex después. Antes de arrancarlo hacen falta las
+decisiones D1 a D9 del documento.

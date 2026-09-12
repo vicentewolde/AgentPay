@@ -1209,6 +1209,20 @@ Claude Code congele el contrato.
 
 ### F9 · Piloto externo en testnet 🟡
 
+> **Actualizado el 2026-09-12 (T72): el alcance de esta fase cambió.** El
+> brief del usuario
+> (`docs/fase-0-fundamentos/agentpey-f9-brief-para-claude.md`) resolvió las
+> dos decisiones que bloqueaban F9 — y una de ellas la resolvió cambiando la
+> premisa: **no hay partner externo**. El proyecto construye la plataforma de
+> agentes (**RealOps Agent**) y el comercio (**SignalDesk**) para probar una
+> integración parecida a una real y poder mostrarla después a partners y
+> comercios potenciales. La métrica de éxito son los diez casos de aceptación
+> del brief, no una métrica de volumen. Todo lo que sigue en esta sección
+> describe el alcance anterior y se conserva sin editar como registro; el
+> plan vigente vive en [PILOTO-F9.md](PILOTO-F9.md), y el cambio de alcance
+> es la decisión `C-74`, propuesta y todavía sin confirmar.
+
+
 > **Nota de numeración.** Esta tabla usaba `T60`/`T61` en su borrador
 > original (2026-09-10, T37). El panel de solo lectura (antes `T61`) ya no
 > depende de nada sin cerrar — F5 cerró el 2026-09-11 — así que pasa a ser

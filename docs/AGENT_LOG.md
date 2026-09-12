@@ -4024,3 +4024,68 @@ métricas, alertas, retención — repartido en tres rondas: T61–T66,
 T67–T69, T70–T71). F9 sigue sin arrancar: falta que el usuario decida
 el partner real y la métrica de éxito del piloto — ninguna de las dos
 respondidas todavía.
+
+---
+
+## 2026-09-12 (9) — cc/f9-propuesta
+
+Agente: Claude Code
+
+Qué: arranque de F9. El usuario dejó un brief
+(`docs/fase-0-fundamentos/agentpey-f9-brief-para-claude.md`) que responde las
+dos preguntas que bloqueaban la fase desde T69: **no hay partner externo** —
+el proyecto construye la plataforma (RealOps Agent) y el comercio
+(SignalDesk) para probar una integración parecida a una real — y el criterio
+de éxito son los diez casos de aceptación del brief, no una métrica de
+volumen. El brief pide explícitamente una propuesta y un PR de documentación
+antes de tocar código, así que este hito (**T72**) no escribe código.
+
+Entregado: `docs/fase-6-agentguard-comercializacion/PILOTO-F9.md`, que
+responde los once puntos del brief § 10 y las siete recomendaciones que pedía
+justificar. La regla de la que cuelga todo el diseño: **RealOps pide,
+AgentPey decide** — la plataforma interpreta y descubre, pero AgentPey
+re-resuelve el comercio contra `venues.json`, pide él mismo la factura 402 y
+compara precio/activo/`payTo` contra el Mandato firmado antes de pagar.
+
+Cuatro hallazgos que salieron de leer `main`, no la documentación, y que
+cambian el plan (§ 13 del documento):
+
+1. **El producto no es firmable hoy** — `scopeSchema` es un `z.strictObject`
+   con `actions`/`venues`/`assets`/`limits` y nada más, y `checkScope`
+   comprueba una sola acción fija. El permiso "solo el informe XLM/USDC" que
+   el brief pide mostrar no puede ir en el Mandato sin tocar documentos
+   firmados. Tres salidas propuestas, ninguna elegida — decisión del usuario.
+2. **El crédito patrocinado puede fondear dos veces** —
+   `ensureTenantPolicyRail` (`apps/web/src/tenant-rail.ts`) despliega, fondea
+   y recién después persiste. Una caída entre fondeo y escritura, o dos
+   primeras compras concurrentes, dejan un rail fondeado y huérfano.
+3. **`buy()` está atada a un solo producto y a una sesión de cookie** —
+   inservible tal cual para un flujo por tenant; sacarla de ahí sin aflojar
+   controles es el hito de más riesgo de la fase.
+4. **No hay lista blanca de URLs de retorno** tras firmar el Mandato — con un
+   flujo público es el paso que un phishing necesita.
+
+Además: **no se pudo verificar que Periplo exista** como catálogo x402
+público (búsqueda web, `stellar/x402-stellar`, docs oficiales de x402 en
+Stellar). La propuesta pide la URL al usuario y, mientras tanto, propone un
+índice de descubrimiento propio como camino principal, con su limitación
+dicha en voz alta.
+
+Por qué: el brief lo pide en ese orden explícitamente, y las cuatro cosas de
+arriba son exactamente el tipo de supuesto que se habría roto a mitad de la
+implementación.
+
+Documentación tocada: `PILOTO-F9.md` (nuevo), `BITACORA.md` (hito T72 +
+tabla + estado actual), `PLATAFORMA-PARTNERS.md` (nota en § F9 apuntando al
+cambio de alcance), `CLAUDE.md` (fila nueva en el índice), y el brief del
+usuario versionado en `docs/fase-0-fundamentos/`. Sin cambios de código.
+`DECISIONES.md` **no** se tocó: la propuesta sugiere `C-74` y ocho decisiones
+más, pero ninguna se registra hasta que el usuario las confirme.
+
+Pendiente: las decisiones D1 a D9 del documento (proveedor de email mágico,
+hosting, catálogo público, permiso por producto, formato del artefacto,
+límites del crédito patrocinado, retención, el cambio de alcance de F9, y
+móvil fuera de alcance). Sin ellas T73 no arranca. Codex no debe iniciar nada
+de F9 por su cuenta: el brief § 11 lo dice y la propuesta lo repite — nada se
+delega antes de que el contrato de `POST /v1/purchases` esté congelado y
+mergeado (T73).

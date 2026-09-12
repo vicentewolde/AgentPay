@@ -39,6 +39,15 @@ narrativo de esas piezas, y un error ahí (una clave mal manejada, un límite
 aflojado, un fondo mal enrutado) no es recuperable de la misma forma que un
 test roto.
 
+**F9 (piloto externo público), desde 2026-09-12:** no inicies código ni
+diseño de F9 por tu cuenta — ni RealOps Agent, ni SignalDesk, ni el catálogo
+de descubrimiento, ni nada que toque `POST /v1/purchases`. Claude Code es
+responsable de la propuesta, la arquitectura y los contratos de esa fase
+(`docs/fase-6-agentguard-comercializacion/PILOTO-F9.md`). Recién cuando el
+contrato de ejecución esté congelado y mergeado (T73) se te delegarán piezas
+acotadas: la UI de RealOps, el comercio SignalDesk, fixtures y tests. Hasta
+entonces, si una tarea parece de F9, preguntá antes de escribir nada.
+
 **Por qué esto es explícito y no una formalidad:** el agente anterior en este
 rol (Devin) generó, en una rama que terminó borrada por completo, un
 adaptador que se saltaba `checkMandate` — un bypass de seguridad real, no
