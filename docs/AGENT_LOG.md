@@ -3866,3 +3866,50 @@ que sobrevive de verdad entre procesos.
 Pendiente: mergear `cc/t68-pending-write-postgres` a `main` y
 pushear. T69 (los otros cuatro stores en memoria del flujo de wallet a
 Postgres) sigue, con su propia revisión antes de cerrar.
+
+---
+
+## 2026-09-12 (6) — cc/t69-wallet-session-postgres
+
+Agente: Claude Code
+
+Qué: T69, último hito de `G12` — nuevo módulo
+`apps/web/src/wallet-session-store.ts`: `walletChallenges`,
+`pendingWalletSessions`, `pendingConsentSessions`,
+`walletAddressBySession`/`walletAddressByConsentSession` (todos en
+memoria hasta ahora) pasan a cinco tablas Postgres, mismo patrón que
+T68. Cada fila se valida con zod al leerla (mismos schemas que el
+resto del proyecto ya usa para credenciales/mandatos). Ningún campo
+secreto cruza a Postgres — confirmado en T67 (`C-69`) que ninguno lo
+era. `PendingWalletSession.supersedes` (el `MandateRecord` completo)
+se simplificó a `supersedesId` (solo el campo que se lee de verdad).
+
+Encontrado sin necesidad de investigar de nuevo: el handler de
+`wallet-anchor` ya recalculaba `tenantAgent` para otro propósito —
+su `.keypair` es exactamente lo que `pending.agentKeypair` guardaba,
+así que no hizo falta ninguna llamada nueva para eliminar ese campo.
+
+Verificado en cuatro niveles: 11 tests de integración nuevos contra
+Postgres real, suite completa del monorepo sin regresiones (se borró
+`ExpiringStore`/`createExpiringStore` de `wallet-session.ts` junto con
+sus 10 tests propios — quedaba sin ningún llamador real), y una
+corrida real de punta a punta contra el servidor levantado de verdad
+cubriendo los **tres** flujos completos: clásico sin wallet,
+wallet-connect (con una segunda conexión de la misma wallet para
+probar que rehidrata), y consent-session hospedado (partner y tenant
+reales vía `/v1`, terminando con la invitación `"completed"` y un
+Mandato anclado). Filas de prueba en la única tabla sin TTL borradas
+a mano al terminar.
+
+De paso: corregidas dos filas de `PLATAFORMA-PARTNERS.md` (`G4`
+y `G12`) que seguían marcadas sin resolver pese a estarlo — `G4` desde
+el mismo día (T61/T66), nunca actualizada al cerrar F8.
+
+Por qué: cerraba `G12` del todo — T67 resolvió el bloqueante de Fase
+1, T68 conectó el anclaje, este hito conecta todo lo demás del flujo
+de wallet.
+
+Pendiente: mergear `cc/t69-wallet-session-postgres` a `main` y
+pushear. `G12` queda cerrado por completo (T67–T69). Sin ticket
+nuevo abierto: métricas/alertas/retención siguen sin priorizar, y
+`agentpey.com`/Custom Domains en Render sigue pendiente sin apuro.

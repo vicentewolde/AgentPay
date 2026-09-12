@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { newId, newTenantId } from "@agentpey/directory";
 import { describe, expect, it } from "vitest";
 
-import { SESSION_COOKIE, challengeMessage, createExpiringStore, isValidSessionId, parseCookies } from "./wallet-session.js";
+import { SESSION_COOKIE, challengeMessage, isValidSessionId, parseCookies } from "./wallet-session.js";
 
 describe("parseCookies", () => {
   it("returns nothing for a request with no cookie header", () => {
@@ -62,96 +62,5 @@ describe("challengeMessage", () => {
 
   it("is the brand the user reads inside their wallet", () => {
     expect(challengeMessage("n")).toContain("AgentPey");
-  });
-});
-
-describe("createExpiringStore", () => {
-  function fixedClock(start = 0) {
-    let now = start;
-    return { now: () => now, advance: (ms: number) => (now += ms) };
-  }
-
-  it("reads back what was stored", () => {
-    const store = createExpiringStore<string>(1000);
-    store.set("k", "v");
-    expect(store.peek("k")).toBe("v");
-  });
-
-  it("returns undefined for a key never stored", () => {
-    expect(createExpiringStore<string>(1000).peek("missing")).toBeUndefined();
-  });
-
-  it("peek leaves the entry in place — the wallet flow reads it twice", () => {
-    const store = createExpiringStore<string>(1000);
-    store.set("k", "v");
-    expect(store.peek("k")).toBe("v");
-    expect(store.peek("k")).toBe("v");
-  });
-
-  // A challenge nonce is spent by being presented at all, so a wrong
-  // signature cannot be retried against the same one.
-  it("take consumes the entry, so it cannot be replayed", () => {
-    const store = createExpiringStore<true>(1000);
-    store.set("nonce", true);
-    expect(store.take("nonce")).toBe(true);
-    expect(store.take("nonce")).toBeUndefined();
-    expect(store.peek("nonce")).toBeUndefined();
-  });
-
-  it("forgets an entry once its TTL passes", () => {
-    const clock = fixedClock();
-    const store = createExpiringStore<string>(1000, clock.now);
-    store.set("k", "v");
-    clock.advance(999);
-    expect(store.peek("k")).toBe("v");
-    clock.advance(2);
-    expect(store.peek("k")).toBeUndefined();
-  });
-
-  it("expires on take as well as on peek", () => {
-    const clock = fixedClock();
-    const store = createExpiringStore<string>(1000, clock.now);
-    store.set("k", "v");
-    clock.advance(1001);
-    expect(store.take("k")).toBeUndefined();
-  });
-
-  it("restarts the window when a key is written again", () => {
-    const clock = fixedClock();
-    const store = createExpiringStore<string>(1000, clock.now);
-    store.set("k", "first");
-    clock.advance(900);
-    store.set("k", "second");
-    clock.advance(900);
-    expect(store.peek("k")).toBe("second");
-  });
-
-  it("delete removes an entry that has not expired", () => {
-    const store = createExpiringStore<string>(1000);
-    store.set("k", "v");
-    store.delete("k");
-    expect(store.peek("k")).toBeUndefined();
-  });
-
-  it("keeps entries apart from one another", () => {
-    const clock = fixedClock();
-    const store = createExpiringStore<string>(1000, clock.now);
-    store.set("early", "a");
-    clock.advance(600);
-    store.set("late", "b");
-    clock.advance(600);
-    expect(store.peek("early")).toBeUndefined();
-    expect(store.peek("late")).toBe("b");
-  });
-
-  // An abandoned wallet flow must not pin its entry in memory forever.
-  it("drops expired entries from its own size, without anyone reading them", () => {
-    const clock = fixedClock();
-    const store = createExpiringStore<string>(1000, clock.now);
-    store.set("a", "1");
-    store.set("b", "2");
-    expect(store.size).toBe(2);
-    clock.advance(1001);
-    expect(store.size).toBe(0);
   });
 });

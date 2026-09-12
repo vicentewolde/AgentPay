@@ -528,7 +528,7 @@ de implementarse.
 | G1 | Identidad técnica y pagador compartidos | `apps/web/src/server.ts` lee `AGENT_SECRET_KEY`/`ISSUER_SECRET_KEY` fijos; `render.yaml` los declara únicos; un solo `POLICY_RAIL_CONTRACT_ID` | Dos partners comparten fondos e identidad. El `perDay` de uno consume el del otro | G2, G3, 4.1 | Piloto ya | F4 |
 | G2 | Tenant derivado solo de la wallet | `walletTenantId()` = `sha256(dirección)`, `apps/web/src/wallet-session.ts` | La misma wallet con dos partners cae en un solo tenant. Rompe el modelo B2B2C de raíz | G3 | Piloto ya | F2 |
 | G3 | `@agentpey/tenancy` sin índice durable, sin gestión de seed, sin rotación, sin decisión de emisor | El paquete no está importado por **ningún** archivo fuera de sí mismo (verificado); `deriveTenantKeypair` recibe `tenantIndex` de quien la llame y nadie la llama | Un índice mal asignado o reusado hace colisionar llaves de tenants distintos | D1, D2 | Piloto ya | F2 → F4 |
-| G4 | Vault y Postgres frente a varios procesos | `postgres-vault.ts` cachea todas las filas al construirse y responde `spentOn()` desde memoria; cola de escrituras solo intra-proceso (`C-7`) | **Con dos instancias, `perDay` se puede exceder en el camino de cuenta clásica.** El camino `policy_rail` está cubierto por el contrato | — | Producción; hoy mitigado por correr una sola instancia | F8 |
+| G4 | ✅ **Resuelto 2026-09-12 (T61/T66).** Vault y Postgres frente a varios procesos | `spentOn()` lee la base en vivo (no un caché), `append`/`atomically()` serializan con un advisory lock de Postgres — la decisión y la escritura, no solo la escritura. Medido con procesos reales y separados (`scripts/loadtest-perday.ts --atomic`), no solo instancias en un mismo proceso. Ver `DECISIONES.md` → `C-67`, `C-68` | Resuelto para el camino de cuenta clásica. El camino `policy_rail` siempre estuvo cubierto por el contrato | — | Producción | F8 (cerrado) |
 | G5 | `apps/web` no es una API de partners | Doce rutas, autenticación solo por cookie de sesión, cero apariciones de API key / rate limit / idempotencia / webhook / OpenAPI en todo el repo | Nadie puede integrar sin que le demos un navegador | G1, G2 | Piloto ya | F5 |
 | G6 | Camino de comercio específico | `BAZAAR_VENUE_CONTRACT_ID` y `BAZAAR_USDC_ISSUER` fijos; `mapAsset` acepta solo `"USDC"`; `PAYABLE_PRODUCT_ID = "swap-risk-quote"` y `ROUTE_PARAMS` fijos en `server.ts` | Un comercio nuevo exige cambiar código | — | Piloto | F7 |
 | G7 | Sesión no durable: cada inicio emite credencial y mandato nuevos | `sessions` es un `Map` en memoria; `startSession` emite y ancla en cada llamada | Viola dos requisitos del objetivo: renovar no debe crear agente, una sesión no debe crear identidad. Además gasta transacciones on-chain de más | G2 | Piloto ya | F2 → F3 |
@@ -536,7 +536,7 @@ de implementarse.
 | G9 | ✅ **Resuelto 2026-09-11 (T57).** `policy_rail` sin retiro ni rotación de owner | Ya no: `Config` tiene `principal: Address`, y `withdraw`/`set_owner` lo exigen vía `require_auth()`. `__check_auth` sin tocar. Ver `DECISIONES.md` → `C-61` y `evidencia/T57.md` | Resuelto para todo rail desplegado desde T57. El rail compartido del piloto sigue con el constructor viejo hasta que se decida migrarlo | 4.1 | Producción | F6 (cerrado) / F10 |
 | G10 | 🟡 **Mitigado 2026-09-11.** Alta automática de emisores con la clave admin | `ensureWalletIsRegisteredIssuer` (`C-15`) gana un tope de 20 registros/hora, server-wide (`issuer-registration-limit.ts`, `C-63`) | El costo ya no es ilimitado, pero sigue sin aprobación manual — a propósito, `C-15` no se revirtió. Sin persistencia entre redeploys (mismo criterio que `G12`) | D3 | Piloto | F5 |
 | G11 | Postgres sin verificación de CA | `ssl: { rejectUnauthorized: false }` (`C-12`) | Cifrado sí, autenticación del servidor no | — | Producción | F8 |
-| G12 | Estado de wallet-connect en memoria | `walletChallenges` y `pendingWalletSessions` son `ExpiringStore` en proceso | Con más de una instancia, conectar la wallet falla de forma intermitente | G4 | Producción | F8 |
+| G12 | ✅ **Resuelto 2026-09-12 (T67–T69).** Estado de wallet-connect en memoria | `walletChallenges`/`pendingWalletSessions`/`pendingConsentSessions`/direcciones de wallet, y la transacción Soroban pendiente de firma (`Registry.pendingWrites`, `packages/sdk`), ahora sobre Postgres — nada de eso era en realidad secreto (`C-69`). Verificado con los tres flujos completos (clásico, wallet-connect, consent-session hospedado) de punta a punta contra el servidor real y testnet real. Ver `DECISIONES.md` → `C-69`, `C-70`, `C-71` | Resuelto | G4 | Producción | F8 (cerrado) |
 | G13 | Sin PII pero sin contrato que lo garantice | No existe ningún campo `external_ref` todavía | Un partner mandará un email en cuanto pueda, salvo que la API lo rechace | G5 | Piloto | F2 |
 | G14 | Mainnet, fiat, tarjetas, custodia | Sin alcance, por `CLAUDE.md` y `P-6` | — | 4.1, G9 (resuelto) | — | F10, solo evaluación |
 
@@ -1163,15 +1163,27 @@ Claude Code congele el contrato.
 > corrida. Detalle completo en `BITACORA.md` → T61, T62/T63, T64/T66, y
 > las decisiones en `DECISIONES.md` → `C-67`, `C-68`.
 >
-> **Lo que queda fuera de este cierre, a propósito.** La sección
-> "Alcance" de arriba mencionaba también `G12` (estado de wallet-connect
-> compartido entre instancias), métricas, alertas y política de
-> retención — pero la delegación real (§ "Delegación Claude Code /
-> Codex" arriba) y la tabla de tickets nunca los desglosaron en un T61–T66
-> concreto; solo `G4` (T61/T66) y `G11` (T62) tuvieron ticket. Cierro F8
-> contra su "listo cuando" explícito, que es solo sobre `perDay`, y anoto
-> `G12`/métricas/alertas/retención como trabajo real y todavía sin
-> ticket — no resuelto, no descartado — para cuando el usuario decida
+> **Lo que quedó fuera del cierre original de F8, a propósito, y qué
+> pasó después.** La sección "Alcance" de arriba mencionaba también
+> `G12` (estado de wallet-connect compartido entre instancias),
+> métricas, alertas y política de retención — pero la delegación real
+> (§ "Delegación Claude Code / Codex" arriba) y la tabla de tickets
+> nunca los desglosaron en un T61–T66 concreto; solo `G4` (T61/T66) y
+> `G11` (T62) tuvieron ticket. F8 cerró contra su "listo cuando"
+> explícito, que era solo sobre `perDay`.
+>
+> **`G12` se resolvió después, en una ronda aparte (T67–T69, mismo día,
+> 2026-09-12), a pedido explícito del usuario.** Investigar antes de
+> tocar código mostró que el plan original que el usuario había
+> aprobado ("Postgres + cifrar los campos secretos") sobrestimaba una
+> parte (nada era en realidad secreto — `C-69`) y subestimaba otra (el
+> bloqueante real vivía en `packages/sdk`, Fase 1, no en `apps/web`).
+> Con el visto bueno explícito del usuario para tocar Fase 1, T67–T69
+> cerraron `G12` de punta a punta — ver `DECISIONES.md` → `C-69`,
+> `C-70`, `C-71`, y la fila de `G12` en la tabla de brechas de arriba.
+>
+> Métricas, alertas y política de retención siguen sin ticket — trabajo
+> real, no resuelto ni descartado, para cuando el usuario decida
 > priorizarlo (F9 o una ronda de hardening aparte).
 
 ---

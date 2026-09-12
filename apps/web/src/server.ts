@@ -19,8 +19,9 @@
  * with Freighter (SEP-0053, verified server-side without ever seeing their
  * secret key) gets a cookie derived from their wallet address instead of a
  * random one, so the same wallet reconnecting lands on the same MandateVault
- * `tenant_id`. It does not yet change who signs the credential or the
- * Mandate — see `walletAddressBySession`'s docstring for why.
+ * `tenant_id`. Since T35, that connected wallet also signs its own Mandate
+ * — see `wallet-session-store.ts` for where that flow's state lives (T69,
+ * `G12`).
  *
  * The one product this can actually pay for is `swap-risk-quote` — the same
  * one `scripts/demo-real-payment.ts` (T24) proved end to end. The catalogue
@@ -34,7 +35,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { AgentPassCredential, CredentialRequest, Scope } from "@agentpass/core";
+import type { CredentialRequest, Scope } from "@agentpass/core";
 import {
   AgentPassError,
   credentialRequestSchema,
@@ -88,11 +89,16 @@ import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identit
 import { ensureTenantAgent } from "./tenant-agent.js";
 import { ensureTenantPolicyRail } from "./tenant-rail.js";
 import {
+  createPostgresWalletSessionStore,
+  type PendingConsentSessionPayload,
+  type PendingWalletSessionPayload,
+  type WalletSessionStore,
+} from "./wallet-session-store.js";
+import {
   PENDING_WALLET_SESSION_TTL_MS,
   SESSION_COOKIE,
   WALLET_CHALLENGE_TTL_MS,
   challengeMessage,
-  createExpiringStore,
   isValidSessionId,
   parseCookies,
 } from "./wallet-session.js";
@@ -176,90 +182,22 @@ interface DemoSession {
 
 const sessions = new Map<string, DemoSession>();
 
-// ---- Wallet connect (T34) -------------------------------------------------
-
-/** Nonces this server issued and hasn't consumed yet. Single-use: see `take`. */
-const walletChallenges = createExpiringStore<true>(WALLET_CHALLENGE_TTL_MS);
-
-/**
- * The wallet address behind each session, once `/api/wallet/verify` accepts
- * its signature. Shown back to the visitor as proof of a real connection —
- * Since T35, a connected wallet also signs its own Mandate — see
- * `startSession`/`pendingWalletSessions` below. The credential's
- * issuer stays the platform (`ISSUER_SECRET_KEY`): only the Mandate's
- * principal becomes the connected wallet (`docs/fase-6-agentguard-comercializacion/DECISIONES.md → C-8`).
- */
-const walletAddressBySession = new Map<string, string>();
-
-// ---- Wallet-signed Mandate (T35) ------------------------------------------
+// ---- Wallet connect (T34), wallet-signed Mandate (T35), hosted consent
+// sessions (T51) — all on Postgres since T69 (`G12`). `PendingWalletSession`/
+// `PendingConsentSession`'s payload shapes live in `wallet-session-store.ts`
+// now, not here — see that file's own docstring for why neither carries a
+// secret (`C-69` traced every field that used to look like one).
 
 /**
- * A session mid-way through starting with a connected wallet as its
- * principal — the credential is already issued, the Mandate is built but
- * unsigned, and everything is waiting on the wallet to sign the consent
- * message and then the anchor transaction, in that order, across three
- * separate requests (a wallet interaction cannot happen inside one HTTP
- * request/response — the browser has to be asked, twice).
+ * Same memoised-pool pattern as `getDirectory`/`getPendingWriteStore`: one
+ * `Pool`, reused across requests, opened the first time any of the wallet
+ * flow's Postgres-backed state is touched.
  */
-interface PendingWalletSession {
-  readonly issuedCredentialJws: string;
-  readonly credentialHash: string;
-  /** The credential's own anchor transaction (`IssuedCredential.transactionHash`) — needed to persist it (T39). */
-  readonly credentialAnchorTx: string;
-  /** The unsigned document, for its `validFrom`/`validUntil`/`issuer`/`credentialSubject.principal` — persisted alongside the mandate (T39). */
-  readonly credential: AgentPassCredential;
-  readonly issuerSecret: string;
-  readonly mandate: AgentPayMandate;
-  readonly walletAddress: string;
-  /** This tenant's own derived identity (F4/T40) — the credential subject, the Mandato's `agent`, the intent signer. Not who pays; see `paymentSecret`. */
-  readonly agentKeypair: Keypair;
-  /** The shared account that actually pays (`C-20`, unchanged by F4) — resolved once in `startSession`, reused here so `wallet-anchor` need not re-read it. */
-  readonly paymentSecret: string;
-  readonly demoScope: CredentialRequest;
-  readonly baseUrl: string;
-  /**
-   * This tenant's previous mandate, if it had one — expired or revoked, or
-   * `startSession` would have rehydrated instead of reaching this branch at
-   * all. Carried through so `wallet-anchor` can record the new mandate as a
-   * renewal (`supersedesId`) rather than an orphan (T39).
-   */
-  readonly supersedes: MandateRecord | undefined;
-  /** Set once `/api/session/wallet-consent` verifies the SEP-0053 signature. */
-  signature?: string;
-  /** Set once the anchor transaction is prepared — names which one `wallet-anchor` finishes. */
-  requestId?: string;
+let walletSessionStorePromise: Promise<WalletSessionStore> | undefined;
+function getWalletSessionStore(env: ReadonlyMap<string, string>): Promise<WalletSessionStore> {
+  walletSessionStorePromise ??= createPostgresWalletSessionStore({ connectionString: requireEnv(env, "DATABASE_URL") });
+  return walletSessionStorePromise;
 }
-/** Steps 2 and 3 of the wallet flow both read this without ending it, so `peek`, not `take`. */
-const pendingWalletSessions = createExpiringStore<PendingWalletSession>(PENDING_WALLET_SESSION_TTL_MS);
-
-// ---- Hosted consent sessions (T51) -----------------------------------------
-
-/**
- * The same "credential issued, Mandate unsigned, waiting on two more wallet
- * round trips" shape as {@link PendingWalletSession}, minus everything that
- * only matters to the demo purchase flow (`paymentSecret`, `demoScope`,
- * `baseUrl`, `agentKeypair` — nothing here ever calls `finishSession`, this
- * session never buys anything). Keyed by the `consent_session` id, not a
- * cookie — the principal signing it may never visit any other page on this
- * site.
- */
-interface PendingConsentSession {
-  readonly issuedCredentialJws: string;
-  readonly credentialHash: string;
-  readonly credentialAnchorTx: string;
-  readonly credential: AgentPassCredential;
-  readonly mandate: AgentPayMandate;
-  readonly walletAddress: string;
-  readonly tenantId: string;
-  /** Set once `/api/consent/{id}/wallet-consent` verifies the SEP-0053 signature. */
-  signature?: string;
-  /** Set once the anchor transaction is prepared — names which one `wallet-anchor` finishes. */
-  requestId?: string;
-}
-const pendingConsentSessions = createExpiringStore<PendingConsentSession>(PENDING_WALLET_SESSION_TTL_MS);
-
-/** The wallet that proved control for a given `consent_session`, between `/wallet-verify` and `/start`. Not an `ExpiringStore`: the session's own `expiresAt` (checked in `startConsentSession`) is what actually gates staleness here. */
-const walletAddressByConsentSession = new Map<string, string>();
 
 /**
  * Server-wide across every session, on purpose (`G10`/`C-63`): the thing
@@ -551,7 +489,8 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
   ]);
 
   const now = new Date();
-  const walletAddress = walletAddressBySession.get(sessionId);
+  const walletSessionStore = await getWalletSessionStore(env);
+  const walletAddress = await walletSessionStore.getWalletAddressForSession(sessionId);
 
   if (walletAddress !== undefined) {
     // T39: `sessionId` is this tenant's own id in `@agentpey/directory`
@@ -626,20 +565,21 @@ async function startSession(sessionId: string): Promise<StartSessionResult> {
     // which needs it registered first (`M-17`, automated here — `C-8`).
     await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
 
-    pendingWalletSessions.set(sessionId, {
-      issuedCredentialJws: issued.jws,
-      credentialHash: issued.hash,
-      credentialAnchorTx: issued.transactionHash,
-      credential,
-      issuerSecret,
-      mandate: mandateDocument,
-      walletAddress,
-      agentKeypair: tenantAgent.keypair,
-      paymentSecret,
-      demoScope,
-      baseUrl,
-      supersedes: decision.supersedes,
-    });
+    await walletSessionStore.setPendingWalletSession(
+      sessionId,
+      {
+        issuedCredentialJws: issued.jws,
+        credentialHash: issued.hash,
+        credentialAnchorTx: issued.transactionHash,
+        credential,
+        mandate: mandateDocument,
+        walletAddress,
+        demoScope,
+        baseUrl,
+        supersedesId: decision.supersedes?.id,
+      },
+      PENDING_WALLET_SESSION_TTL_MS,
+    );
 
     return { kind: "pending-wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
   }
@@ -705,12 +645,13 @@ interface StartConsentSessionResult {
  * unusable.
  */
 async function startConsentSession(consentSessionId: string): Promise<StartConsentSessionResult> {
-  const walletAddress = walletAddressByConsentSession.get(consentSessionId);
+  const env = await readEnv();
+  const walletSessionStore = await getWalletSessionStore(env);
+  const walletAddress = await walletSessionStore.getWalletAddressForConsentSession(consentSessionId);
   if (walletAddress === undefined) {
     throw new AgentPassError("ConfigError", "conectá la wallet primero", { details: { consentSessionId } });
   }
 
-  const env = await readEnv();
   const directory = await getDirectory(env);
   const session = await directory.findConsentSession(consentSessionId);
   if (session === undefined) {
@@ -773,15 +714,19 @@ async function startConsentSession(consentSessionId: string): Promise<StartConse
 
   await ensureWalletIsRegisteredIssuer(agentpass, env, walletAddress);
 
-  pendingConsentSessions.set(consentSessionId, {
-    issuedCredentialJws: issued.jws,
-    credentialHash: issued.hash,
-    credentialAnchorTx: issued.transactionHash,
-    credential,
-    mandate: mandateDocument,
-    walletAddress,
-    tenantId: session.tenantId,
-  });
+  await walletSessionStore.setPendingConsentSession(
+    consentSessionId,
+    {
+      issuedCredentialJws: issued.jws,
+      credentialHash: issued.hash,
+      credentialAnchorTx: issued.transactionHash,
+      credential,
+      mandate: mandateDocument,
+      walletAddress,
+      tenantId: session.tenantId,
+    },
+    PENDING_WALLET_SESSION_TTL_MS,
+  );
 
   return { pending: "wallet-consent", credentialHash: issued.hash, challengeMessage: mandateChallengeMessage(mandateDocument) };
 }
@@ -1196,7 +1141,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/wallet/challenge") {
     const nonce = randomUUID();
-    walletChallenges.set(nonce, true);
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
+    await walletSessionStore.issueChallenge(nonce, WALLET_CHALLENGE_TTL_MS);
     sendJson(res, 200, { ok: true, nonce, message: challengeMessage(nonce) });
     return;
   }
@@ -1211,10 +1158,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta address, nonce o signature" });
       return;
     }
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
     // Consumed here, before the signature is checked: a nonce is spent by
     // being presented at all, so a wrong signature cannot be retried against
     // the same challenge.
-    if (walletChallenges.take(nonce) === undefined) {
+    if (!(await walletSessionStore.takeChallenge(nonce))) {
       sendJson(res, 400, {
         ok: false,
         code: "InvalidArguments",
@@ -1232,7 +1181,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     // (or created, on this wallet's very first connection) here, once, so
     // every later request can find the same tenant by cookie alone.
     try {
-      const env = await readEnv();
       const directory = await getDirectory(env);
       const agentAddress = requireSecretKey(env, "AGENT_SECRET_KEY").publicKey();
 
@@ -1248,7 +1196,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         proofSignature: signature,
       });
 
-      walletAddressBySession.set(tenant.id, address);
+      await walletSessionStore.setWalletAddressForSession(tenant.id, address);
       withSessionCookie(res, tenant.id);
       sendJson(res, 200, { ok: true, address });
     } catch (error) {
@@ -1285,7 +1233,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         perTx: `${started.session.scope.limits.perTx} ${started.session.scope.limits.currency}`,
         perDay: `${started.session.scope.limits.perDay} ${started.session.scope.limits.currency}`,
         policyRail: started.session.railContractId ?? null,
-        walletAddress: walletAddressBySession.get(sessionId) ?? null,
+        walletAddress: started.session.walletAddress ?? null,
       });
     } catch (error) {
       logError("session start request failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
@@ -1296,7 +1244,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/session/wallet-consent") {
     const sessionId = readSessionId(req);
-    const pending = sessionId === undefined ? undefined : pendingWalletSessions.peek(sessionId);
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
+    const pending = sessionId === undefined ? undefined : await walletSessionStore.getPendingWalletSession(sessionId);
     if (sessionId === undefined || pending === undefined) {
       sendJson(res, 400, {
         ok: false,
@@ -1312,14 +1262,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const env = await readEnv();
       const agentpass = await createWalletAgentPass(env);
       const prepared = await prepareWalletAnchor(agentpass, {
         mandate: pending.mandate,
         signature,
       });
-      pending.signature = signature;
-      pending.requestId = prepared.requestId;
+      await walletSessionStore.updatePendingWalletSession(sessionId, { signature, requestId: prepared.requestId });
       sendJson(res, 200, { ok: true, requestId: prepared.requestId, xdr: prepared.xdr });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });
@@ -1329,7 +1277,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
   if (req.method === "POST" && pathname === "/api/session/wallet-anchor") {
     const sessionId = readSessionId(req);
-    const pending = sessionId === undefined ? undefined : pendingWalletSessions.peek(sessionId);
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
+    const pending = sessionId === undefined ? undefined : await walletSessionStore.getPendingWalletSession(sessionId);
     if (sessionId === undefined || pending === undefined || pending.signature === undefined) {
       sendJson(res, 400, {
         ok: false,
@@ -1346,7 +1296,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const env = await readEnv();
       const agentpass = await createWalletAgentPass(env);
       const transactionHash = await agentpass.submitSigned(requestId, signedXdr);
 
@@ -1354,10 +1303,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // `finishSession`, so an unrelated failure wiring the live session
       // afterwards never costs the evidence the wallet already paid gas for.
       // F4 (T40): `agentId` is this tenant's own row, not the shared payer's
-      // — `pending.agentKeypair` already *is* that tenant's derived identity
+      // — `tenantAgent.keypair` already *is* that tenant's derived identity
       // (set in `startSession`), so this re-resolves the same row
       // `ensureTenantAgent` created or found there, rather than threading its
-      // id through `PendingWalletSession` — idempotent, so re-calling it here
+      // id through the pending session — idempotent, so re-calling it here
       // costs one query, not a second row.
       const directory = await getDirectory(env);
       const masterMnemonic = requireEnv(env, "MASTER_MNEMONIC");
@@ -1388,20 +1337,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         validFrom: new Date(pending.mandate.validFrom),
         validUntil: new Date(pending.mandate.validUntil),
         anchorTx: transactionHash,
-        supersedesId: pending.supersedes?.id,
+        supersedesId: pending.supersedesId,
       });
 
       const session = await finishSession({
         sessionId,
         env,
         agentpass,
-        agentKeypair: pending.agentKeypair,
-        paymentSecret: pending.paymentSecret,
+        agentKeypair: tenantAgent.keypair,
+        paymentSecret: requireSecretKey(env, "AGENT_SECRET_KEY").secret(),
         demoScope: pending.demoScope,
         baseUrl: pending.baseUrl,
         issuedCredentialJws: pending.issuedCredentialJws,
         credentialHash: pending.credentialHash,
-        issuerSecret: pending.issuerSecret,
+        issuerSecret: requireSecretKey(env, "ISSUER_SECRET_KEY").secret(),
         mandate: {
           hash: walletMandateHash(pending.mandate),
           mandate: pending.mandate,
@@ -1414,7 +1363,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         tenantAgentId: tenantAgent.instance.id,
       });
       sessions.set(sessionId, session);
-      pendingWalletSessions.delete(sessionId);
+      await walletSessionStore.deletePendingWalletSession(sessionId);
       sendJson(res, 200, {
         ok: true,
         credentialHash: session.credentialHash,
@@ -1479,7 +1428,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       sendJson(res, 400, { ok: false, code: "InvalidArguments", message: "falta address, nonce o signature" });
       return;
     }
-    if (walletChallenges.take(nonce) === undefined) {
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
+    if (!(await walletSessionStore.takeChallenge(nonce))) {
       sendJson(res, 400, {
         ok: false,
         code: "InvalidArguments",
@@ -1493,7 +1444,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     }
 
     try {
-      const env = await readEnv();
       const directory = await getDirectory(env);
       const session = await directory.findConsentSession(consentSessionId);
       if (session === undefined) {
@@ -1511,7 +1461,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         proofNonce: nonce,
         proofSignature: signature,
       });
-      walletAddressByConsentSession.set(consentSessionId, address);
+      await walletSessionStore.setWalletAddressForConsentSession(consentSessionId, address);
       sendJson(res, 200, { ok: true, address });
     } catch (error) {
       logError("consent wallet verification failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });
@@ -1536,7 +1486,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const consentConsentMatch = /^\/api\/consent\/([^/]+)\/wallet-consent$/.exec(pathname);
   if (req.method === "POST" && consentConsentMatch?.[1] !== undefined) {
     const consentSessionId = decodeURIComponent(consentConsentMatch[1]);
-    const pending = pendingConsentSessions.peek(consentSessionId);
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
+    const pending = await walletSessionStore.getPendingConsentSession(consentSessionId);
     if (pending === undefined) {
       sendJson(res, 400, {
         ok: false,
@@ -1552,11 +1504,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const env = await readEnv();
       const agentpass = await createWalletAgentPass(env);
       const prepared = await prepareWalletAnchor(agentpass, { mandate: pending.mandate, signature });
-      pending.signature = signature;
-      pending.requestId = prepared.requestId;
+      await walletSessionStore.updatePendingConsentSession(consentSessionId, { signature, requestId: prepared.requestId });
       sendJson(res, 200, { ok: true, requestId: prepared.requestId, xdr: prepared.xdr });
     } catch (error) {
       sendJson(res, 400, { ok: false, ...errorBody(error) });
@@ -1567,7 +1517,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const consentAnchorMatch = /^\/api\/consent\/([^/]+)\/wallet-anchor$/.exec(pathname);
   if (req.method === "POST" && consentAnchorMatch?.[1] !== undefined) {
     const consentSessionId = decodeURIComponent(consentAnchorMatch[1]);
-    const pending = pendingConsentSessions.peek(consentSessionId);
+    const env = await readEnv();
+    const walletSessionStore = await getWalletSessionStore(env);
+    const pending = await walletSessionStore.getPendingConsentSession(consentSessionId);
     if (pending === undefined || pending.signature === undefined) {
       sendJson(res, 400, {
         ok: false,
@@ -1584,7 +1536,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
     try {
-      const env = await readEnv();
       const agentpass = await createWalletAgentPass(env);
       const transactionHash = await agentpass.submitSigned(requestId, signedXdr);
       const directory = await getDirectory(env);
@@ -1622,8 +1573,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         anchorTx: transactionHash,
       });
       const completed = await directory.completeConsentSession(consentSessionId, mandateRecord.id);
-      pendingConsentSessions.delete(consentSessionId);
-      walletAddressByConsentSession.delete(consentSessionId);
+      await walletSessionStore.deletePendingConsentSession(consentSessionId);
+      await walletSessionStore.deleteWalletAddressForConsentSession(consentSessionId);
       sendJson(res, 200, {
         ok: true,
         status: completed.status,

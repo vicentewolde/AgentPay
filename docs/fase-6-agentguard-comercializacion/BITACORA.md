@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T68 (`G12`: `PendingWriteStore` sobre Postgres en `apps/web`) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T69 (`G12` completo — wallet-connect sobrevive a más de un proceso) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -2256,3 +2256,59 @@ wallet (desafíos, sesiones pendientes de wallet y de consentimiento
 hospedado, dirección de wallet por sesión) también a Postgres. Plan
 completo en
 `/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.
+
+---
+
+## T69 · Los últimos cuatro stores del flujo de wallet, a Postgres — `G12` completo — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** `G12` está resuelto de
+punta a punta: conectar una wallet, firmar el consentimiento, anclar
+el Mandato, y la invitación hospedada para un partner (`consent
+sessions`) — los tres flujos completos — ya no dependen de que las dos
+o tres llamadas de cada uno caigan en el mismo proceso de `apps/web`.
+Todo lo que antes vivía en memoria (el desafío de un solo uso, la
+sesión a mitad de camino, qué wallet corresponde a cada sesión) ahora
+vive en Postgres, compartido entre todas las instancias que haya.
+
+**Evidencia técnica** (`C-71`):
+
+- Módulo nuevo, mismo patrón que el de T68: cinco tablas chicas, cada
+  fila que sale de la base se revisa con las mismas reglas de forma
+  que el resto del proyecto ya usa para credenciales y mandatos, no se
+  confía a ciegas.
+- Ningún campo secreto cruzó nunca a Postgres — confirmado en T67 que
+  no hacía falta, y esta migración lo mantiene así: lo único que se
+  persiste es información pública de la sesión.
+- **Verificado con el servidor real, los tres flujos completos, no
+  solo el de wallet-connect que T68 ya había probado**: el camino
+  clásico sin wallet, wallet-connect completo más una segunda conexión
+  con la misma wallet (para confirmar que "quién es" sigue
+  recordándose entre visitas), y una invitación hospedada real para un
+  partner de prueba — creado de verdad, con su propio tenant, vía la
+  API — que terminó firmada y anclada. Los tres, de punta a punta,
+  contra el servidor real y testnet real.
+- De paso, se encontró y borró una utilidad que había quedado sin
+  ningún uso en el código real — solo la sostenían sus propios tests —
+  en vez de dejarla ahí sin que nadie la llamara nunca más.
+- Se corrigieron también dos filas de la tabla de brechas conocidas
+  que seguían marcadas "sin resolver" mucho después de haberlo estado
+  de verdad (`G4`, resuelta el mismo día que `G12` arrancó, y ahora
+  `G12` misma) — para que esa tabla siga siendo confiable como fuente
+  de qué falta y qué no.
+
+Por qué: cerraba lo que T67 (el hallazgo de Fase 1) y T68 (la primera
+mitad conectada a Postgres) dejaron pendiente — sin este hito, el
+anclaje de wallet ya sobrevivía a más de un proceso, pero conectar la
+wallet en primer lugar todavía no.
+
+Documentación tocada: `DECISIONES.md` (`C-71`),
+`PLATAFORMA-PARTNERS.md` (`G4`/`G12` marcadas resueltas), este
+archivo. Archivos tocados:
+`apps/web/src/wallet-session-store.ts` (nuevo),
+`apps/web/src/wallet-session-store.integration.test.ts` (nuevo),
+`apps/web/src/server.ts`, `apps/web/src/wallet-session.ts`,
+`apps/web/src/wallet-session.test.ts`.
+
+Pendiente: nada de `G12` — cerrado del todo (T67–T69). Sigue sin
+ticket, a propósito: métricas, alertas, política de retención.
+`agentpey.com`/Custom Domains en Render, sin apuro.

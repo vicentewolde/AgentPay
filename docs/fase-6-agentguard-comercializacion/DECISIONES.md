@@ -2473,3 +2473,115 @@ wallet, a Postgres. Plan completo en
 `/Users/vicentewolde/.claude/plans/encapsulated-bubbling-phoenix.md`.
 
 ---
+
+### C-71 · T69: los últimos cuatro stores en memoria del flujo de wallet, a Postgres — `G12` cerrado · `Vigente`
+**Fecha:** 2026-09-12
+
+Tercer y último hito de `G12`. `T67` (`C-69`) resolvió el bloqueante
+real de Fase 1 (`Registry.pendingWrites`); `T68` (`C-70`) conectó esa
+capacidad en `apps/web` para el anclaje de wallet. Quedaban cuatro
+stores en memoria, todos en `server.ts`/`wallet-session.ts`, sin
+ningún bloqueante nuevo que investigar — `C-69` ya había confirmado
+que ninguno de los tres campos que parecían secretos en
+`PendingWalletSession` (`issuerSecret`, `paymentSecret`,
+`agentKeypair`) necesitaba viajar por Postgres:
+
+- `walletChallenges` (`ExpiringStore<true>`, T34) — los nonces de un
+  solo uso del desafío de wallet.
+- `pendingWalletSessions`/`pendingConsentSessions` (`ExpiringStore`,
+  T35/T51) — el estado de la sesión a mitad de camino entre las tres
+  requests que una firma de wallet necesita.
+- `walletAddressBySession`/`walletAddressByConsentSession` (`Map`
+  plano, sin TTL) — la wallet detrás de cada sesión, una vez verificada.
+
+**El cambio.** Módulo nuevo, `apps/web/src/wallet-session-store.ts`:
+cinco tablas, mismo patrón que `pending-write-store.ts` (T68) — un
+`Pool`, la postura de TLS de T62, errores por `logError` (T63). Cada
+fila que sale de Postgres se valida con zod
+(`agentPassCredentialSchema`/`agentPayMandateSchema`/
+`credentialRequestSchema`, las mismas que el resto del proyecto ya usa
+para esto) antes de devolverse — mismo criterio que
+`@agentpey/directory` aplica a sus propias filas, no un cast a ciegas.
+
+`PendingWalletSessionPayload`/`PendingConsentSessionPayload` (los
+tipos que ahora viven en este módulo, reemplazando las interfaces
+locales de `server.ts`) **no tienen** `issuerSecret`/`paymentSecret`/
+`agentKeypair` — se recalculan en cada request desde `env`/
+`masterMnemonic`, igual que la rama "rehydrate" ya hacía. Un
+simplificación de paso: `PendingWalletSession.supersedes` (el
+`MandateRecord` completo) pasó a `supersedesId` (solo el campo que
+`wallet-anchor` realmente lee) — evita tener que pensar en cómo
+serializar un registro completo con fechas por un solo id.
+
+`walletChallenges.set/take` → `issueChallenge`/`takeChallenge`
+(`take` es un único `delete ... returning`, no un `select` seguido de
+un `delete` — dos `submitSigned`/`wallet-verify` con el mismo nonce al
+mismo tiempo no deben poder leer la misma fila los dos).
+`pendingWalletSessions.peek/set/delete` → `get`/`set`/`delete`
+asíncronos; la mutación en el lugar que hacía `pending.signature = x`
+pasa a `updatePendingWalletSession(id, {signature, requestId})`, un
+`update ... set payload = payload || $2::jsonb`.
+
+**Un hallazgo real, encontrado leyendo el propio código antes de
+migrarlo, no algo que hiciera falta investigar de nuevo.** El
+`wallet-anchor` de la sesión clásica ya recalculaba `tenantAgent`
+(`ensureTenantAgent`) para otro propósito (resolver el `agentId` de
+`recordCredential`) — su `.keypair` es exactamente lo que
+`pending.agentKeypair` guardaba. No hizo falta ninguna llamada nueva,
+solo reusar el valor que el handler ya calculaba.
+
+**Verificado en cuatro niveles:**
+
+1. 11 tests de integración nuevos contra Postgres real
+   (`wallet-session-store.integration.test.ts`): cada método, guardado
+   en una instancia del store y leído desde **otra instancia
+   distinta** — la misma prueba que T67/T68 hicieron en sus capas.
+2. Suite completa del monorepo sin regresiones (`ExpiringStore`, ya sin
+   ningún llamador en código de producción, se borró junto con sus 10
+   tests propios — dejarla habría sido código muerto sostenido solo
+   por su propia suite).
+3. **Corrida real de punta a punta contra el servidor real, los tres
+   flujos completos**, no solo el de wallet: clásico (sin wallet),
+   wallet-connect (challenge → verify → start → wallet-consent →
+   wallet-anchor, **más una reconexión** con la misma wallet que
+   confirma que `walletAddressBySession` sobrevive y rehidrata), y
+   consent-session hospedado (creación de partner y tenant reales vía
+   `/v1`, `wallet-verify` → `start` → `wallet-consent` →
+   `wallet-anchor`, terminando con la invitación en `"completed"` y un
+   Mandato anclado de verdad). Un script temporal (borrado después)
+   condujo los tres. Filas de prueba en `wallet_address_by_session`
+   (la única tabla sin TTL) borradas a mano al terminar — las demás no
+   dejaron nada, por diseño.
+4. `pnpm typecheck`/`build` limpios en cada paso.
+
+**De paso, corregido: dos filas de `PLATAFORMA-PARTNERS.md` que
+seguían diciendo "sin resolver" mucho después de estarlo.** `G4`
+seguía marcada "hoy mitigado por correr una sola instancia" pese a que
+T61/T66 (mismo día) ya la habían resuelto de verdad — nunca se
+actualizó esa fila específica al cerrar F8. Corregidas las dos (`G4` y
+`G12`) al mismo tiempo, con el mismo criterio `✅ Resuelto` que `G9`/
+`G10` ya usan.
+
+**Qué NO cambió, a propósito.** `checkMandate`/`checkScope`/
+`checkDailyLimit`/`PolicyRail` — nada de esto se tocó en ninguno de los
+tres hitos de `G12`. `sessions` (el `Map` de sesiones ya terminadas,
+con la instancia viva de `Agent`) queda tal cual — es un problema
+distinto (contiene objetos no serializables por diseño, como `Registry`
+lo hacía antes de T67) y no es lo que `G12` pedía cerrar.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (filas `G4`/`G12`
+marcadas resueltas, nota de F8 actualizada), `BITACORA.md` (nuevo
+hito, `G12` completo). Archivos tocados:
+`apps/web/src/wallet-session-store.ts` (nuevo),
+`apps/web/src/wallet-session-store.integration.test.ts` (nuevo, 11
+tests), `apps/web/src/server.ts`, `apps/web/src/wallet-session.ts`
+(`ExpiringStore` borrado), `apps/web/src/wallet-session.test.ts` (sus
+10 tests borrados con él).
+
+Pendiente: nada de `G12` — los tres hitos (T67, T68, T69) cierran la
+brecha completa. Sigue sin ticket, a propósito: métricas, alertas,
+política de retención (mencionadas en el alcance original de F8, nunca
+desglosadas). `agentpey.com`/Custom Domains en Render sigue pendiente,
+sin apuro.
+
+---
