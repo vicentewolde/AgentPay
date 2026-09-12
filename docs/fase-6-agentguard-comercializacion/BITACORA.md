@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** T60 (+ mitigación de G10, sin numerar) · **Fase 6: en curso**
+**Fecha:** 2026-09-11 · **Último hito cerrado:** rename a AgentPey (+ mitigación de G10, sin numerar) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -83,6 +83,7 @@ sin fondos antes de que una compra falle contra él.
 | T54 | Comercio de referencia x402 independiente (`examples/reference-merchant/**`) — segundo venue real, cierra F7 | ✅ cerrado 2026-09-11 (Codex, PR #17) |
 | T58 | Rail `policy_rail` por tenant: desplegado y fondeado sin CLI, la primera vez que un tenant con wallet real paga; verificado en testnet con dos tenants en rails distintos y un tercero rechazado por `per_day` | ✅ cerrado 2026-09-11 |
 | T60 | `scripts/check-rail-balances.ts`: lee el saldo USDC real de cada rail de tenant, avisa si está bajo — completa los tres entregables de F6 | ✅ cerrado 2026-09-11 |
+| — | Rename a AgentPey (ejecuta `P-11`): scope de npm, contenido y docs vivos, repo de GitHub. Render, pendiente del usuario | ✅ cerrado 2026-09-11 (sin numerar) |
 
 ---
 
@@ -1690,3 +1691,55 @@ gasto, no un filtro de quién es de fiar.
 Pendiente: lo de siempre — migrar o no el rail compartido, el rename a
 AgentPey (`P-11`), desplegar a Render, y que el usuario arranque T59 en
 Codex.
+
+---
+
+## Rename a AgentPey — ejecuta `P-11` (sin numerar) — 2026-09-11
+
+**Qué quedó funcionando, en palabras llanas.** El proyecto ya usaba el
+nombre "AgentPey" en el kit visual desde `P-11`, pero el código, los
+paquetes internos, el repositorio de GitHub y la documentación viva
+seguían diciendo "AgentPay" en todos lados. Ahora dicen lo mismo en todo
+el proyecto: el repo de GitHub, los paquetes internos, la página web
+(landing, demo, consentimiento), y los textos que la wallet muestra al
+firmar. Tres cosas se dejaron a propósito sin tocar, porque cambiarlas
+habría invalidado algo que ya existe de verdad en testnet o habría hecho
+más ambiguo, no más claro, un nombre de módulo interno — el detalle está
+en `DECISIONES.md` → `C-64`.
+
+**Evidencia técnica.** Detalle completo, con cada comando, en
+[`evidencia/rename-agentpey.md`](evidencia/rename-agentpey.md); el
+resumen:
+
+- Scope de npm: `@agentpay/*` → `@agentpey/*` en los doce paquetes/apps
+  que lo usaban (`@agentpass/*` sin tocar). Confirmado antes de hacerlo
+  que ningún paquete se publicó nunca a npm — cero riesgo de romper un
+  consumidor externo. `pnpm install` regeneró el lockfile.
+- Contenido y documentación viva actualizados (README, ROADMAP,
+  CLAUDE.md, AGENTS.md, los `BITACORA`/`ARQUITECTURA`/`CONTEXTO`/
+  `DECISIONES` vigentes de cada fase, la landing y demás páginas de
+  `apps/web/public`, comentarios de código) — sin tocar `AGENT_LOG.md`,
+  el `docs/DECISIONES.md` de raíz (la narrativa de `P-8`/`P-9`/`P-11` que
+  describe qué nombre regía en cada fecha), ni ningún `evidencia/*.md`:
+  eso es registro histórico, se queda como está.
+- Dos strings que una wallet ve al firmar, no literales de protocolo,
+  también se actualizaron: el desafío de conexión (`challengeMessage`,
+  que había quedado en "VynGent" desde antes de `P-11`) y la primera
+  línea del desafío de consentimiento del Mandato
+  (`mandateChallengeMessage`) — confirmado que este último se recalcula
+  desde cero en cada verificación, así que no invalida ningún Mandato ya
+  anclado.
+- `pnpm typecheck`/`build`/`test` limpios después de cada paso — 907+
+  tests unitarios sin regresiones.
+- Repo de GitHub renombrado de verdad (`gh repo rename`):
+  `vicentewolde/AgentPay` → `vicentewolde/AgentPey`. La URL vieja
+  redirige sola.
+- `render.yaml` actualizado para que el próximo deploy use el nombre
+  nuevo, pero el servicio real en Render **sigue sin renombrarse** — eso
+  rompe el link que ya tiene Tellus, así que es una acción que le toca al
+  usuario desde el dashboard, no a un script corrido sin que él lo vea.
+
+Pendiente: que el usuario renombre el servicio de Render (dashboard) y
+avise el link nuevo a Tellus; después, desplegar T40/T49/T51/T52 a
+producción con las variables de entorno nuevas de F6. Migrar o no el rail
+compartido sigue igual de pendiente que antes de este hito.

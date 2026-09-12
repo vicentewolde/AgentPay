@@ -1892,3 +1892,64 @@ propósito). Archivos tocados: `packages/core/src/errors.ts`
 (nuevo) y su test, `apps/web/src/server.ts` (`ensureWalletIsRegisteredIssuer`).
 
 ---
+
+### C-64 · El rename a AgentPey (`P-11`) se ejecuta con tres exclusiones deliberadas · `Vigente`
+**Fecha:** 2026-09-11
+
+`P-11` dejó anotado que el rename real —repo, paquetes, servicio de
+Render, landing, README, el string que la wallet firma— seguía sin
+ejecutarse, a propósito, por su blast radius. Esta sesión lo ejecutó,
+pero no de forma total: tres superficies se dejaron sin tocar,
+deliberadamente, después de investigar el costo real de tocarlas.
+
+**`@agentpass/*` no se renombra.** Es el nombre de la Fase 1 (el
+`core`/`sdk`/`cli` de la credencial), no la marca comercial del proyecto
+— la misma relación que `PolicyRail` o `MandateVault` tienen con
+"AgentPay"/"AgentPey": un nombre de módulo, no de empresa. Confirmado con
+el usuario antes de tocar nada.
+
+**Los literales de protocolo horneados en documentos ya firmados no se
+tocan.** `AGENTPAY_MANDATE_TYPE` (`"AgentPayMandate"`), `AGENTPAY_INTENT_TYPE`/`AGENTPAY_INTENT_FAMILY`,
+y el header de webhook `agentpay-signature` son parte del esquema
+zod/wire-format, no texto de marca — un Mandato o un `PurchaseIntent` que
+ya se firmó y ancló en testnet real (F6 ya tiene tenants con mandatos
+anclados de verdad, T58) tiene ese literal exacto adentro. Cambiar el
+valor invalidaría la verificación de todo lo ya emitido, sin ningún
+mecanismo de migración — y ninguno se pidió para este hito. Sí se
+renombraron dos strings distintos, que **no** son literales de protocolo
+sino texto legible que una wallet muestra al firmar y que se recalcula
+desde cero en cada verificación (`challengeMessage` en
+`wallet-session.ts`, la primera línea de `mandateChallengeMessage` en
+`wallet-sign.ts`) — confirmado, antes de tocarlos, que ninguna firma ya
+anclada depende de ese texto exacto.
+
+**Las rutas `~/dev/AgentPay(-codex)` no se renombran.** Son carpetas
+reales en el disco del usuario, documentadas en `CLAUDE.md`/`AGENTS.md`
+como el protocolo de coordinación con Codex (`P-5`) — renombrar la
+carpeta que esta misma sesión tiene abierta, o el worktree de Codex, es
+una operación de filesystem con blast radius propio (un git worktree
+activo, una sesión de Codex quizás corriendo) que no formaba parte de lo
+acordado con el usuario para este hito.
+
+**Qué sí se ejecutó, sin quedar pendiente:** el scope de npm completo
+(`@agentpay/*` → `@agentpey/*`, confirmado que nunca se publicó nada),
+todo el contenido y documentación viva, y el repo de GitHub
+(`gh repo rename`, con el redirect de la URL vieja confirmado). El
+servicio de Render queda con `render.yaml` actualizado pero sin
+renombrarse de verdad — no por elección de diseño sino porque este
+entorno no tiene credenciales de Render; es una acción de dashboard que
+le toca al usuario, avisada explícitamente en el cierre del hito.
+
+**Alternativa descartada:** renombrar también `@agentpass/*` y los
+literales de protocolo "ya que estábamos". Descartada por el usuario
+explícitamente al arrancar el hito — la primera habría sido pura
+inconsistencia conceptual (mezclar el nombre de un módulo con el de la
+marca), la segunda habría requerido diseñar una migración de
+compatibilidad de esquema que nadie pidió y que agrega alcance no
+solicitado a un hito que ya de por sí toca casi cien archivos.
+
+Documentación tocada: `BITACORA.md` (este hito, sin numerar),
+`evidencia/rename-agentpey.md`. Sin cambios en `PLATAFORMA-PARTNERS.md`
+— este hito no cambia ningún entregable de la plataforma.
+
+---

@@ -3462,3 +3462,51 @@ introdujo ninguna que no estuviera ya en el prompt de delegación.
 Pendiente: migrar o no el rail compartido, el rename a AgentPey
 (`P-11`, sesión aparte ya en curso), y desplegar T40/T49/T51/T52 a
 Render.
+
+---
+
+## 2026-09-11 (14) — cc/t61-rename-agentpey (rename ejecutado, sin numerar)
+
+Agente: Claude Code
+
+Qué: se ejecutó el rename real a AgentPey que `P-11` había dejado
+explícitamente sin hacer. Antes de tocar código, tres preguntas al
+usuario (¿se renombra `@agentpass/*` también? ¿se renombra el servicio de
+Render ya, sabiendo que rompe el link de Tellus? ¿se tocan los literales
+de protocolo horneados en documentos ya firmados?) — las tres
+respondidas explícitamente, ver `C-64` en
+`docs/fase-6-agentguard-comercializacion/DECISIONES.md` para el detalle
+completo de qué se dejó afuera y por qué.
+
+Ejecutado: scope de npm `@agentpay/*` → `@agentpey/*` en los doce
+paquetes/apps que lo usaban (confirmado antes que ninguno se publicó
+nunca a npm — cero riesgo externo), `@agentpass/*` intacto; contenido y
+documentación viva (README, ROADMAP, CLAUDE.md, AGENTS.md, los
+`BITACORA`/`ARQUITECTURA`/`CONTEXTO`/`DECISIONES` vigentes de cada fase,
+`apps/web/public/**`, comentarios de código) sin tocar este archivo, el
+`docs/DECISIONES.md` de raíz, ni ningún `evidencia/*.md` — registro
+histórico, se queda como está; los dos strings que una wallet ve al
+firmar (`challengeMessage`, que había quedado en "VynGent" desde antes de
+`P-11`, y la primera línea de `mandateChallengeMessage`); y el repo de
+GitHub renombrado de verdad (`gh repo rename`,
+`vicentewolde/AgentPay` → `vicentewolde/AgentPey`, redirect de la URL
+vieja confirmado). `pnpm typecheck`/`build`/`test` limpios en cada paso.
+
+Por qué: el usuario pidió explícitamente arrancar esta sesión dedicada,
+tal como `P-11` había anotado que iba a hacer falta.
+
+Un hallazgo real durante la ejecución: un primer barrido con
+`\bAgentPay\b` no encontró tres textos de consola
+(`scripts/demo.ts`, `scripts/demo-real-payment.ts`,
+`apps/web/src/server.ts`) porque los precede un `\n` de escape dentro del
+mismo string (`` `\nAgentPay web...` ``) — el carácter `n` inmediatamente
+antes de "AgentPay" hace que ahí no haya límite de palabra. Un segundo
+barrido sin `\b` los encontró; corregidos a mano.
+
+Pendiente, y es lo único que queda de este hito: el usuario tiene que
+renombrar el servicio de Render desde el dashboard (sin credenciales de
+Render en este entorno, no se puede hacer por script) y avisarle el link
+nuevo a Tellus — `render.yaml` ya quedó actualizado con el nombre nuevo
+para cuando eso pase. Después de eso: desplegar T40/T49/T51/T52 a
+producción con las variables de entorno nuevas de F6, y migrar o no el
+rail compartido.
