@@ -1,4 +1,10 @@
-import { requireTenant, type ActivityDirectory } from "@agentpey/activity";
+import {
+  requireTenant,
+  type ActivityDirectory,
+  type SponsoredCreditDirectory,
+  type VaultReader,
+  type VaultReaderFactory,
+} from "@agentpey/activity";
 import type { MandateRecord, Tenant } from "@agentpey/directory";
 import type { VaultRecord, VaultVerification } from "@agentpey/vault";
 
@@ -9,7 +15,7 @@ import type { VaultRecord, VaultVerification } from "@agentpey/vault";
  * route on `/v1` cannot be given different powers by accident.
  */
 export type StatusDirectory = ActivityDirectory;
-export type { VaultReader, VaultReaderFactory } from "@agentpey/activity";
+export type { VaultReader, VaultReaderFactory, SponsoredCreditDirectory };
 
 export interface MandatesStatus {
   readonly tenant: Tenant;

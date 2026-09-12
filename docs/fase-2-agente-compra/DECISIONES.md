@@ -74,8 +74,16 @@ mejor ahora, con un solo paquete, que más adelante con tres.
 Más uniforme de leer, pero convierte el nombre del scope en ruido: dejaría de
 distinguir qué es identidad verificable y qué es todo lo demás.
 
-### B-3 · Forma canónica de `venueId` y `assetId`, comparación byte a byte · `Vigente`
-**Fecha:** 2026-09-02 (T9)
+### B-3 · Forma canónica de `venueId` y `assetId`, comparación byte a byte · `Ampliada en T79`
+**Fecha:** 2026-09-02 (T9) · **Ampliada el 2026-09-12** — ver [fase-6 § C-87](../fase-6-agentguard-comercializacion/DECISIONES.md)
+
+> **Lo que cambió (T79).** El segundo tramo de un `venueId` ya no tiene que
+> ser un contrato Soroban: puede ser un contrato (`C…`) **o** una cuenta
+> clásica (`G…`), porque SignalDesk es un comercio HTTP y su identidad
+> infalsificable es la cuenta en la que cobra. El campo pasó a llamarse
+> `address`. Todo lo demás de esta decisión sigue vigente tal cual: el slug,
+> la forma del `assetId`, y la comparación byte a byte sin `trim` ni plegado
+> ni normalización.
 
 | | forma | ejemplo |
 |---|---|---|

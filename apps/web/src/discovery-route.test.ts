@@ -10,7 +10,7 @@ const BASE_URL = "https://signaldesk.example";
 const VENUE = makeVenueId("signaldesk", CONTRACT_ID);
 
 const REGISTRY = loadVenueRegistry([
-  { slug: "signaldesk", contractId: CONTRACT_ID, baseUrl: BASE_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "signaldesk", address: CONTRACT_ID, baseUrl: BASE_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
 ]);
 
 const CANDIDATE = toCandidate(REGISTRY, {

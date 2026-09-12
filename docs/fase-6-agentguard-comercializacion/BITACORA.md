@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T78 (descubrimiento público) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T79 (SignalDesk) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -91,7 +91,15 @@ no hay forma de que el precio de un tercero entre en una decisión de pago.
 Y AgentPey publica su propio índice en `GET /discovery/search` como plan B
 para cuando el catálogo público no responda, con su límite dicho en voz
 alta: un índice propio prueba el mecanismo, no el descubrimiento abierto
-(T78, `C-84` a `C-86`).
+(T78, `C-84` a `C-86`). Y el piloto ya tiene comercio: **SignalDesk** vende dos
+cosas —un informe de mercado de datos sintéticos y créditos de producto no
+transferibles—, cobra USDC de testnet y entrega solo después de que la red
+liquida. Probado con plata real de testnet, no simulada: 0.35 USDC llegaron a
+su cuenta y el recibo de cada entrega se verifica con nada más que la clave
+pública del comercio, sin AgentPey de por medio. Es un servicio aparte a
+propósito —claves propias, proceso propio, tablas propias— porque un comercio
+que pudiera meterse en la autorización de AgentPey haría que el piloto no
+probara nada (T79, `C-87` a `C-90`).
 
 ### Progreso
 
@@ -139,6 +147,7 @@ alta: un índice propio prueba el mecanismo, no el descubrimiento abierto
 | T76 | F9: `GET /v1/tenants/{id}/activity` — nace `@agentpey/activity`, y el panel interno y la vista del usuario comparten el mismo cálculo | ✅ cerrado 2026-09-12 |
 | T77 | F9: controles del crédito patrocinado — arreglo del doble fondeo, pre-chequeo tipado de la reserva, y los números de `C-80` en el rail | ✅ cerrado 2026-09-12 |
 | T78 | F9: descubrimiento público — adaptador sobre Periplo, índice propio sobre `venues.json` en `GET /discovery/search`, y fallback entre los dos | ✅ cerrado 2026-09-12 |
+| T79 | F9: SignalDesk, el comercio del piloto — dos productos, catálogo humano, `402`, entrega tras liquidar y recibo firmado verificable sin AgentPey | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -3023,3 +3032,94 @@ nombra el venue, y "nadie contestó" ≠ "no hay nada").
 **Qué sigue.** **T79**: SignalDesk, el comercio del piloto, a partir de
 `examples/reference-merchant/` — delegable a Codex. Después RealOps, el
 despliegue público y la suite de los diez casos de aceptación.
+
+---
+
+## T79 · SignalDesk, el comercio del piloto — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras simples.**
+
+El piloto ya tiene **de quién comprar**. SignalDesk vende dos cosas: un informe
+de mercado del par XLM/USDC por 0.25 USDC, y mil créditos de producto por 0.10.
+Tiene una página que una persona puede abrir y leer antes de autorizar nada, y
+un catálogo aparte que el agente lee.
+
+**Y funciona con plata de verdad.** Se le pagaron los dos productos contra
+Stellar testnet: 0.35 USDC llegaron a su cuenta, la transacción está en el
+ledger, y las dos entregas salieron **después** de que la red liquidó, nunca
+antes.
+
+**El recibo es evidencia, no una promesa.** Cada entrega viene con un recibo
+que dice qué se vendió, a quién, por cuánto, en qué transacción, y con el hash
+de los bytes exactos que se entregaron — firmado por SignalDesk. Cualquiera
+puede bajarse el artefacto, hashearlo y comprobar la firma con la clave pública
+del comercio, **sin AgentPey en el medio y sin confiar en este repositorio**.
+Si el recibo solo fuera creíble porque AgentPey lo repite, no probaría nada.
+
+**Dos cosas que son estructurales, no promesas de portada.** El informe se
+genera con datos sintéticos propios y lo dice en su primera línea, del mismo
+tamaño que el resto — no en gris chiquito al pie. Y los créditos **no se pueden
+transferir**: no es una regla escrita en una política, es que no existe la
+operación, ni ruta, ni método, ni consulta SQL que los mueva de una cuenta a
+otra. Un crédito transferible sería una emisión, y eso está del otro lado de la
+línea que el proyecto mantiene cerrada.
+
+**SignalDesk es un comercio, no una máscara de AgentPey.** Claves propias,
+proceso propio, tablas propias, y no importa nada de la plataforma de pagos. Si
+el comercio al que AgentPey le paga pudiera meterse en la autorización de
+AgentPey, el piloto sería circular y no probaría nada.
+
+**Una decisión que tomó el usuario.** Para que SignalDesk pudiera entrar en el
+registro de comercios pagables hubo que ampliar una regla de la Fase 2: hasta
+ahora la identidad de un comercio tenía que ser un contrato Soroban, y
+SignalDesk es un servicio HTTP que nunca va a tener uno. Ahora puede ser un
+contrato **o** una cuenta Stellar — y para un comercio HTTP la cuenta en la que
+cobra es justamente la identidad que no se puede falsificar, la misma que el
+sistema ya compara contra cada factura antes de pagar.
+
+**Evidencia técnica.**
+
+- `apps/signaldesk/**`: catálogo, artefactos, recibos, almacenamiento (memoria
+  y Postgres), servidor y página humana. Los precios viven en una sola tabla,
+  así que la página, el feed y el `402` no pueden cotizar distinto.
+- **Entrega después de liquidar**, y **una transacción liquidada entrega una
+  sola vez** — `recordDelivery` está indexada por la transacción, así que un
+  reintento devuelve la entrega ya pagada (caso de aceptación 8, del lado del
+  comercio).
+- El artefacto es **determinista a partir del `delivery_id`**, que es lo único
+  que hace verificable su hash más tarde.
+- `B-3` ampliada (`C-87`): el segundo tramo de un `venueId` puede ser `C…` o
+  `G…`, el campo pasó a llamarse `address`, y la ampliación es aditiva —
+  todo id que parseaba antes parsea igual, y una semilla `S…`, un contrato
+  truncado o una cuenta truncada siguen siendo rechazados.
+- `ulid` y `canonicalJson` se movieron a `@agentpass/core` en vez de
+  duplicarse: SignalDesk no puede depender de la base de tenants de la
+  plataforma para numerar sus entregas (`C-88`).
+- **1113 tests verdes** (eran 1065), `typecheck` y `build` limpios, 46 pruebas
+  nuevas de SignalDesk y ninguna toca la red.
+- **Verificación real**: `pnpm run signaldesk:smoke` contra testnet — recibo
+  verificado con la clave pública, hash del artefacto coincidiendo, tx
+  `aaf0ea0d…fed4d` en el ledger 4644779.
+
+**Un defecto propio, encontrado corriendo la cosa de verdad.** La primera
+compra real falló: el lector de `.env.local` que escribí no quitaba las
+comillas, así que le pasaba una "clave secreta" de 58 caracteres a Stellar. El
+servidor de SignalDesk tenía el mismo bug y habría fallado igual al arrancar.
+Arreglado y cubierto con pruebas. Ninguno de los tests escritos antes lo
+encontró — lo encontró la corrida real.
+
+**Y un guardarraíl que estaba roto desde antes** (`C-90`): `apps/status-dashboard`
+no estaba en las referencias del `tsconfig.json` raíz, así que `pnpm typecheck`
+**nunca lo compiló**, y acumulaba errores de tipo reales (la mayoría de T77).
+Ninguno rompía producción, pero los tipos mentían. Se arregló la causa primero
+y los errores después; las cuatro apps están ahora en las referencias.
+
+**Decisiones nuevas:** `C-87` (identidad de venue ampliada, decidida por el
+usuario), `C-88` (SignalDesk es un comercio, no un módulo), `C-89` (el recibo
+lo firma el comercio y se verifica sin AgentPey), `C-90` (el `typecheck` que no
+cubría una app).
+
+**Qué sigue.** **T80**: RealOps, la plataforma de agentes —registro por enlace
+mágico, perfil, permisos— y su conexión con `/v1`. Después el despliegue
+público de los tres servicios (T81) y la suite de los diez casos de aceptación
+(T82).

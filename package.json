@@ -26,7 +26,10 @@
     "check": "pnpm typecheck && pnpm test",
     "clean": "tsc -b --clean && rm -rf packages/*/dist packages/*/*.tsbuildinfo",
     "check:sponsored-credit": "tsx --tsconfig tsconfig.scripts.json scripts/check-sponsored-credit.ts",
-    "check:discovery": "tsx --tsconfig tsconfig.scripts.json scripts/check-discovery.ts"
+    "check:discovery": "tsx --tsconfig tsconfig.scripts.json scripts/check-discovery.ts",
+    "signaldesk": "pnpm --filter @agentpey/signaldesk run dev",
+    "signaldesk:setup": "tsx --tsconfig tsconfig.scripts.json scripts/signaldesk-setup.ts",
+    "signaldesk:smoke": "pnpm --filter @agentpey/signaldesk exec tsx src/smoke.ts"
   },
   "devDependencies": {
     "@stellar/stellar-sdk": "^17.0.1",

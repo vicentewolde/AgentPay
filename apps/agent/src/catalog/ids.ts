@@ -29,9 +29,11 @@ const ASSET_CODE_PATTERN = /^[A-Za-z0-9]{1,12}$/;
 
 declare const venueIdBrand: unique symbol;
 /**
- * A string proven to be `<slug>:<contract id>` — a venue the agent can be
- * authorised to buy at. Produced only by {@link parseVenueId},
- * {@link makeVenueId} and {@link venueIdSchema}.
+ * A string proven to be `<slug>:<address>` — a venue the agent can be
+ * authorised to buy at, where the address is the Soroban contract (`C...`)
+ * or the Stellar account (`G...`) that *is* that venue's identity. Produced
+ * only by {@link parseVenueId}, {@link makeVenueId} and
+ * {@link venueIdSchema}.
  */
 export type VenueId = string & { readonly [venueIdBrand]: true };
 
@@ -47,8 +49,17 @@ export interface ParsedVenueId {
   readonly venueId: VenueId;
   /** The human-readable label. Carried, never trusted to identify anything. */
   readonly slug: string;
-  /** The Soroban contract that *is* the venue's identity (`C...`). */
-  readonly contractId: string;
+  /**
+   * The on-chain half that *is* the venue's identity: a Soroban contract
+   * (`C...`) or a classic Stellar account (`G...`).
+   *
+   * Named `address` and not `contractId` since T79, when the second form was
+   * admitted: a field called `contractId` holding a `G...` would be a quiet
+   * lie inside an authorisation identifier, which is the worst place to keep
+   * one.
+   */
+  readonly address: string;
+  readonly addressKind: "account" | "contract";
 }
 
 export interface ParsedAssetId {
@@ -76,7 +87,17 @@ function splitOnce(value: string): [string, string] | undefined {
 }
 
 /**
- * Splits `<slug>:<contract id>`, validating both halves.
+ * Splits `<slug>:<address>`, validating both halves.
+ *
+ * **The address may be a contract (`C...`) or an account (`G...`).** `B-3`
+ * originally admitted only a contract, because every venue this project knew
+ * was a Soroban bazaar. T79 added an HTTP merchant that is not a contract and
+ * never will be, and whose unforgeable identity is the account it is paid at
+ * — the same value `reconcileTerms` already compares against the 402 invoice.
+ * The widening is additive: every venue id that parsed before parses to the
+ * same thing now, comparison stays byte for byte, and anything that is
+ * neither form is still refused. It is the same reasoning `parseAssetId` has
+ * applied to issuers since T9.
  *
  * Never returns a partial result: either the id is well-formed or this throws.
  *
@@ -92,11 +113,11 @@ export function parseVenueId(value: string): ParsedVenueId {
     throw invalidVenueId(
       value,
       "malformed",
-      `expected <slug>${ID_SEPARATOR}<contract id>, got ${value.split(ID_SEPARATOR).length} segment(s)`,
+      `expected <slug>${ID_SEPARATOR}<address>, got ${value.split(ID_SEPARATOR).length} segment(s)`,
     );
   }
 
-  const [slug, contractId] = parts;
+  const [slug, address] = parts;
 
   if (slug.length > VENUE_SLUG_MAX_LENGTH) {
     throw invalidVenueId(
@@ -112,15 +133,21 @@ export function parseVenueId(value: string): ParsedVenueId {
       `"${slug}" is not a venue slug: lowercase letters, digits and single hyphens only`,
     );
   }
-  if (!StrKey.isValidContract(contractId)) {
+  const addressKind = StrKey.isValidContract(address)
+    ? "contract"
+    : StrKey.isValidEd25519PublicKey(address)
+      ? "account"
+      : undefined;
+
+  if (addressKind === undefined) {
     throw invalidVenueId(
       value,
-      "malformed-contract-id",
-      "the second segment is not a Soroban contract id (C...)",
+      "malformed-address",
+      "the second segment is neither a Soroban contract (C...) nor a Stellar account (G...)",
     );
   }
 
-  return { venueId: value as VenueId, slug, contractId };
+  return { venueId: value as VenueId, slug, address, addressKind };
 }
 
 /**
@@ -174,8 +201,8 @@ export function parseAssetId(value: string): ParsedAssetId {
 }
 
 /** Builds a {@link VenueId} from its parts, validating the result. */
-export function makeVenueId(slug: string, contractId: string): VenueId {
-  return parseVenueId(`${slug}${ID_SEPARATOR}${contractId}`).venueId;
+export function makeVenueId(slug: string, address: string): VenueId {
+  return parseVenueId(`${slug}${ID_SEPARATOR}${address}`).venueId;
 }
 
 /** Builds an {@link AssetId} from its parts, validating the result. */

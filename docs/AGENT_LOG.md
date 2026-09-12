@@ -4476,3 +4476,87 @@ Siguiente hito **T79**: SignalDesk, el comercio del piloto, a partir de
 toca autorización). Del lado del usuario sigue pendiente, sin bloquear:
 `RESERVE_ADDRESS` en Render, pagar la instancia Starter de `agentpey-web`, y
 comprar `agentpey.com`.
+
+---
+
+## 2026-09-12 (16) — main / cc/t79-signaldesk
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t78-public-discovery` a `main` (fast-forward) con
+confirmación del usuario. Misma sesión, **T79**: SignalDesk, el comercio del
+piloto. El usuario pidió explícitamente seguir sin delegar nada a Codex, así
+que este hito lo hizo Claude Code entero, aunque `PILOTO-F9.md` § 9 lo tenía
+marcado como delegable.
+
+**Una decisión del usuario antes de escribir código.** SignalDesk no podía
+entrar en `venues.json`: `B-3` (Fase 2, `Vigente`) exige que un `venueId` sea
+`<slug>:<contract id>` validado con `StrKey.isValidContract`, y SignalDesk es
+un comercio HTTP que nunca va a tener contrato. Se verificó primero que el
+`contractId` de un venue **nunca se usa para llamar a un contrato** —es un
+identificador que se compara byte a byte dentro del scope/grant firmado— y se
+le presentaron tres opciones. Eligió **ampliar `B-3`**: el segundo tramo puede
+ser `C…` o `G…`, y para un comercio HTTP la cuenta en la que cobra es la
+identidad infalsificable, la misma que `reconcileTerms` ya compara. El campo
+se renombró de `contractId` a `address` (`C-87`); `B-3` quedó marcada como
+ampliada en su propio archivo.
+
+**Lo construido:** `apps/signaldesk/**` — dos productos (informe 0.25, créditos
+0.10), página humana, feed `ServiceCard`, dos rutas pagas x402, entrega,
+recibos firmados y almacenamiento propio (memoria + Postgres `signaldesk_*`).
+Tres cosas que valen más que el cableado:
+
+1. **Es un comercio, no un módulo** (`C-88`). Claves propias, proceso propio,
+   tablas propias, y no importa nada de AgentPey salvo helpers neutros de
+   `core`. Eso obligó a mover `ulid` (vivía en `@agentpey/directory`) y
+   `canonicalJson` (privado en `wallet-sign.ts`) a `@agentpass/core`, en vez de
+   duplicarlos o hacer que el comercio dependiera de la base de tenants.
+2. **El recibo se verifica sin AgentPey** (`C-89`). Firmado por el comercio,
+   con el hash de los bytes entregados adentro del cuerpo firmado, y el
+   artefacto determinista a partir del `delivery_id`. Un recibo creíble solo
+   porque AgentPey lo repite no es evidencia.
+3. **Los créditos no se pueden transferir por construcción**, no por política:
+   no hay ruta, ni método en el store, ni sentencia SQL que los mueva. Hay dos
+   pruebas que fallarían si alguien la agregara.
+
+Verificado: **1113 tests** (eran 1065), `typecheck` y `build` limpios. Y
+—con plata real— `pnpm run signaldesk:smoke` contra testnet: los dos productos
+pagados, 0.35 USDC en la cuenta del comercio
+(`GB4D4PLLFEIKZK6MDW42MZRQ5XMPC6QRJN4FFRODO6D3PRB3MDGGYOOF`), tx
+`aaf0ea0d…fed4d` en el ledger 4644779, recibo verificado con nada más que la
+clave pública y el hash del artefacto coincidiendo.
+
+**Dos defectos encontrados, los dos por correr cosas de verdad y no por leer:**
+
+- La primera compra real falló con `invalid encoded string length: expected 56,
+  got 58`: el lector de `.env.local` que escribí no quitaba las comillas que
+  este repo usa. El servidor de SignalDesk tenía el mismo bug. Centralizado en
+  `apps/signaldesk/src/env.ts` con cuatro pruebas.
+- **`apps/status-dashboard` no estaba en las referencias del `tsconfig.json`
+  raíz**, así que `pnpm typecheck` nunca lo compiló y acumulaba errores de tipo
+  reales, la mayoría de T77 (`VaultReaderFactory` re-exportado sin traerlo al
+  scope, `directory` declarado más angosto que lo que la ruta de la reserva
+  lee, tres fixtures inválidos). Ninguno rompía producción, pero los tipos
+  mentían. Arreglada la causa primero y los errores después (`C-90`); las
+  cuatro apps están ahora en las referencias.
+
+Documentación tocada: `DECISIONES.md` (`C-87` a `C-90`), `BITACORA.md` (hito
+T79 + tabla + estado actual), `evidencia/T79.md` (nuevo),
+`fase-2/DECISIONES.md` (`B-3` marcada como ampliada). Archivos de código:
+`apps/signaldesk/**` (nuevo, 46 pruebas), `apps/agent/src/catalog/{ids,registry,
+venues.json}` y sus tests, `packages/core/src/{canonical,ulid,index}.ts`
+(nuevos/compartidos), `packages/mandate/src/wallet-sign.ts`,
+`packages/directory/src/ids.ts`, `apps/status-dashboard/src/**` (arreglos de
+tipos), `tsconfig.json`, `tsconfig.scripts.json`, `scripts/signaldesk-setup.ts`
+(nuevo), `.env.example`, `render.yaml`, `package.json`.
+
+Pendiente: **mergear `cc/t79-signaldesk`** (espera confirmación). SignalDesk
+está registrado en `venues.json` con el `baseUrl` de Render que va a tener,
+pero **todavía no está desplegado** — hasta T81, `check:discovery` lo loguea
+como que no contesta y lo saltea, que es exactamente el aislamiento por venue
+que T78 construyó, ahora visto sobre un caso real. Del lado del usuario, además
+de lo de siempre (`RESERVE_ADDRESS` en Render, instancia Starter de
+`agentpey-web`, comprar `agentpey.com`): al desplegar SignalDesk hay que cargar
+`SIGNALDESK_SECRET_KEY` y `SIGNALDESK_FACILITATOR_SECRET` en su panel — están
+en `.env.local`, generadas por `pnpm run signaldesk:setup`. Siguiente hito
+**T80**: RealOps y su conexión con `/v1`.

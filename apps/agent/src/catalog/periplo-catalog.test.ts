@@ -11,7 +11,7 @@ const BASE_URL = "https://signaldesk.example";
 const VENUE = makeVenueId("signaldesk", CONTRACT_ID);
 
 const REGISTRY = loadVenueRegistry([
-  { slug: "signaldesk", contractId: CONTRACT_ID, baseUrl: BASE_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "signaldesk", address: CONTRACT_ID, baseUrl: BASE_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
 ]);
 
 const USDC_SAC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";

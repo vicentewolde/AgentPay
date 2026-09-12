@@ -21,9 +21,9 @@ const BASE_URL = "https://signaldesk.example/api";
 const VENUE = makeVenueId("signaldesk", CONTRACT_ID);
 
 const REGISTRY = loadVenueRegistry([
-  { slug: "signaldesk", contractId: CONTRACT_ID, baseUrl: BASE_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "signaldesk", address: CONTRACT_ID, baseUrl: BASE_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
   // A venue with no baseUrl: registered so its assets resolve, but not something a URL can match.
-  { slug: "catalog-only", contractId: CONTRACT_ID, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "catalog-only", address: CONTRACT_ID, assets: [{ code: "USDC", issuer: ISSUER }] },
 ]);
 
 function sourceReturning(sourceId: string, candidates: readonly ServiceCandidate[]): CatalogSource {

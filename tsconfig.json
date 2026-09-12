@@ -13,6 +13,8 @@
     { "path": "./packages/partner-sdk" },
     { "path": "./packages/webhooks" },
     { "path": "./apps/agent" },
-    { "path": "./apps/web" }
+    { "path": "./apps/web" },
+    { "path": "./apps/status-dashboard" },
+    { "path": "./apps/signaldesk" }
   ]
 }

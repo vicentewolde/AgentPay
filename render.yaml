@@ -82,3 +82,36 @@ services:
       # read-only surface from needing a signing key.
       - key: RESERVE_ADDRESS
         value: GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K
+
+  # T79 — SignalDesk, the pilot's merchant. Deliberately its own service with
+  # its own keys: if the merchant AgentPey pays could reach into AgentPey's
+  # authorisation, the pilot would be proving nothing. The free plan is fine
+  # here — a cold start costs a buyer a slow first request, not a failed
+  # payment, and AgentPey can ping it awake.
+  #
+  # Its host must match the `baseUrl` of the `signaldesk` row in
+  # apps/agent/src/catalog/venues.json: a venue is resolved by origin, so a
+  # different hostname is a different venue and is refused.
+  - type: web
+    name: agentpey-signaldesk
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @agentpey/signaldesk run start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: COREPACK_INTEGRITY_KEYS
+        value: ""
+      # The merchant's own secrets. Set in the Render dashboard, never here.
+      - key: SIGNALDESK_SECRET_KEY
+        sync: false
+      - key: SIGNALDESK_FACILITATOR_SECRET
+        sync: false
+      # Its own tables (`signaldesk_*`) — same Postgres instance as AgentPey
+      # only because the pilot has one. It reads no AgentPey table.
+      - key: DATABASE_URL
+        sync: false
+      - key: SIGNALDESK_PUBLIC_URL
+        value: https://agentpey-signaldesk.onrender.com

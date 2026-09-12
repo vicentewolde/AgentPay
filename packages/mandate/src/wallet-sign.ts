@@ -19,7 +19,7 @@
  */
 import { createHash } from "node:crypto";
 
-import { AgentPassError, didToStellarAddress, verifyStellarMessage } from "@agentpass/core";
+import { AgentPassError, canonicalJson, didToStellarAddress, verifyStellarMessage } from "@agentpass/core";
 import type { StellarDid } from "@agentpass/core";
 
 import type { AgentPayMandate } from "./mandate.js";
@@ -34,19 +34,7 @@ import { agentPayMandateSchema } from "./mandate.js";
  * would fail to verify for no reason tied to its actual content).
  */
 export function canonicalMandateJson(mandate: AgentPayMandate): string {
-  return JSON.stringify(sortKeysDeep(mandate));
-}
-
-function sortKeysDeep(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(sortKeysDeep);
-  if (value !== null && typeof value === "object") {
-    const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
-      sorted[key] = sortKeysDeep((value as Record<string, unknown>)[key]);
-    }
-    return sorted;
-  }
-  return value;
+  return canonicalJson(mandate);
 }
 
 /** `sha256` of a mandate's canonical JSON, hex — the wallet-signed analogue of `mandateHash` (`sign.ts`). */

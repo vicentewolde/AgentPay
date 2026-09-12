@@ -9,7 +9,8 @@ import { Keypair } from "@stellar/stellar-sdk";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createStatusServer } from "./server.js";
-import type { StatusDirectory, VaultReader } from "./status.js";
+import type { StellarDid } from "@agentpass/core";
+import type { SponsoredCreditDirectory, StatusDirectory, VaultReader } from "./status.js";
 
 const AGENT_DID = stellarAddressToDid(Keypair.random().publicKey(), "testnet");
 
@@ -105,16 +106,17 @@ const railedAgent: AgentInstance = {
   tenantId: tenant.id,
   keyIndex: 0,
   address: "GDRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILR",
-  did: "did:stellar:testnet:GDRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILR",
+  did: "did:stellar:testnet:GDRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILR" as StellarDid,
   label: null,
   status: "active",
-  onchainState: "anchored",
+  onchainState: "funded",
   policyRailContractId: "CRAILCONTRACTIDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  policyRailFundedAt: new Date("2026-09-12T00:00:00.000Z"),
   createdAt,
   updatedAt: createdAt,
 };
 
-function readOnlyDirectory(): StatusDirectory {
+function readOnlyDirectory(): StatusDirectory & SponsoredCreditDirectory {
   return {
     async countFundedRails() {
       return 3;

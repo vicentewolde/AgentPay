@@ -24,7 +24,7 @@ const UNREGISTERED_VENUE = `comercio-hostil:${VENUE_CONTRACT}`;
 const registry = loadVenueRegistry([
   {
     slug: "signaldesk",
-    contractId: VENUE_CONTRACT,
+    address: VENUE_CONTRACT,
     baseUrl: "https://signaldesk.example",
     assets: [{ code: "USDC", issuer: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA" }],
   },

@@ -60,6 +60,31 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  apps/signaldesk:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@stellar/stellar-sdk':
+        specifier: ^17.0.1
+        version: 17.0.1(debug@4.4.3)
+      '@x402/core':
+        specifier: ~2.24.0
+        version: 2.24.0
+      '@x402/stellar':
+        specifier: ^2.24.0
+        version: 2.24.0(debug@4.4.3)
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.0
+
   apps/status-dashboard:
     dependencies:
       '@agentpass/core':

@@ -23,7 +23,7 @@ describe("the mock catalogue's identity", () => {
     const parsed = parseVenueId(MOCK_VENUE_ID);
 
     expect(parsed.slug).toBe("mock-bazaar");
-    expect(parsed.contractId).toBe(MOCK_VENUE_CONTRACT_ID);
+    expect(parsed.address).toBe(MOCK_VENUE_CONTRACT_ID);
   });
 
   it("prices in two parseable assets", () => {

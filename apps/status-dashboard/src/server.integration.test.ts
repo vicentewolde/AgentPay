@@ -162,6 +162,7 @@ describe("status dashboard against Postgres", () => {
       directory,
       vaultFactory: (tenantId) => createPostgresMandateVault({ connectionString, tenantId }),
       readRailBalance: async () => "0.00",
+      reserveAddress: "GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K",
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address() as AddressInfo;

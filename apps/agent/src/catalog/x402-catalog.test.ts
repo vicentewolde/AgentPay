@@ -14,13 +14,13 @@ const CATALOG_ONLY_VENUE = makeVenueId("catalog-only", CONTRACT_ID);
 const REGISTRY = loadVenueRegistry([
   {
     slug: "reference-merchant",
-    contractId: CONTRACT_ID,
+    address: CONTRACT_ID,
     baseUrl: BASE_URL,
     assets: [{ code: "USDC", issuer: ISSUER }],
   },
   {
     slug: "catalog-only",
-    contractId: CONTRACT_ID,
+    address: CONTRACT_ID,
     assets: [{ code: "USDC", issuer: ISSUER }],
   },
 ]);

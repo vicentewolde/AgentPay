@@ -7,63 +7,15 @@
  * id in a query that scopes access is exactly the class of bug the prefix
  * makes visible at a glance.
  *
- * A ULID, not `randomUUID()`, because these ids sort by creation time
- * lexicographically, which is what a cursor-paginated list endpoint needs
- * (`PLATAFORMA-PARTNERS.md` §2.7). Sortability is to the millisecond; two ids
- * minted in the same millisecond sort arbitrarily relative to each other, and
- * nothing here relies on the stricter monotonic guarantee the ULID spec makes
- * optional.
- *
- * Implemented rather than taken from a package: it is thirty lines of a
- * fully-specified format, and the alternative is a dependency in the path
- * that mints the identity of every partner and tenant.
+ * The ULID itself moved to `@agentpass/core` in T79, when SignalDesk — a
+ * merchant, deliberately not part of AgentPey — needed to number its own
+ * deliveries without depending on this package. Re-exported here so every
+ * existing importer keeps working, and so there is still exactly one
+ * implementation.
  */
-import { randomBytes } from "node:crypto";
+import { AgentPassError, CROCKFORD_ALPHABET, ULID_LENGTH, ulid } from "@agentpass/core";
 
-import { AgentPassError } from "@agentpass/core";
-
-/**
- * Crockford's base32: no `I`, `L`, `O` or `U`, so an id cannot be misread
- * between `1/I/L`, `0/O`, or turn into a word by accident.
- */
-const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-
-const TIME_LENGTH = 10;
-const RANDOM_LENGTH = 16;
-export const ULID_LENGTH = TIME_LENGTH + RANDOM_LENGTH;
-
-/** The largest timestamp a 10-character Crockford time component can hold. */
-const MAX_ULID_TIME = 2 ** 48 - 1;
-
-function encodeTime(milliseconds: number): string {
-  if (!Number.isInteger(milliseconds) || milliseconds < 0 || milliseconds > MAX_ULID_TIME) {
-    throw new AgentPassError("InvalidArguments", `a ULID timestamp must be an integer in [0, ${MAX_ULID_TIME}]`, {
-      details: { milliseconds },
-    });
-  }
-  let remaining = milliseconds;
-  let out = "";
-  for (let i = 0; i < TIME_LENGTH; i += 1) {
-    out = CROCKFORD[remaining % 32] + out;
-    remaining = Math.floor(remaining / 32);
-  }
-  return out;
-}
-
-/**
- * `byte % 32` is uniform here and not a modulo bias: 256 is exactly eight
- * times 32, so every symbol is reachable from exactly eight byte values.
- */
-function encodeRandom(): string {
-  const bytes = randomBytes(RANDOM_LENGTH);
-  let out = "";
-  for (const byte of bytes) out += CROCKFORD[byte % 32];
-  return out;
-}
-
-export function ulid(now: number = Date.now()): string {
-  return encodeTime(now) + encodeRandom();
-}
+export { ULID_LENGTH, ulid };
 
 /** What each kind of entity's id is prefixed with. */
 export const ID_PREFIXES = {
@@ -81,7 +33,7 @@ export const ID_PREFIXES = {
 
 export type IdKind = keyof typeof ID_PREFIXES;
 
-const ULID_PATTERN = new RegExp(`^[${CROCKFORD}]{${ULID_LENGTH}}$`);
+const ULID_PATTERN = new RegExp(`^[${CROCKFORD_ALPHABET}]{${ULID_LENGTH}}$`);
 
 export function newId(kind: IdKind, now?: number): string {
   return `${ID_PREFIXES[kind]}_${ulid(now)}`;

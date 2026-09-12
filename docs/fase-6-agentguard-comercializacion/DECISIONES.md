@@ -3374,3 +3374,157 @@ control **antes** de entrar en ninguna URL.
 en el camino de pago. Cambiar cuándo se rinde una llamada ahí cambia
 comportamiento de pago, y este hito no tenía por qué hacerlo. Queda como
 deuda con nombre.
+
+---
+
+### C-87 · T79: un venue puede identificarse con una cuenta (`G…`), no solo con un contrato — `B-3` se amplía · `Vigente`
+**Fecha:** 2026-09-12 · **Decidido por el usuario**
+
+`B-3` (Fase 2, T9) fijó que un `venueId` es `<slug>:<contract id>` y validó el
+segundo tramo con `StrKey.isValidContract`. Era correcto: todo venue que el
+proyecto conocía era un bazaar Soroban. **SignalDesk no es un contrato y nunca
+lo va a ser** — es un comercio HTTP —, así que sin tocar esto no podía entrar
+en `venues.json` y AgentPey no le podía pagar.
+
+Antes de proponer nada se verificó una cosa en el código: **el `contractId` de
+un venue nunca se usa para llamar a un contrato.** No hay una sola invocación
+on-chain que lo tome. Es un identificador que se compara byte a byte dentro
+del `scope`/`grant` firmado, y nada más.
+
+**La decisión (del usuario, entre tres opciones): el segundo tramo puede ser
+un contrato (`C…`) o una cuenta clásica (`G…`).** Para un comercio HTTP la
+identidad que de verdad es infalsificable es **la cuenta en la que cobra** —
+el mismo valor que `reconcileTerms` ya compara contra la factura 402 y que
+`TermsPayeeNotAllowed` refuza. La identidad de SignalDesk queda
+`signaldesk:GB4D4PLL…GYOOF`.
+
+La ampliación es **aditiva y no afloja nada**: todo `venueId` que parseaba
+antes parsea a lo mismo, la comparación sigue byte a byte, y cualquier cosa
+que no sea una de las dos formas se sigue rechazando con `InvalidVenueId`
+(hay pruebas para una cuenta truncada, un contrato truncado y una semilla
+secreta `S…`). Es exactamente el razonamiento que `parseAssetId` aplica a los
+emisores desde T9, y que `B-3` ya justificaba con esas palabras: aceptar las
+dos formas evita que la respuesta a una pregunta abierta obligue a rediseñar
+el tipo.
+
+**El campo se renombró a `address`, y eso no es cosmético.**
+`ParsedVenueId.contractId` y la columna `contractId` de `venues.json` pasan a
+`address`, con `addressKind: "account" | "contract"`. Un campo llamado
+`contractId` conteniendo un `G…` es una mentira silenciosa adentro de un
+identificador de autorización, que es el peor lugar para tener una.
+
+**Costo real, dicho de frente:** si SignalDesk rota su cuenta cobradora,
+cambia su `venueId`, y los Mandatos ya firmados que la nombran dejan de
+matchear. Es el precio de que la identidad sea la cuenta. `signaldesk-setup`
+se niega a reemplazar claves existentes justamente por eso.
+
+**Alternativa descartada:** desplegar un contrato Soroban solo para que
+SignalDesk tuviera un `C…`. No toca nada de autorización y `B-3` quedaba
+intacto, pero **nada verifica que el comercio controle ese contrato**, así que
+no habría agregado ninguna garantía: un identificador que *parece* un ancla
+on-chain sin serlo. Se prefirió la forma que al menos coincide con un valor
+que el sistema sí verifica en cada pago.
+
+---
+
+### C-88 · T79: SignalDesk es un comercio, no un módulo de AgentPey · `Vigente`
+**Fecha:** 2026-09-12
+
+`apps/signaldesk` tiene **claves propias** (`SIGNALDESK_SECRET_KEY`,
+`SIGNALDESK_FACILITATOR_SECRET`, nunca intercambiables con `AGENT_SECRET_KEY`),
+**proceso propio** (su propio servicio en `render.yaml`), **tablas propias**
+(`signaldesk_*`), y no importa nada de la plataforma de pagos salvo helpers
+neutros de `@agentpass/core`.
+
+**Por qué importa tanto:** si el comercio al que AgentPey le paga pudiera
+meterse en la autorización de AgentPey, el piloto no probaría nada — sería
+circular. El brief lo dice y esta es la forma de cumplirlo que se puede
+verificar leyendo los imports, no confiando en una intención.
+
+Eso obligó a mover dos cosas a `@agentpass/core` en vez de duplicarlas o
+importarlas mal:
+
+- **`ulid`** vivía en `@agentpey/directory`, donde acuña la identidad de cada
+  partner y tenant. SignalDesk necesita numerar sus entregas y **no puede
+  depender de la base de datos de tenants de la plataforma** para hacerlo. El
+  directorio lo re-exporta, así que ningún importador cambió.
+- **`canonicalJson`** vivía privado dentro de `wallet-sign.ts`. El recibo de
+  SignalDesk necesita la misma garantía de "los mismos bytes" y dos copias de
+  esa función son dos definiciones de lo mismo que coinciden hasta que alguien
+  cambia una. Es `C-73` aplicado otra vez.
+
+**Nota operativa honesta:** en el piloto los dos servicios apuntan a la misma
+instancia de Postgres, porque Render da una. Bases separadas es un cambio de
+despliegue, no de código — nada en `apps/signaldesk` toca una tabla fuera del
+prefijo `signaldesk_`.
+
+---
+
+### C-89 · T79: el recibo lo firma el comercio, y se verifica sin AgentPey · `Vigente`
+**Fecha:** 2026-09-12
+
+Cada entrega produce un recibo con `delivery_id`, producto, comprador, los
+términos **liquidados** (monto, activo, `payTo`, tomados de la respuesta de
+liquidación y no de lo que pidió el request), la transacción Stellar, el
+**hash de los bytes exactos entregados** y la fecha. Se canonicaliza, se
+hashea, y **el hash se firma con la clave de SignalDesk**.
+
+**Un recibo que solo es creíble porque AgentPey lo repite no es evidencia, es
+un dicho.** Cualquiera con la clave **pública** del comercio puede bajar el
+artefacto, hashearlo, reconstruir el recibo y verificar la firma, sin ningún
+servicio de AgentPey, sin API key, y sin confiar en este repositorio.
+
+Tres detalles que no son de forma:
+
+- **`artifact_hash` va adentro del cuerpo firmado.** Sin eso, un comercio
+  podría firmar un recibo verdadero y servir un archivo distinto.
+- **Se recomputa el hash antes de mirar la firma**, así "esto fue alterado" y
+  "esto no lo firmaron ellos" quedan distinguibles en vez de colapsar en un
+  "inválido" genérico.
+- **El artefacto es determinista a partir del `delivery_id`**, así que el hash
+  es una propiedad de la entrega y no del momento en que se volvió a renderizar
+  — que es lo único que hace verificable el recibo más tarde.
+
+**Y la entrega ocurre después de liquidar, nunca antes.** El orden de
+`handlePaidRoute` es la garantía entera: exigir el header de pago, comprobar
+que la carga nombra *estos* términos para *esta* URL, verificar contra la red,
+liquidar, y recién entonces renderizar algo. Además, **una transacción
+liquidada entrega una sola vez**: `recordDelivery` está indexada por la
+transacción, así que un reintento devuelve la entrega ya pagada en vez de
+acuñar un segundo artefacto — el caso de aceptación 8, del lado del comercio.
+
+**Los créditos son un entitlement, no un activo.** No hay operación de
+transferencia en el servicio: ni ruta, ni método en `SignalDeskStore`, ni
+sentencia SQL. Es estructural, no una política — un crédito transferible sería
+una emisión, y eso está del otro lado de la línea que este proyecto mantiene
+cerrada. Hay dos pruebas que fallarían si alguien la agregara.
+
+---
+
+### C-90 · T79: `pnpm typecheck` no cubría `apps/status-dashboard`, y tapaba errores reales · `Vigente`
+**Fecha:** 2026-09-12
+
+Encontrado al sumar una cuarta app: **`apps/status-dashboard` no estaba en las
+referencias del `tsconfig.json` raíz**, así que `tsc -b` nunca lo compiló.
+Vitest transpila sin chequear tipos, de modo que sus pruebas pasaban en verde
+mientras el paquete acumulaba errores de tipo reales — la mayoría introducidos
+en T77, que tocó `status.ts` y `server.ts`.
+
+Qué tapaba, en concreto:
+
+- `export type { VaultReaderFactory } from …` **re-exporta sin traer el nombre
+  al scope local**, y el archivo lo usaba como anotación. Solo tipos: sin
+  efecto en runtime.
+- `StatusDashboardDependencies.directory` estaba declarado como
+  `StatusDirectory`, que no tiene `countFundedRails`, mientras
+  `readSponsoredCreditStatus` sí lo exige. **No rompía producción** —el objeto
+  real es un `Directory` completo y sí lo tiene— pero el tipo mentía, y un
+  doble de prueba tipado así habría explotado.
+- Tres fixtures con valores que la unión nunca tuvo (`onchainState:
+  "anchored"`) o campos faltantes (`policyRailFundedAt`).
+
+**Se arregló el guardarraíl primero y los errores después**, en ese orden: la
+línea que faltaba en `tsconfig.json` es la causa, y los tres errores son lo que
+la causa dejó entrar. Sumar SignalDesk sin cerrar esto habría significado
+agregar una cuarta app a un `typecheck` que ya estaba mintiendo sobre su
+cobertura.

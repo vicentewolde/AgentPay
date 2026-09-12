@@ -41,7 +41,12 @@ export const registryAssetSchema = z.strictObject({
 /** One venue's row: its identity, where to reach it, and every asset it may quote. */
 export const registryVenueSchema = z.strictObject({
   slug: venueSlugSchema,
-  contractId: z.string(),
+  /**
+   * The venue's on-chain identity: a Soroban contract (`C...`) or the classic
+   * account it is paid at (`G...`). Validated by `parseVenueId`, not here —
+   * one definition of what a venue id is, in `ids.ts`.
+   */
+  address: z.string(),
   /**
    * Present for a venue `x402.ts`'s generic adapter can fetch over HTTP.
    * Absent for a venue registered only so its assets resolve (e.g. one whose
@@ -94,7 +99,7 @@ export function loadVenueRegistry(raw: unknown): VenueRegistry {
   const venues = new Map<VenueId, ResolvedVenue>();
 
   for (const row of parsed.data) {
-    const venueId = venueIdSchema.parse(makeVenueId(row.slug, row.contractId));
+    const venueId = venueIdSchema.parse(makeVenueId(row.slug, row.address));
     if (venues.has(venueId)) {
       throw invalidRegistry(`the registry names venue "${venueId}" more than once`, { venueId });
     }

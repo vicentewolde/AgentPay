@@ -18,10 +18,10 @@ const SIGNALDESK = makeVenueId("signaldesk", CONTRACT_ID);
 const BAZAAR = makeVenueId("bazaar", OTHER_CONTRACT_ID);
 
 const REGISTRY = loadVenueRegistry([
-  { slug: "signaldesk", contractId: CONTRACT_ID, baseUrl: SIGNALDESK_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
-  { slug: "bazaar", contractId: OTHER_CONTRACT_ID, baseUrl: BAZAAR_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "signaldesk", address: CONTRACT_ID, baseUrl: SIGNALDESK_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "bazaar", address: OTHER_CONTRACT_ID, baseUrl: BAZAAR_URL, assets: [{ code: "USDC", issuer: ISSUER }] },
   // No baseUrl: nothing to fetch, so the index must simply skip it.
-  { slug: "catalog-only", contractId: CONTRACT_ID, assets: [{ code: "USDC", issuer: ISSUER }] },
+  { slug: "catalog-only", address: CONTRACT_ID, assets: [{ code: "USDC", issuer: ISSUER }] },
 ]);
 
 function product(id: string, name: string, description: string): Product {

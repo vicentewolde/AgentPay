@@ -16,7 +16,7 @@ const CATALOG_ONLY = makeVenueId("catalog-only", CONTRACT_A);
 const ONE_ROW = [
   {
     slug: "reference-merchant",
-    contractId: CONTRACT_A,
+    address: CONTRACT_A,
     baseUrl: "https://reference-merchant.example",
     assets: [{ code: "USDC", issuer: ISSUER_A }],
   },
@@ -34,7 +34,7 @@ describe("loadVenueRegistry", () => {
       ...ONE_ROW,
       {
         slug: "second-merchant",
-        contractId: CONTRACT_B,
+        address: CONTRACT_B,
         baseUrl: "https://second-merchant.example",
         assets: [
           { code: "USDC", issuer: ISSUER_B },
@@ -51,7 +51,7 @@ describe("loadVenueRegistry", () => {
 
   it("accepts a row with no baseUrl", () => {
     const registry = loadVenueRegistry([
-      { slug: "catalog-only", contractId: CONTRACT_A, assets: [{ code: "USDC", issuer: ISSUER_A }] },
+      { slug: "catalog-only", address: CONTRACT_A, assets: [{ code: "USDC", issuer: ISSUER_A }] },
     ]);
 
     expect(baseUrlForVenue(registry, CATALOG_ONLY)).toBeUndefined();
@@ -59,7 +59,7 @@ describe("loadVenueRegistry", () => {
 
   it("throws InvalidVenueRegistry for a row that fails schema validation", () => {
     try {
-      loadVenueRegistry([{ slug: "Not-Lowercase", contractId: CONTRACT_A, assets: [{ code: "USDC", issuer: ISSUER_A }] }]);
+      loadVenueRegistry([{ slug: "Not-Lowercase", address: CONTRACT_A, assets: [{ code: "USDC", issuer: ISSUER_A }] }]);
       expect.unreachable("expected loadVenueRegistry to throw");
     } catch (error) {
       expect(hasErrorCode(error, "InvalidVenueRegistry")).toBe(true);
@@ -68,7 +68,7 @@ describe("loadVenueRegistry", () => {
 
   it("throws InvalidVenueRegistry for a venue with an empty assets array", () => {
     try {
-      loadVenueRegistry([{ slug: "empty", contractId: CONTRACT_A, assets: [] }]);
+      loadVenueRegistry([{ slug: "empty", address: CONTRACT_A, assets: [] }]);
       expect.unreachable("expected loadVenueRegistry to throw");
     } catch (error) {
       expect(hasErrorCode(error, "InvalidVenueRegistry")).toBe(true);
@@ -89,7 +89,7 @@ describe("loadVenueRegistry", () => {
       loadVenueRegistry([
         {
           slug: "reference-merchant",
-          contractId: CONTRACT_A,
+          address: CONTRACT_A,
           assets: [
             { code: "USDC", issuer: ISSUER_A },
             { code: "USDC", issuer: ISSUER_B },
@@ -107,7 +107,7 @@ describe("loadVenueRegistry", () => {
       loadVenueRegistry([
         {
           slug: "reference-merchant",
-          contractId: CONTRACT_A,
+          address: CONTRACT_A,
           assets: [
             { code: "USDC", issuer: ISSUER_A },
             { code: "USDX", issuer: ISSUER_A },

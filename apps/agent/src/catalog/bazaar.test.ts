@@ -64,7 +64,7 @@ describe("the bazaar catalogue's identity", () => {
     const parsed = parseVenueId(BAZAAR_VENUE_ID);
 
     expect(parsed.slug).toBe("stellar-bazaar");
-    expect(parsed.contractId).toBe(BAZAAR_VENUE_CONTRACT_ID);
+    expect(parsed.address).toBe(BAZAAR_VENUE_CONTRACT_ID);
   });
 
   it("prices in the bazaar's own USDC — a contract issuer, not the mock's classic one", () => {

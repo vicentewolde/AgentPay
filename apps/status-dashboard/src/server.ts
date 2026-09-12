@@ -21,6 +21,7 @@ import {
   type PerDayUsage,
   type RailBalance,
   type RefusalSummary,
+  type SponsoredCreditDirectory,
   type StatusDirectory,
   type VaultReaderFactory,
 } from "./status.js";
@@ -31,7 +32,14 @@ const PORT = Number(process.env.PORT ?? 8790);
 const tenantIdSchema = z.string().trim().min(1).max(200);
 
 export interface StatusDashboardDependencies {
-  readonly directory: StatusDirectory;
+  /**
+   * The dashboard's read-only view. It is `StatusDirectory` *plus* the
+   * sponsored-credit count: the reserve panel (T77) reads a number that is
+   * not per-tenant, and the type has to say so. Until T79 it did not, and
+   * nothing caught it — `apps/status-dashboard` was missing from the root
+   * `tsconfig.json` references, so `pnpm typecheck` never compiled this app.
+   */
+  readonly directory: StatusDirectory & SponsoredCreditDirectory;
   readonly vaultFactory: VaultReaderFactory;
   /** T71: a SEP-41 `balance()` simulation of one rail's address — never a `transfer`. */
   readonly readRailBalance: (railContractId: string) => Promise<string>;

@@ -14,12 +14,27 @@ const CONTRACT = "CCL57L4ZDBRRWL2PKHZCYQZRDV4A37LOZRWMSCRQQ5JYRKMJW6I3TM7F";
 const ACCOUNT = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
 
 describe("parseVenueId", () => {
-  it("splits a well-formed id into its slug and contract id", () => {
+  it("splits a well-formed id into its slug and address", () => {
     const parsed = parseVenueId(`bazaar-aliado:${CONTRACT}`);
 
     expect(parsed.slug).toBe("bazaar-aliado");
-    expect(parsed.contractId).toBe(CONTRACT);
+    expect(parsed.address).toBe(CONTRACT);
+    expect(parsed.addressKind).toBe("contract");
     expect(parsed.venueId).toBe(`bazaar-aliado:${CONTRACT}`);
+  });
+
+  /**
+   * T79 widened `B-3`: an HTTP merchant is not a Soroban contract and never
+   * will be, and the account it is paid at is the identity that is actually
+   * unforgeable for it — the same value `reconcileTerms` compares against the
+   * 402 invoice.
+   */
+  it("accepts a classic account as the address, for a venue that is not a contract", () => {
+    const parsed = parseVenueId(`signaldesk:${ACCOUNT}`);
+
+    expect(parsed.slug).toBe("signaldesk");
+    expect(parsed.address).toBe(ACCOUNT);
+    expect(parsed.addressKind).toBe("account");
   });
 
   it.each([
@@ -31,8 +46,9 @@ describe("parseVenueId", () => {
     ["leading hyphen", `-bazaar:${CONTRACT}`],
     ["trailing hyphen", `bazaar-:${CONTRACT}`],
     ["double hyphen", `bazaar--aliado:${CONTRACT}`],
-    ["account instead of contract", `bazaar:${ACCOUNT}`],
     ["truncated contract", `bazaar:${CONTRACT.slice(0, -1)}`],
+    ["truncated account", `bazaar:${ACCOUNT.slice(0, -1)}`],
+    ["a secret seed, not an address", "bazaar:SBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"],
     ["empty string", ""],
   ])("rejects %s with InvalidVenueId", (_label, value) => {
     expect(() => parseVenueId(value)).toThrow();
@@ -74,7 +90,7 @@ describe("parseVenueId", () => {
       expect.unreachable("a trailing space must not parse");
     } catch (error) {
       expect((error as { details: { reason: string } }).details.reason).toBe(
-        "malformed-contract-id",
+        "malformed-address",
       );
     }
   });
@@ -92,8 +108,9 @@ describe("parseVenueId", () => {
 
   it("makeVenueId validates what it builds", () => {
     expect(makeVenueId("bazaar", CONTRACT)).toBe(`bazaar:${CONTRACT}`);
+    expect(makeVenueId("signaldesk", ACCOUNT)).toBe(`signaldesk:${ACCOUNT}`);
     expect(() => makeVenueId("Bazaar", CONTRACT)).toThrow();
-    expect(() => makeVenueId("bazaar", ACCOUNT)).toThrow();
+    expect(() => makeVenueId("bazaar", "neither-form")).toThrow();
   });
 });
 
@@ -152,7 +169,8 @@ describe("parseAssetId", () => {
 describe("edge schemas", () => {
   it("venueIdSchema accepts canonical ids and rejects the rest", () => {
     expect(venueIdSchema.safeParse(`bazaar:${CONTRACT}`).success).toBe(true);
-    expect(venueIdSchema.safeParse(`bazaar:${ACCOUNT}`).success).toBe(false);
+    expect(venueIdSchema.safeParse(`bazaar:${ACCOUNT}`).success).toBe(true);
+    expect(venueIdSchema.safeParse(`bazaar:not-an-address`).success).toBe(false);
     expect(venueIdSchema.safeParse(42).success).toBe(false);
   });
 
