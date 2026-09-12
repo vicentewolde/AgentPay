@@ -1149,8 +1149,8 @@ Claude Code congele el contrato.
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
 | T61 | Claude | Ninguna | 🔴 Alto — enforcement de `perDay` | `packages/vault/src/postgres-vault.ts` | ✅ cerrado 2026-09-12 — `spentOn` lee la base en vivo, `append` serializa el `seq`/`prevHash` con un advisory lock de Postgres por `tenantId`. 8 tests de integración contra Postgres real, incluida una escritura verdaderamente concurrente (`Promise.all`) que antes del fix rompía la unicidad de `seq` |
-| T62 | Codex | Ninguna | Medio — seguridad de transporte, revisión cercana | `packages/vault/src/postgres-vault.ts` (solo opción `ssl`), `packages/directory/src/directory.ts` (solo opción `ssl`) | Falla cerrado si la CA no verifica, no degrada en silencio |
-| T63 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | Ningún log serializa un error crudo (`C-32`) — cubierto por test |
+| T62 | Codex | Ninguna | Medio — seguridad de transporte, revisión cercana | `packages/vault/src/postgres-vault.ts` (solo opción `ssl`), `packages/directory/src/directory.ts` (solo opción `ssl`) | ✅ cerrado 2026-09-12 (PR #19) — `POSTGRES_CA_CERT` opcional; con CA, `rejectUnauthorized: true` (verificación real, delegada al TLS de Node); sin CA, el comportamiento de hoy sin cambios. Sin fallback inseguro en ningún camino |
+| T63 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | ✅ cerrado 2026-09-12 (PR #19) — `logging.ts` tipa los campos como primitivos (`LogFields`), así que un error crudo no compila como argumento; `logError` solo extrae `.message`. Test reproduce el escenario exacto de `C-32` (`connectionParameters.password`) y confirma que nunca llega al log |
 | T64 | Codex | T61 mergeado | Bajo — mide, no decide | `scripts/loadtest-perday.ts` (nuevo) | Reproduce la condición de carrera que T61 corrige |
 | T65 | Claude | T61, T62, T63, T64 mergeados | — | — | Corrida personal de T64; revisión final de todo el hito antes de cerrar |
 

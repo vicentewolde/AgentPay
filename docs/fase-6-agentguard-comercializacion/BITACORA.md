@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T61 (F8, `perDay` a prueba de dos procesos) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T62/T63 (F8, CA de Postgres y logging seguro, PR #19 de Codex) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -1915,3 +1915,62 @@ estructurado), T64 (prueba de carga que reproduce la condición de
 carrera — ahora con algo real que medir), T65 (revisión final de F8) —
 los cuatro siguientes de `PLATAFORMA-PARTNERS.md` § F8, delegables a
 Codex salvo T65.
+
+---
+
+## T62 y T63 · CA de Postgres y logging seguro (F8, PR #19 de Codex) — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Dos mejoras de seguridad
+operativa, sin cambiar nada de lo que un usuario ve. Primero: la conexión
+a la base de datos ya puede verificar de verdad que está hablando con el
+servidor correcto (antes cifraba la conexión pero no chequeaba la
+identidad del otro lado) — es opcional, así que el piloto sigue andando
+exactamente igual hasta que alguien decida activarlo. Segundo: cuando algo
+falla del lado del servidor, ahora queda un registro legible en los logs
+de Render — antes, un error simplemente desaparecía sin dejar rastro para
+quien opera el piloto.
+
+**Revisión, no aprobación a ciegas.** Se armó un worktree aislado
+(`/tmp/agentpay-pr19-review`, descartado al terminar), diff completo línea
+por línea, y se corrió todo de forma independiente — no se confió en lo
+que el PR decía haber corrido. Atención particular, como marca el
+protocolo, a la parte de seguridad de transporte (`T62`) y a que ningún
+log filtrara algo sensible (`T63`).
+
+**Evidencia técnica:**
+
+- `T62`: `packages/vault/src/postgres-vault.ts` y
+  `packages/directory/src/directory.ts` tocados **solo** en la opción
+  `ssl` — nada del advisory lock que T61 agregó un día antes se tocó, que
+  era exactamente lo que el prompt de delegación pedía cuidar. Con
+  `POSTGRES_CA_CERT` sin setear, el comportamiento es idéntico al de
+  hoy (confirmado con un test que espera exactamente
+  `{ rejectUnauthorized: false }`); con la variable seteada, pasa
+  `{ ca, rejectUnauthorized: true }` — la verificación real la hace el
+  TLS de Node, no código propio, así que el riesgo de una implementación
+  casera de verificación de certificados no aplica acá.
+- `T63`: `apps/web/src/logging.ts` (nuevo) tipa los campos que un log
+  puede llevar como primitivos únicamente (`LogFields`) — un objeto de
+  error crudo directamente **no compila** como argumento, no es solo una
+  convención de código. El test reproduce el escenario exacto de `C-32`
+  (un error con `connectionParameters.password` adentro, igual que un
+  error real de `pg`) y confirma que ni el valor ni el nombre del campo
+  llegan a la línea logueada.
+- Corrida independiente completa: `pnpm typecheck`/`build`/`test` (919
+  tests) limpios, más los 8 tests de integración de
+  `packages/vault` contra Postgres real (los mismos de T61, sin
+  regresión — la ruta por default no cambió).
+- Alcance del diff verificado contra lo permitido: nueve archivos, todos
+  dentro de lo que el prompt de delegación autorizaba — nada en
+  `contracts/**`, `checkMandate`, enforcement de `scope.limits`, ni
+  ningún archivo de custodia o llaves.
+
+Mergeado por PR #19 (`gh pr merge --merge`), rama remota
+`codex/t62-t63-hardening` sin borrar a propósito — sigue en el worktree
+de Codex.
+
+Pendiente: T64 (prueba de carga que reproduce la condición de carrera de
+T61 — ahora con algo real que medir), T65 (revisión final de F8, corrida
+personal de T64). Configurar `POSTGRES_CA_CERT` en Render es opcional y
+queda para cuando el usuario lo pida — no es parte del criterio de
+"listo" de este hito.
