@@ -1182,9 +1182,17 @@ Claude Code congele el contrato.
 > cerraron `G12` de punta a punta — ver `DECISIONES.md` → `C-69`,
 > `C-70`, `C-71`, y la fila de `G12` en la tabla de brechas de arriba.
 >
-> Métricas, alertas y política de retención siguen sin ticket — trabajo
-> real, no resuelto ni descartado, para cuando el usuario decida
-> priorizarlo (F9 o una ronda de hardening aparte).
+> **Retención se resolvió después, a pedido explícito del usuario
+> (T70, mismo día).** Las cuatro tablas efímeras del flujo de wallet
+> (`wallet_challenges`, `pending_wallet_sessions`,
+> `pending_consent_sessions`, `sdk_pending_writes`) ya solo dejaban de
+> ser legibles al vencer, sin borrarse nunca. Un temporizador dentro
+> del propio proceso de `apps/web` (cada 15 minutos, sin infraestructura
+> nueva) barre lo vencido. Ver `DECISIONES.md` → `C-72`.
+>
+> Métricas y alertas siguen sin ticket — el usuario pidió un panel
+> completo (`perDay` cerca del límite, rechazos, saldo de rail),
+> trabajo real para el próximo hito, no resuelto ni descartado.
 
 ---
 

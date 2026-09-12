@@ -88,6 +88,24 @@ export interface WalletSessionStore {
   setWalletAddressForConsentSession(consentSessionId: string, address: string): Promise<void>;
   getWalletAddressForConsentSession(consentSessionId: string): Promise<string | undefined>;
   deleteWalletAddressForConsentSession(consentSessionId: string): Promise<void>;
+
+  /**
+   * Deletes rows past their own `expires_at` from the three tables that have
+   * one (`wallet_challenges`, `pending_wallet_sessions`,
+   * `pending_consent_sessions`) — every read here already filters by
+   * `expires_at > now()`, but nothing removed the row itself for a flow that
+   * never finished (an abandoned wallet connection, a challenge nobody
+   * answered). Without this, those tables grow without bound. Deliberately
+   * does not touch `wallet_address_by_session`/`wallet_address_by_consent_session`
+   * — those have no `expires_at` by design (`C-71`: a session's own lifetime
+   * bounds them, not a TTL). Returns how many rows each table lost, for
+   * logging.
+   */
+  sweepExpired(): Promise<{
+    readonly walletChallenges: number;
+    readonly pendingWalletSessions: number;
+    readonly pendingConsentSessions: number;
+  }>;
 }
 
 const CREATE_TABLES_SQL = `
@@ -293,6 +311,21 @@ export async function createPostgresWalletSessionStore(
     deleteWalletAddressForConsentSession(consentSessionId) {
       return run("delete a wallet address for a consent session", async () => {
         await pool.query("delete from wallet_address_by_consent_session where consent_session_id = $1", [consentSessionId]);
+      });
+    },
+
+    sweepExpired() {
+      return run("sweep expired wallet-session rows", async () => {
+        const [challenges, walletSessions, consentSessions] = await Promise.all([
+          pool.query("delete from wallet_challenges where expires_at <= now()"),
+          pool.query("delete from pending_wallet_sessions where expires_at <= now()"),
+          pool.query("delete from pending_consent_sessions where expires_at <= now()"),
+        ]);
+        return {
+          walletChallenges: challenges.rowCount ?? 0,
+          pendingWalletSessions: walletSessions.rowCount ?? 0,
+          pendingConsentSessions: consentSessions.rowCount ?? 0,
+        };
       });
     },
   };

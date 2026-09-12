@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T69 (`G12` completo — wallet-connect sobrevive a más de un proceso) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T70 (limpieza activa de filas vencidas del flujo de wallet) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -63,7 +63,19 @@ memoria que un segundo proceso no podía ver — así que el límite se
 podía exceder sin que nada se rompiera. Ahora esa decisión también pasa
 por Postgres, atada al mismo lock que ya protegía la escritura (T66),
 verificado con la misma prueba de carga repitiendo la corrida y
-manteniéndose siempre dentro del límite.
+manteniéndose siempre dentro del límite. F8 cerró del todo con T65. A
+pedido explícito del usuario, `G12` (estado de wallet-connect en
+memoria, la otra brecha que el alcance original de F8 había mencionado
+sin desglosar en un ticket) se resolvió aparte, mismo día: `Registry`
+(Fase 1) ya no necesita ser la misma instancia entre preparar una
+transacción y firmarla (T67), y los cinco stores en memoria del flujo
+de wallet pasaron a Postgres (T68, T69) — verificado con los tres
+flujos completos (clásico, wallet-connect, consent-session hospedado)
+contra el servidor real y testnet real. Con eso cerrado, quedaba un
+hueco anotado pero sin ticket: ninguna de esas filas efímeras se
+borraba de verdad al vencer, solo dejaban de leerse. T70 lo cierra: un
+barrido periódico dentro del propio servidor borra las filas vencidas
+de las cuatro tablas que tienen `expires_at`.
 
 ### Progreso
 
@@ -98,6 +110,11 @@ manteniéndose siempre dentro del límite.
 | T62, T63 | F8: verificación de CA de Postgres opcional, logging estructurado sin filtrar datos sensibles | ✅ cerrados 2026-09-12 (Codex, PR #19) |
 | T64 | F8: `scripts/loadtest-perday.ts` — cuatro procesos de Node reales compitiendo por `perDay`; encontró que `perDay` se podía exceder pese a T61 | ✅ cerrado 2026-09-12 (Codex, PR #20) |
 | T66 | F8: `ledger.atomically()` cierra la carrera de decisión que T64 encontró — `perDay` aguanta procesos separados de verdad, no solo la escritura | ✅ cerrado 2026-09-12 |
+| T65 | F8: revisión final de conjunto (T61–T66) contra el "listo cuando" explícito — **F8 completa** | ✅ cerrado 2026-09-12 |
+| T67 | `G12`, primer hito: `Registry` (`packages/sdk`) gana un `PendingWriteStore` opcional — ya no depende de ser la misma instancia entre `prepareAnchor`/`prepareRevoke` y `submitSigned` | ✅ cerrado 2026-09-12 |
+| T68 | `G12`, segundo hito: ese store llega a `apps/web` sobre Postgres; `agentpass` se reconstruye por request en el flujo de anclaje de wallet | ✅ cerrado 2026-09-12 |
+| T69 | `G12`, tercer hito: los últimos cuatro stores en memoria del flujo de wallet (desafíos, sesiones pendientes, dirección por sesión) pasan a Postgres — **`G12` completo** | ✅ cerrado 2026-09-12 |
+| T70 | Limpieza activa: barrido periódico borra filas vencidas de `wallet_challenges`/`pending_wallet_sessions`/`pending_consent_sessions`/`sdk_pending_writes`, que antes solo dejaban de leerse | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2312,3 +2329,101 @@ archivo. Archivos tocados:
 Pendiente: nada de `G12` — cerrado del todo (T67–T69). Sigue sin
 ticket, a propósito: métricas, alertas, política de retención.
 `agentpey.com`/Custom Domains en Render, sin apuro.
+
+---
+
+## T70 · Limpieza activa de filas vencidas del flujo de wallet — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** El usuario pidió cerrar
+el hueco de retención que `G12` (T67–T69) había dejado anotado: cada
+vez que alguien empieza a conectar una wallet y abandona el flujo a
+mitad de camino —o el navegador se cierra antes de terminar de
+firmar—, la fila que guardaba ese intento (el desafío de un solo uso,
+la sesión a mitad de camino, la transacción armada esperando firma)
+seguía viva en la base de datos para siempre. No rompía nada — cada
+lectura ya filtraba por su fecha de vencimiento, así que una fila
+vencida nunca volvía a usarse — pero nada la borraba, así que la tabla
+solo podía crecer. Ahora el propio servidor se encarga: cada quince
+minutos revisa las cuatro tablas que tienen fecha de vencimiento y
+borra lo que ya venció.
+
+**Evidencia técnica** (`C-72`):
+
+- `apps/web/src/wallet-session-store.ts`: `WalletSessionStore` gana
+  `sweepExpired()` — tres `delete` (uno por `wallet_challenges`,
+  `pending_wallet_sessions`, `pending_consent_sessions`) filtrando por
+  `expires_at <= now()`, devolviendo cuántas filas se borraron de cada
+  una. Deliberadamente no toca `wallet_address_by_session`/
+  `wallet_address_by_consent_session` — esas dos no tienen
+  `expires_at`, a propósito (`C-71`: el ciclo de vida de la sesión las
+  acota, no un TTL propio).
+- `apps/web/src/pending-write-store.ts`: mismo criterio para
+  `sdk_pending_writes` — un `delete ... where expires_at <= now()`. Se
+  agregó como un método nuevo, `sweepExpired()`, pero **no** en el
+  puerto compartido `PendingWriteStore` que `@agentpass/sdk` define
+  (Fase 1): ese puerto ya tiene una implementación en memoria por
+  defecto que poda entradas vencidas en cada `save`/`take` (barato
+  para un `Map`) — agregarle el método ahí habría forzado a esa
+  implementación a tener uno que no necesita. Se definió en cambio un
+  tipo local, `PostgresPendingWriteStore`, que extiende el puerto solo
+  para la implementación de Postgres — sin tocar `packages/sdk` para
+  nada.
+- `apps/web/src/server.ts`: un `setInterval` de 15 minutos, arrancado
+  una sola vez cuando el servidor ya está escuchando, llama a los dos
+  `sweepExpired()` y registra cuántas filas borró (solo si borró
+  alguna) con el logging estructurado de T63 — nunca revienta el
+  proceso: un error de la base se loguea y se reintenta en el próximo
+  ciclo. El intervalo elegido —15 minutos— es a propósito más largo
+  que el TTL más largo del flujo (10 minutos, sesión pendiente o
+  transacción sin firmar), así que ninguna fila vive mucho más de un
+  ciclo extra de más antes de desaparecer, sin agregar un `delete` al
+  camino caliente de cada request.
+
+**Por qué un temporizador dentro del propio proceso, y no un cron job
+de Render aparte.** El plan alternativo — un servicio de Render Cron
+separado que corra el barrido — habría sido infraestructura nueva para
+agregar y mantener, en un plan gratuito donde ni siquiera está
+confirmado que esté disponible. El servidor de `apps/web` ya corre sin
+parar mientras el piloto está activo, y ya es dueño de los dos `Pool`
+de Postgres que necesita tocar — un temporizador interno reutiliza
+exactamente esa conexión, sin ningún proceso ni configuración nueva.
+Si el piloto alguna vez corre con más de una instancia a la vez (el
+mismo escenario que motivó `G12`), varios barridos concurrentes no son
+un problema: cada `delete` es idempotente por sí mismo, así que da
+igual si otra instancia ya se adelantó y borró la fila.
+
+**Verificado en cuatro niveles:**
+
+1. Tests de integración nuevos contra Postgres real, en los dos
+   módulos: insertan una fila ya vencida junto a una viva (y, en
+   `wallet-session-store`, también una fila sin `expires_at`),
+   corren `sweepExpired()`, y confirman contra la tabla cruda —no solo
+   contra la interfaz de lectura— que la vencida desapareció, la viva
+   sigue ahí, y la que no tiene TTL ni se tocó.
+2. Suite completa del monorepo (919 tests) sin regresiones.
+3. Los 17 tests de integración de `apps/web` contra Postgres real
+   (los 12 de `wallet-session-store` más los 5 de `pending-write-store`,
+   sumando las dos pruebas nuevas de este hito) pasan.
+4. El servidor real (`pnpm --filter @agentpey/web run dev`) arranca
+   limpio con el temporizador ya cableado y responde
+   `200` en `/` — confirma que la pieza nueva no rompe el arranque del
+   proceso real, más allá de lo que los tests aislados ya prueban.
+
+**Qué NO cambió, a propósito.** `checkMandate`/`checkScope`/
+`checkDailyLimit`/`PolicyRail` — nada de esto se tocó. Ninguna ruta
+HTTP nueva ni cambio de comportamiento visible para un visitante: el
+barrido es enteramente interno, no se expone ni se puede disparar
+desde afuera.
+
+Documentación tocada: `DECISIONES.md` (`C-72`), `PLATAFORMA-PARTNERS.md`
+(nota de F8 actualizada — retención deja de estar sin ticket), este
+archivo. Archivos tocados: `apps/web/src/wallet-session-store.ts`,
+`apps/web/src/wallet-session-store.integration.test.ts`,
+`apps/web/src/pending-write-store.ts`,
+`apps/web/src/pending-write-store.integration.test.ts`,
+`apps/web/src/server.ts`.
+
+Pendiente: nada de retención. Sigue sin decidir, a pedido explícito
+del usuario: métricas/alertas (el usuario pidió un panel completo —
+`perDay` cerca del límite, rechazos, saldo de rail — próximo hito) y
+F9 (partner real y métrica de éxito, ambos sin decidir todavía).

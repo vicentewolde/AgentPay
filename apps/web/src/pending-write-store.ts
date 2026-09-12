@@ -19,6 +19,19 @@ export interface PostgresPendingWriteStoreOptions {
   readonly connectionString: string;
 }
 
+/**
+ * `PendingWriteStore` (the port `@agentpass/sdk` defines) plus a sweep this
+ * Postgres implementation alone offers. Kept local rather than added to the
+ * shared port: the in-memory default already prunes expired entries
+ * opportunistically on every `save`/`take` (cheap for a `Map`), so the port
+ * itself doesn't need this method — only a Postgres-backed store, where an
+ * abandoned two-phase write (`prepareAnchor`/`prepareRevoke` never followed
+ * by `submitSigned`) would otherwise sit in `sdk_pending_writes` forever.
+ */
+export interface PostgresPendingWriteStore extends PendingWriteStore {
+  sweepExpired(): Promise<{ readonly deleted: number }>;
+}
+
 const CREATE_TABLE_SQL = `
   create table if not exists sdk_pending_writes (
     request_id text        not null primary key,
@@ -33,7 +46,7 @@ interface PendingWriteRow {
 
 export async function createPostgresPendingWriteStore(
   options: PostgresPendingWriteStoreOptions,
-): Promise<PendingWriteStore> {
+): Promise<PostgresPendingWriteStore> {
   const { connectionString } = options;
   const postgresCa = process.env.POSTGRES_CA_CERT;
   const pool = new Pool({
@@ -82,6 +95,16 @@ export async function createPostgresPendingWriteStore(
         throw new AgentPassError("ConfigError", "could not read the pending write from Postgres", { cause: error });
       }
       return rows[0]?.payload;
+    },
+
+    async sweepExpired() {
+      try {
+        const { rowCount } = await pool.query("delete from sdk_pending_writes where expires_at <= now()");
+        return { deleted: rowCount ?? 0 };
+      } catch (error) {
+        logError("[pending-write-store] could not sweep expired pending writes", error);
+        throw new AgentPassError("ConfigError", "could not sweep expired pending writes in Postgres", { cause: error });
+      }
     },
   };
 }

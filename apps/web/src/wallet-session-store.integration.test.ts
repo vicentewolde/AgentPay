@@ -262,4 +262,60 @@ describe("createPostgresWalletSessionStore", () => {
     await expect(store.getWalletAddressForSession(missing)).resolves.toBeUndefined();
     await expect(store.getWalletAddressForConsentSession(missing)).resolves.toBeUndefined();
   });
+
+  it("sweepExpired (T70) deletes rows past expires_at, leaves live rows and TTL-less rows alone", async () => {
+    const store = await createPostgresWalletSessionStore({ connectionString });
+
+    const expiredNonce = freshId("nonce");
+    const liveNonce = freshId("nonce");
+    nonces.push(expiredNonce, liveNonce);
+    await store.issueChallenge(expiredNonce, -1_000);
+    await store.issueChallenge(liveNonce, 60_000);
+
+    const expiredSessionId = freshId("session");
+    const liveSessionId = freshId("session");
+    sessionIds.push(expiredSessionId, liveSessionId);
+    await store.setPendingWalletSession(expiredSessionId, walletSessionPayload(), -1_000);
+    await store.setPendingWalletSession(liveSessionId, walletSessionPayload(), 60_000);
+
+    const expiredConsentId = freshId("consent");
+    const liveConsentId = freshId("consent");
+    consentSessionIds.push(expiredConsentId, liveConsentId);
+    await store.setPendingConsentSession(expiredConsentId, consentSessionPayload(), -1_000);
+    await store.setPendingConsentSession(liveConsentId, consentSessionPayload(), 60_000);
+
+    // No expires_at at all (C-71) — sweepExpired must never touch these.
+    const permanentSessionId = freshId("session");
+    sessionIds.push(permanentSessionId);
+    const permanentAddress = Keypair.random().publicKey();
+    await store.setWalletAddressForSession(permanentSessionId, permanentAddress);
+
+    const swept = await store.sweepExpired();
+
+    expect(swept.walletChallenges).toBeGreaterThanOrEqual(1);
+    expect(swept.pendingWalletSessions).toBeGreaterThanOrEqual(1);
+    expect(swept.pendingConsentSessions).toBeGreaterThanOrEqual(1);
+
+    // The already-expired rows are gone even from the raw table, not just unreadable.
+    const { rows: remainingChallenges } = await pool.query("select 1 from wallet_challenges where nonce = $1", [
+      expiredNonce,
+    ]);
+    expect(remainingChallenges).toHaveLength(0);
+    const { rows: remainingSessions } = await pool.query(
+      "select 1 from pending_wallet_sessions where session_id = $1",
+      [expiredSessionId],
+    );
+    expect(remainingSessions).toHaveLength(0);
+    const { rows: remainingConsentSessions } = await pool.query(
+      "select 1 from pending_consent_sessions where consent_session_id = $1",
+      [expiredConsentId],
+    );
+    expect(remainingConsentSessions).toHaveLength(0);
+
+    // Live rows and TTL-less rows survive the sweep untouched.
+    await expect(store.getPendingWalletSession(liveSessionId)).resolves.toBeDefined();
+    await expect(store.getPendingConsentSession(liveConsentId)).resolves.toBeDefined();
+    await expect(store.getWalletAddressForSession(permanentSessionId)).resolves.toBe(permanentAddress);
+    await expect(store.takeChallenge(liveNonce)).resolves.toBe(true);
+  });
 });

@@ -2585,3 +2585,76 @@ desglosadas). `agentpey.com`/Custom Domains en Render sigue pendiente,
 sin apuro.
 
 ---
+
+### C-72 · T70: un temporizador dentro del propio proceso barre las filas vencidas, no un cron aparte · `Vigente`
+**Fecha:** 2026-09-12
+
+`G12` (T67–T69) dejó anotado, sin ticket, que ninguna de las tablas
+efímeras del flujo de wallet borraba de verdad una fila vencida — cada
+lectura ya filtra por `expires_at > now()`, pero una fila que nunca se
+volvió a leer (un desafío sin responder, una sesión abandonada a mitad
+de camino) se queda en la tabla para siempre. Con el visto bueno
+explícito del usuario ("agregar limpieza activa ahora"), este hito lo
+cierra.
+
+**La decisión: un `setInterval` de 15 minutos dentro del propio proceso
+de `apps/web`, no un servicio de cron de Render aparte.** Alternativa
+descartada: un Render Cron Job separado que invoque un script de
+limpieza. Se descartó porque habría sido infraestructura nueva a
+configurar y mantener (y en el plan gratuito actual, `render.yaml` no
+tiene ningún servicio de ese tipo hoy — agregarlo es un compromiso de
+plataforma, no una línea de código), mientras que el servidor ya corre
+sin parar y ya es dueño de los dos `Pool` de Postgres que hace falta
+tocar. Un temporizador interno reutiliza esa conexión ya abierta sin
+ningún proceso, dependencia ni configuración nueva. Si el piloto algún
+día corre más de una instancia (el mismo escenario de `G12`), varios
+barridos concurrentes no chocan: cada `delete ... where expires_at <=
+now()` es idempotente en sí mismo.
+
+**Por qué 15 minutos y no algo más corto o más largo.** El TTL más
+largo del flujo hoy es 10 minutos (`PENDING_WALLET_SESSION_TTL_MS`,
+`PENDING_WRITE_TTL_MS` en `packages/sdk`); 15 minutos deja como máximo
+un ciclo extra de filas ya vencidas pero todavía no barridas, sin
+agregar un `delete` al camino caliente de cada request de conectar
+wallet (que es lo que habría pasado si se podara en cada `save`, como
+sí hace barato el `Map` en memoria que este mismo patrón ya usa en
+`packages/sdk`).
+
+**Por qué el método nuevo no se agregó al puerto compartido
+`PendingWriteStore` (`@agentpass/sdk`, Fase 1).** Ese puerto ya tiene
+una implementación en memoria por defecto (`createInMemoryPendingWriteStore`)
+que poda entradas vencidas en cada `save`/`take` — barato para un
+`Map`, sin necesitar ningún método de barrido separado. Agregarle
+`sweepExpired()` al puerto habría forzado a esa implementación a
+declarar un método que no le hace falta, solo para que la
+implementación de Postgres de `apps/web` lo tuviera. Se definió en
+cambio un tipo local en `apps/web/src/pending-write-store.ts`
+(`PostgresPendingWriteStore`, que extiende el puerto) — el método
+nuevo vive solo donde hace falta, sin tocar `packages/sdk` para nada.
+`wallet-session-store.ts` no tuvo este problema: su interfaz
+(`WalletSessionStore`) ya es local a `apps/web`, sin ninguna
+implementación alternativa que respetar.
+
+**Qué NO se tocó, a propósito.** `wallet_address_by_session`/
+`wallet_address_by_consent_session` — sin `expires_at` por diseño
+desde `C-71`, el barrido nunca las toca. `checkMandate`/`checkScope`/
+`checkDailyLimit`/`PolicyRail` — nada de esto tiene relación con
+retención de sesiones de wallet.
+
+**Verificado en cuatro niveles:** tests de integración nuevos contra
+Postgres real en los dos módulos (confirman contra la tabla cruda que
+la fila vencida desaparece, la viva y la sin-TTL sobreviven); suite
+completa del monorepo sin regresiones; los 17 tests de integración de
+`apps/web` (12 + 5, incluyendo los dos nuevos); y el servidor real
+arrancado con `pnpm --filter @agentpey/web run dev`, respondiendo
+`200` en `/` con el temporizador ya cableado desde el arranque.
+
+Documentación tocada: `BITACORA.md` (nuevo hito T70),
+`PLATAFORMA-PARTNERS.md` (nota de F8). Archivos tocados:
+`apps/web/src/wallet-session-store.ts`,
+`apps/web/src/wallet-session-store.integration.test.ts`,
+`apps/web/src/pending-write-store.ts`,
+`apps/web/src/pending-write-store.integration.test.ts`,
+`apps/web/src/server.ts`.
+
+---

@@ -43,7 +43,7 @@ import {
   stellarAddressToDid,
   verifyStellarMessage,
 } from "@agentpass/core";
-import { createAgentPass, type AgentPass, type CredStatus, type PendingWriteStore } from "@agentpass/sdk";
+import { createAgentPass, type AgentPass, type CredStatus } from "@agentpass/sdk";
 import { Keypair, Networks } from "@stellar/stellar-sdk";
 
 import { createDirectory, type ConsentSessionRecord, type Directory, type MandateRecord } from "@agentpey/directory";
@@ -80,9 +80,9 @@ import {
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
 import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
-import { logError } from "./logging.js";
+import { log, logError } from "./logging.js";
 import { routePartnerRequest } from "./partner-routes.js";
-import { createPostgresPendingWriteStore } from "./pending-write-store.js";
+import { createPostgresPendingWriteStore, type PostgresPendingWriteStore } from "./pending-write-store.js";
 import { decideRehydration } from "./session-rehydration.js";
 import { buildSessionDocuments } from "./session-documents.js";
 import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identity.js";
@@ -319,8 +319,8 @@ function getDirectory(env: ReadonlyMap<string, string>): Promise<Directory> {
  * storage that lets a `prepareAnchor`/`prepareRevoke` on one process finish
  * with `submitSigned` on another (T67/T68, G12).
  */
-let pendingWriteStorePromise: Promise<PendingWriteStore> | undefined;
-function getPendingWriteStore(env: ReadonlyMap<string, string>): Promise<PendingWriteStore> {
+let pendingWriteStorePromise: Promise<PostgresPendingWriteStore> | undefined;
+function getPendingWriteStore(env: ReadonlyMap<string, string>): Promise<PostgresPendingWriteStore> {
   pendingWriteStorePromise ??= createPostgresPendingWriteStore({ connectionString: requireEnv(env, "DATABASE_URL") });
   return pendingWriteStorePromise;
 }
@@ -1678,6 +1678,49 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   sendJson(res, 404, { ok: false, code: "NotFound", message: `no route for ${req.method} ${pathname}` });
 }
 
+/**
+ * T70: rows in `wallet_challenges`/`pending_wallet_sessions`/
+ * `pending_consent_sessions`/`sdk_pending_writes` outlive an abandoned
+ * flow forever otherwise — every read already filters by `expires_at`, but
+ * nothing deletes the row itself. TTLs here are 5–10 minutes
+ * (`WALLET_CHALLENGE_TTL_MS`/`PENDING_WALLET_SESSION_TTL_MS`/
+ * `PENDING_WRITE_TTL_MS`), so a 15-minute sweep keeps at most one extra
+ * cycle's worth of dead rows around instead of doing a `delete` on every
+ * request's hot path. `.unref()` so this timer alone never keeps the
+ * process alive (matters for tests and graceful shutdown, not for the
+ * running server, which is already held open by its listening socket).
+ */
+const RETENTION_SWEEP_INTERVAL_MS = 15 * 60_000;
+function startRetentionSweep(): void {
+  const timer = setInterval(() => {
+    void (async () => {
+      try {
+        const env = await readEnv();
+        const [walletSessionStore, pendingWriteStore] = await Promise.all([
+          getWalletSessionStore(env),
+          getPendingWriteStore(env),
+        ]);
+        const [walletSwept, writesSwept] = await Promise.all([
+          walletSessionStore.sweepExpired(),
+          pendingWriteStore.sweepExpired(),
+        ]);
+        const total =
+          walletSwept.walletChallenges +
+          walletSwept.pendingWalletSessions +
+          walletSwept.pendingConsentSessions +
+          writesSwept.deleted;
+        if (total > 0) {
+          log("info", "[retention] swept expired rows", { ...walletSwept, sdkPendingWrites: writesSwept.deleted });
+        }
+      } catch (error) {
+        logError("[retention] sweep failed", error);
+      }
+    })();
+  }, RETENTION_SWEEP_INTERVAL_MS);
+  timer.unref();
+}
+
 server.listen(PORT, () => {
+  startRetentionSweep();
   process.stdout.write(`\nAgentPey web · Fase 4 (T25) · http://localhost:${PORT}\n\n`);
 });

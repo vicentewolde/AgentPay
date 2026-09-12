@@ -3913,3 +3913,55 @@ Pendiente: mergear `cc/t69-wallet-session-postgres` a `main` y
 pushear. `G12` queda cerrado por completo (T67–T69). Sin ticket
 nuevo abierto: métricas/alertas/retención siguen sin priorizar, y
 `agentpey.com`/Custom Domains en Render sigue pendiente sin apuro.
+
+---
+
+## 2026-09-12 (7) — cc/t70-retention-cleanup
+
+Agente: Claude Code
+
+Qué: continuación de sesión tras cerrar F8 y `G12`. Antes de tocar
+código, le pregunté al usuario tres cosas que quedaban sin decidir
+(retención, alcance de métricas/alertas, y las dos preguntas que
+bloquean F9 — partner real y métrica de éxito): confirmó construir la
+limpieza de retención ahora, un panel completo de métricas/alertas
+como próximo hito, y que ni el partner ni la métrica de F9 están
+decididos todavía — así que **F9 no arranca en esta sesión**.
+
+T70 cierra retención: `wallet_challenges`/`pending_wallet_sessions`/
+`pending_consent_sessions`/`sdk_pending_writes` (las cuatro tablas de
+`G12`, T67–T69, con `expires_at`) solo dejaban de leerse al vencer,
+nunca se borraban de verdad. `WalletSessionStore` y un tipo local
+nuevo (`PostgresPendingWriteStore`, que extiende el puerto de
+`@agentpass/sdk` sin tocar ese paquete) ganan `sweepExpired()`; un
+`setInterval` de 15 minutos dentro del propio proceso de `apps/web`
+(arrancado una vez, al escuchar) lo llama en las dos tablas y loguea
+cuántas filas borró. Sin infraestructura nueva — reutiliza los `Pool`
+de Postgres que el servidor ya abre. Detalle completo, con la
+alternativa de un Render Cron descartada, en `C-72`.
+
+Verificado en cuatro niveles: tests de integración nuevos contra
+Postgres real en los dos módulos (confirman contra la tabla cruda, no
+solo la interfaz de lectura), suite completa del monorepo (919 tests)
+sin regresiones, los 17 tests de integración de `apps/web`, y el
+servidor real arrancado localmente respondiendo `200` con el
+temporizador ya cableado.
+
+Por qué: el usuario lo pidió explícitamente después de que le mostrara
+el hueco real (ninguna fila vencida se borraba) como parte de la lista
+de candidatos para la conversación de retención/métricas/alertas.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/BITACORA.md`
+(hito T70), `DECISIONES.md` (`C-72`), `PLATAFORMA-PARTNERS.md` (nota
+de F8). Archivos tocados: `apps/web/src/wallet-session-store.ts`,
+`apps/web/src/wallet-session-store.integration.test.ts`,
+`apps/web/src/pending-write-store.ts`,
+`apps/web/src/pending-write-store.integration.test.ts`,
+`apps/web/src/server.ts`.
+
+Pendiente: mergear `cc/t70-retention-cleanup` a `main` y pushear (a
+confirmar con el usuario). Siguiente hito, ya acordado: el panel
+completo de métricas/alertas (`perDay` cerca del límite, rechazos,
+saldo de rail) — arranca en una sesión/hito aparte, no encadenado a
+este. F9 sigue sin arrancar: falta que el usuario decida el partner
+real y la métrica de éxito del piloto.

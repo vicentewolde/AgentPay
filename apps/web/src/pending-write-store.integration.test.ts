@@ -103,4 +103,21 @@ describe("createPostgresPendingWriteStore", () => {
 
     await expect(store.take(`test-${randomUUID()}`)).resolves.toBeUndefined();
   });
+
+  it("sweepExpired (T70) deletes an abandoned write from the raw table, leaves a live one readable", async () => {
+    const store = await createPostgresPendingWriteStore({ connectionString });
+    const expiredId = freshRequestId();
+    const liveId = freshRequestId();
+    const write = { kind: "revoke" as const, issuerAddress: "GABC", credentialHash: "d".repeat(64) };
+
+    await store.save(expiredId, write, -1_000); // abandoned — never followed by a take()
+    await store.save(liveId, write, 60_000);
+
+    const swept = await store.sweepExpired();
+    expect(swept.deleted).toBeGreaterThanOrEqual(1);
+
+    const { rows } = await pool.query("select 1 from sdk_pending_writes where request_id = $1", [expiredId]);
+    expect(rows).toHaveLength(0);
+    await expect(store.take(liveId)).resolves.toEqual(write);
+  });
 });
