@@ -3510,3 +3510,47 @@ nuevo a Tellus — `render.yaml` ya quedó actualizado con el nombre nuevo
 para cuando eso pase. Después de eso: desplegar T40/T49/T51/T52 a
 producción con las variables de entorno nuevas de F6, y migrar o no el
 rail compartido.
+
+---
+
+## 2026-09-12 — main (deploy a Render verificado; T40/T49/T51/T52 en producción)
+
+Agente: Claude Code
+
+Qué: el usuario pusheó lo mergeado y disparó el redeploy. El primer
+intento falló — `render.yaml` seguía filtrando `@agentpay/web` (paquete
+que ya no existía tras el rename), porque la búsqueda de scope de npm
+del hito anterior nunca miró archivos `.yaml`. Corregido junto con el
+mismo punto ciego en `.env.example` y `docs/api/openapi.yaml`; el
+redeploy siguiente levantó bien.
+
+El usuario cambió el nombre del servicio en el dashboard de Render a
+"agentpey-web", pero el subdominio público no siguió el cambio —
+confirmado que en Render el campo "Name" y el subdominio `.onrender.com`
+son cosas separadas, y el subdominio no se puede editar una vez asignado
+(solo se consigue uno nuevo creando un servicio nuevo, o con un dominio
+propio vía "Custom Domains"). El usuario decidió: `agentpay-web.onrender.com`
+se queda como está hasta que compre `agentpey.com`.
+
+Cargó `MASTER_MNEMONIC` en el dashboard (generado en T40, nunca
+desplegado hasta ahora). Verificado en producción real, no solo que el
+servidor arranca: con una wallet Stellar generada al vuelo (sin fondos,
+descartable) se probó el flujo completo de conexión (`/api/wallet/challenge`
+→ `/api/wallet/verify` → `/api/session/start`) y devolvió un Mandato
+recién derivado para esa wallet — la ruta que sin `MASTER_MNEMONIC`
+falla con `ConfigError`. Después, con un partner de prueba creado vía
+`pnpm run partner:create` (misma base de Postgres que usa Render, no hay
+staging separado en este piloto), se confirmaron T49 (`POST /v1/tenants`
+real), T51 (`POST /v1/consent_sessions` real, con `payTo`) y T52
+(`consent.html` renderizando el grant completo en el navegador, contra
+la URL real que T51 generó). Detalle completo en el addendum del mismo
+día en `docs/fase-6-agentguard-comercializacion/BITACORA.md`.
+
+Por qué: era el siguiente paso explícito que el usuario pidió después de
+cerrar el rename — confirmar que los cuatro hitos que quedaban "sin
+verificar en producción" (T40, T49, T51, T52) realmente funcionan contra
+el Render real, no solo contra testnet local.
+
+Pendiente: comprar `agentpey.com` y conectarlo por Custom Domains
+(decisión del usuario, sin apuro); migrar o no el rail compartido. No
+queda ningún despliegue pendiente de verificar de la lista original.

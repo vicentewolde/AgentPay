@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-11 · **Último hito cerrado:** rename a AgentPey (+ mitigación de G10, sin numerar) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** rename a AgentPey + deploy a Render verificado en producción (T40/T49/T51/T52) — sin numerar · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -1743,3 +1743,61 @@ Pendiente: que el usuario renombre el servicio de Render (dashboard) y
 avise el link nuevo a Tellus; después, desplegar T40/T49/T51/T52 a
 producción con las variables de entorno nuevas de F6. Migrar o no el rail
 compartido sigue igual de pendiente que antes de este hito.
+
+**Addendum, mismo día — deploy a Render verificado, URL pública resuelta
+distinto de lo planeado.**
+
+Un bug propio interrumpió el primer redeploy: la búsqueda de
+`@agentpay/` del paso 1 nunca miró archivos `.yaml`, así que
+`render.yaml` seguía filtrando el paquete viejo
+(`pnpm --filter @agentpay/web run start`) — Render lo reportó clarito en
+el log ("No projects matched the filters") apenas se probó. Corregido
+(y lo mismo en `.env.example`/`docs/api/openapi.yaml`, mismo punto
+ciego), el redeploy siguiente sí levantó.
+
+Sobre el servicio de Render: renombrar la **etiqueta** interna
+(`agentpay-web` → `agentpey-web` en el campo "Name" del dashboard) **no**
+cambia el subdominio público — son dos cosas separadas en Render, y una
+vez asignado el subdominio no se puede editar desde ahí. El usuario
+decidió, con esto ya claro: **`agentpay-web.onrender.com` se queda como
+está** hasta que compre `agentpey.com` y lo conecte por "Custom
+Domains" — nada que hacer mientras tanto, el link de Tellus nunca
+estuvo en riesgo.
+
+`MASTER_MNEMONIC` (generado en T40, nunca cargado en Render hasta ahora)
+lo cargó el usuario a mano en el dashboard. Verificado en producción real
+—no solo que el servidor no crashea— con una wallet Stellar generada al
+vuelo para la prueba (nunca usada antes, sin fondos): `POST
+/api/wallet/challenge` → `/api/wallet/verify` → `POST
+/api/session/start` devolvió `ok:true` con un `challengeMessage` de
+Mandato recién derivado para esa wallet — la ruta exacta que sin
+`MASTER_MNEMONIC` revienta con `ConfigError`. El `challengeMessage` en
+la respuesta además confirma que dice "AgentPey Mandate" en producción,
+no solo en local. Script de la prueba no commiteado, mismo criterio que
+las sondas de T22/T57/T58.
+
+Confirmados también T49/T51/T52 contra la misma URL en producción, con
+un partner de prueba creado con `pnpm run partner:create` apuntando a la
+misma base de Postgres que usa Render (no hay entorno de staging
+separado en este piloto):
+
+- **T49** (`/v1` real): `POST /v1/tenants` con la API key recién emitida
+  devolvió `201` y un tenant real.
+- **T51** (`consent_sessions`): `POST /v1/consent_sessions` con un grant
+  completo (`payTo` incluido) devolvió `pending` y un `consent_url` real.
+- **T52** (`consent.html`): esa URL, abierta en el navegador, renderiza
+  el grant completo — acciones, comercio, activo, límites por
+  transacción/día, `payTo`, vencimientos — antes de pedir conectar
+  Freighter. No se completó la firma real (necesita la extensión de
+  Freighter, fuera de lo que se puede automatizar acá), pero la página y
+  el `/v1` que la alimenta ya están confirmados de punta a punta.
+
+El partner/tenant/consent_session de prueba quedan en la base real como
+datos de testnet sin relevancia — mismo criterio que otros datos de
+verificación que ya conviven en esa misma base.
+
+Pendiente actualizado: comprar `agentpey.com` y conectar el dominio
+(decisión del usuario, sin apuro); migrar o no el rail compartido. **Los
+cuatro despliegues pendientes de la sesión anterior (T40, T49, T51, T52)
+ya quedaron confirmados en producción real — no queda nada de la lista
+original sin verificar.**
