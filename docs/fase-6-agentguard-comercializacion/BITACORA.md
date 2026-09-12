@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T75 (la ruta de compra, cableada y persistida) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T76 (la ruta de actividad del tenant, sobre cálculo compartido) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -126,6 +126,7 @@ ninguna ruta nueva capaz de escribir.
 | T73 | F9: contrato de ejecución congelado — permiso por producto en el grant firmado, tres scopes y tres rutas `/v1` nuevas respondiendo `501` hasta T75 | ✅ cerrado 2026-09-12 |
 | T74 | F9: el runner de compra sale de la sesión-cookie a un módulo por tenant (`tenant-purchase.ts`), sin producto ni venue hardcodeados | ✅ cerrado 2026-09-12 |
 | T75 | F9: `POST /v1/purchases` y `GET /v1/purchases/{id}` cableados y persistidos — los rechazos se guardan igual que las compras | ✅ cerrado 2026-09-12 |
+| T76 | F9: `GET /v1/tenants/{id}/activity` — nace `@agentpey/activity`, y el panel interno y la vista del usuario comparten el mismo cálculo | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2796,3 +2797,61 @@ devuelve el cuerpo del recurso y nada más).
 uso de `perDay`, el saldo del rail y los rechazos del vault, que hoy se
 calculan dentro de `apps/status-dashboard` y hay que compartir sin duplicar
 (`C-73`). Pasa a ser **T76**, y el resto del plan corre un número.
+
+---
+
+## T76 · La actividad del tenant, sobre cálculo compartido — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** Una plataforma ya puede
+mostrarle a su usuario todo lo suyo: el Mandato que firmó con los permisos
+exactos que firmó, cuánto lleva gastado hoy contra su límite, cuánto queda en
+el crédito de prueba que le prestamos, sus compras, y sus intentos rechazados
+con el motivo. Con la API key del partner, limitado a su propio tenant, y sin
+una sola forma de escribir nada.
+
+Lo importante no es la ruta, es de dónde salen los números. **Salen del mismo
+código que decide.** El gasto de hoy que se le muestra a la persona es el
+mismo valor que el sistema consulta justo antes de autorizar una compra, no
+una suma aparte que podría no coincidir. Una pantalla que le discute al
+enforcement es peor que no tener pantalla, porque se le cree.
+
+Para lograrlo, los tres cálculos que el panel interno ya hacía se mudaron a
+un paquete compartido y ahora el panel y la vista del usuario importan el
+mismo código. El panel no cambió de comportamiento: sus nueve pruebas siguen
+corriendo sobre las mismas funciones, que ahora viven un directorio más
+arriba.
+
+Y algo que se decidió mostrar y no esconder: cuando alguien todavía no compró
+nada, no aparece un cero, aparece que todavía no hay rail. "No pagaste nada
+todavía" y "te quedaste sin saldo" son cosas distintas y la interfaz no las
+va a mezclar.
+
+**Evidencia técnica.**
+
+- `packages/activity` (nuevo): `readPerDayUsage`, `recentRefusals`,
+  `readRailBalances`, `activeMandate`, `requireTenant`, y los umbrales
+  `PERDAY_WARNING_RATIO` / `LOW_USDC_WARNING`. Los puertos
+  (`ActivityDirectory`, `VaultReader`) no tienen ningún método de escritura,
+  así que ninguna ruta construida sobre ellos puede ganar uno por descuido.
+- `apps/status-dashboard/src/status.ts` re-exporta desde el paquete en vez de
+  implementar: mismo código, mismas 13 pruebas verdes, cero cambios de
+  comportamiento.
+- `readRailUsdcBalance` se movió a `apps/agent`, junto a las dos cosas que
+  lee. Meterlo en el paquete nuevo habría hecho que un paquete dependiera de
+  una app, o habría duplicado el formateo de montos — ver `C-81`.
+- `apps/web/src/tenant-activity.ts` (nuevo) arma el recurso. No calcula
+  nada: la única aritmética propia es restar el gasto del límite, en enteros
+  escalados, sin tocar un float, y sin devolver nunca un negativo.
+- La ruta responde `404` ante el tenant de otro partner **antes de leer una
+  sola cifra sobre él**, con un test que lo comprueba contando llamadas.
+- **1001 tests verdes** (eran 977), `typecheck` y `build` limpios, OpenAPI
+  regenerado: ya no queda ninguna ruta congelada en `501`.
+
+**Decisiones nuevas:** `C-80` (los números del piloto, decididos por el
+usuario: 1 USDC por tenant, rail 0.30/0.60, informe 0.25, créditos 0.10) y
+`C-81` (el paquete compartido).
+
+**Qué sigue.** T77: los controles de la reserva — precheck de saldo, tope de
+patrocinio, el arreglo del doble fondeo, y el cambio de las constantes de
+`tenant-rail.ts` a los números de `C-80`. Es el mismo archivo y el mismo
+tema, por eso van juntos.

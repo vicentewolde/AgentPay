@@ -217,6 +217,8 @@ export {
 
 export { withVault } from "./policy/with-vault.js";
 
+export { readRailUsdcBalance } from "./policy/rail-balance.js";
+
 export {
   anchorPaymentDecision,
   paymentLinkHash,

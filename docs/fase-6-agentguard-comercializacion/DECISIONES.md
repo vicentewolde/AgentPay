@@ -3046,3 +3046,100 @@ de `perDay`, el saldo del rail y los rechazos del vault, que hoy se calculan
 dentro de `apps/status-dashboard` y hay que compartir sin duplicar (`C-73`).
 Pasa a ser su propio hito, T76, y el resto del plan de `PILOTO-F9.md` § 9
 corre un número.
+
+---
+
+### C-80 · Los números del piloto: 1 USDC por tenant, límites del rail 0.30/0.60, precios 0.25 y 0.10 · `Vigente`
+**Fecha:** 2026-09-12 · **Decidido por el usuario**
+
+`PILOTO-F9.md` § 12.2 dejó anotado que los tres números —cuánto se fondea
+cada rail, qué límites lleva grabados, y cuánto cuestan los productos— no se
+podían decidir por separado: `tenant-rail.ts` desplegaba cada rail con
+`per_tx = 0.002` y `per_day = 0.01` USDC, así que 1 USDC por tenant era
+inusable (cien días para gastarlo) y ningún producto podía costar más de
+0.002.
+
+**Decidido:**
+
+| | |
+|---|---|
+| Fondeo por tenant | 1 USDC |
+| Tope por transacción del rail | 0.30 USDC |
+| Tope diario del rail | 0.60 USDC |
+| Informe de mercado | 0.25 USDC |
+| Paquete de créditos de IA | 0.10 USDC |
+| Tope de tenants patrocinados | 20 |
+| Alerta de la reserva | quedando para 5 |
+
+Con esos números, **una segunda compra del informe supera el tope diario sin
+que haya que esperar ni inventar nada** — el caso de aceptación 4 del brief
+se vuelve realizable dentro de una misma sesión de prueba, que es la razón
+por la que se eligieron así y no redondos.
+
+**La restricción operativa que el usuario aportó, y por qué no aprieta.** El
+usuario puede fondear la reserva con 20 USDC testnet una vez por día. La
+cuenta de reserva (`GAK6E5E7L63ZY…`, confirmada como la misma que usa Render)
+tiene hoy 39.484 USDC. La aritmética del piloto:
+
+- Un recorrido completo gasta 0.35 USDC (informe + créditos). **Ese dinero no
+  se pierde: va a SignalDesk, que también construye el proyecto**, así que se
+  puede barrer de vuelta a la reserva. Queda anotado como tarea operativa de
+  T77.
+- Lo que sí se va para siempre es lo que queda **sin gastar en el rail del
+  visitante**: unos 0.65 USDC por tenant. Y se va por diseño, no por descuido
+  — desde `C-61` (T57) solo la wallet del principal puede retirar de su
+  propio rail, y que nosotros no podamos recuperarlo es exactamente la
+  garantía que hace que el rail valga algo.
+- 20 tenants × 0.65 = **13 USDC de drenaje real para todo el piloto**. El
+  saldo actual cubre unos 60 tenants sin refondear, y 20 USDC por día
+  sostienen unos 30 tenants diarios. **El tope de 20 tenants se agota mucho
+  antes que los fondos.**
+
+**Un rail ya desplegado no cambia de límites.** Los topes se graban en el
+contrato al construirlo, así que los rails de tenants de prueba creados en
+T58 conservan `0.002`/`0.01`. No hay que migrarlos: son tenants de prueba, y
+los del piloto se desplegarán con los números nuevos.
+
+Las constantes se cambian en **T77**, junto con los controles de la reserva
+(precheck de saldo, tope de patrocinio, y el arreglo del doble fondeo de
+`PILOTO-F9.md` § 13.2), porque son el mismo tema y el mismo archivo.
+
+---
+
+### C-81 · T76: los tres números del panel se comparten, no se reimplementan — nace `@agentpey/activity` · `Vigente`
+**Fecha:** 2026-09-12
+
+`GET /v1/tenants/{id}/activity` necesitaba exactamente los tres números que
+`apps/status-dashboard` (T71) ya calculaba: uso de `perDay`, rechazos
+recientes y saldo del `policy_rail`. Escribirlos de nuevo del lado de `/v1`
+habría sido la violación literal de `C-73` — "un número sobre gasto sale del
+cálculo que la autorización misma hace, nunca de una segunda suma".
+
+**La decisión: `readPerDayUsage`, `recentRefusals`, `readRailBalances`, sus
+puertos y sus dos umbrales se mudan a `packages/activity`, y las dos apps
+importan de ahí.** No es una copia con otro nombre: el archivo del dashboard
+quedó re-exportando desde el paquete, así que su servidor y sus nueve tests
+siguen corriendo sobre el mismo código sin un solo cambio de comportamiento.
+`readPerDayUsage` sigue llamando el mismo `vault.spentOn()` que
+`PolicyRail.authorise()` llama antes de decidir; la cadena entera —
+enforcement, panel interno y vista del usuario — tiene ahora una sola
+implementación.
+
+**Los puertos también se comparten, y eso importa por seguridad, no por
+prolijidad.** `ActivityDirectory` y `VaultReader` no tienen ningún método de
+escritura. Una sola definición significa que una ruta del panel y una ruta de
+`/v1` no pueden recibir poderes distintos por descuido — `StatusDirectory`
+pasó a ser un alias del tipo del paquete.
+
+**`readRailUsdcBalance` se movió a `apps/agent`, no al paquete nuevo.** Lee
+Stellar y necesita dos cosas que viven ahí (`BAZAAR_USDC_ISSUER` y
+`fromScaledAmount`); meterlo en un paquete habría obligado a que un paquete
+dependiera de una app, que es la inversión de capas al revés, o a duplicar el
+formateo de montos, que es peor cerca de dinero. Ahora vive al lado de lo que
+lee y las dos apps importan la misma función.
+
+**Alternativa descartada:** que `apps/web` llamara `vault.spentOn()` por su
+cuenta y armara la proyección. No habría duplicado la *suma*, pero sí el
+umbral del 80% y la regla de qué Mandato cuenta como activo — dos reglas que
+dos pantallas pueden empezar a contestar distinto, que es justo el modo de
+falla que `C-73` describe.

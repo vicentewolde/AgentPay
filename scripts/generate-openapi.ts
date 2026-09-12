@@ -290,7 +290,6 @@ const document = {
         ],
         responses: {
           "200": { description: "The tenant's activity.", ...jsonContent("TenantActivitySuccessResponse") },
-          "501": { description: "Not wired yet — frozen in T73, implemented in T76.", $ref: "#/components/responses/ErrorResponse" },
           ...errorResponses,
         },
       },

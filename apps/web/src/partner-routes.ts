@@ -91,6 +91,9 @@ export type ExecutePurchase = (request: {
     }
 >;
 
+/** Reads one tenant's activity. Strictly read-only on both sides of the port. */
+export type ReadActivity = (tenantId: string) => Promise<unknown>;
+
 export interface PartnerRouteRequest {
   readonly method: string;
   readonly pathname: string;
@@ -103,6 +106,13 @@ export interface PartnerRouteRequest {
   readonly baseUrl: string;
   /** Runs one purchase. Only read by `POST /v1/purchases`. */
   readonly executePurchase: ExecutePurchase;
+  /**
+   * Reads everything a tenant may be shown about their own agent. Only read
+   * by `GET /v1/tenants/{id}/activity`, and injected for the same reason
+   * `executePurchase` is: Postgres, the vault and a Stellar RPC client all
+   * stay on the far side of it, and this layer stays testable with a fake.
+   */
+  readonly readActivity: ReadActivity;
   readonly now?: Date;
 }
 
@@ -406,10 +416,10 @@ async function handleGetPurchase(input: PartnerRouteRequest, id: string): Promis
  */
 async function handleGetTenantActivity(input: PartnerRouteRequest, tenantId: string): Promise<PartnerRouteResponse> {
   const auth = await authorizeRequest(input.authorizationHeader, "vault:read" satisfies ApiScope, input.directory.authenticate);
+  // Ownership first: another partner's tenant gets the same `404` a
+  // nonexistent one does, before a single figure about it is read.
   await requireOwnedTenant(input.directory, tenantId, auth.partnerId);
-  throw new AgentPassError("NotImplemented", "reading a tenant's activity is not wired yet — T73 froze this contract, T75 implements it", {
-    details: { tenantId },
-  });
+  return { status: 200, body: successEnvelope(await input.readActivity(tenantId)) };
 }
 
 function notFound(method: string, pathname: string): PartnerRouteResponse {

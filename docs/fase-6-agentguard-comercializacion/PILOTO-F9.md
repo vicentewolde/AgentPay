@@ -608,7 +608,7 @@ Ninguna de estas la tomo solo, y siete vienen pedidas por el brief § 10.
 | **D3** | Catálogo x402 público | No pude verificar Periplo; pedí la URL | **`github.com/Eras256/Periplo`.** Verificado contra el servicio vivo — ver `C-77` |
 | **D4** | Permiso por producto | v1 sin producto firmado, con la UI diciendo qué capa hace cumplir qué | **"Quiero que sí incluya permiso por producto".** Implementado en T73 — ver `C-75`. § 13.1 queda resuelto |
 | **D5** | Formato del artefacto | HTML autocontenido con su hash impreso | **HTML** |
-| **D6** | Límites del crédito patrocinado | 0.05 USDC por tenant, 20 tenants | **1 USDC por tenant, 20 tenants, alerta a los 5 restantes.** Ver § 12.2: cambia los límites del rail y los precios de SignalDesk |
+| **D6** | Límites del crédito patrocinado | 0.05 USDC por tenant, 20 tenants | **1 USDC por tenant, 20 tenants, alerta a los 5 restantes**, y los límites del rail y precios que § 12.2 proponía. Cerrado en `C-80` |
 | **D7** | Retención | Email 90 días, artefactos 90 días, Mandato y vault nunca | **De acuerdo** |
 | **D8** | Alcance de F9 sin partner externo | Confirmar el cambio | **Confirmado** — `C-74` |
 | **D9** | Segunda wallet móvil | Fuera de F9 | **Anotado como mejora, no necesario por ahora** |
@@ -660,7 +660,15 @@ margen.
    `per_day` 0.60 — así una segunda compra del informe supera el tope diario
    (caso 4) sin que haga falta esperar ni inventar nada.
 
-Esos números son una propuesta de T76, no algo ya decidido.
+**Confirmado el 2026-09-12** — ver `C-80`, que además registra la
+restricción operativa que el usuario aportó (puede fondear la reserva con 20
+USDC testnet una vez por día) y por qué no aprieta: un recorrido completo
+gasta 0.35 USDC que van a SignalDesk, que también es nuestro y se puede
+barrer de vuelta; lo que se va de verdad son los ~0.65 que quedan sin gastar
+en el rail del visitante, y eso se va **por diseño**, porque desde `C-61`
+solo su wallet puede retirarlos. Veinte tenants son 13 USDC de drenaje real;
+el saldo actual cubre unos sesenta. El tope de 20 tenants se agota mucho
+antes que los fondos. Las constantes se cambian en T77.
 
 ## 13. Lo que encontré en el código y no estaba previsto
 

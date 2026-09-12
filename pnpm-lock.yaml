@@ -65,6 +65,9 @@ importers:
       '@agentpass/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@agentpey/activity':
+        specifier: workspace:*
+        version: link:../../packages/activity
       '@agentpey/agent':
         specifier: workspace:*
         version: link:../agent
@@ -99,6 +102,9 @@ importers:
       '@agentpass/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@agentpey/activity':
+        specifier: workspace:*
+        version: link:../../packages/activity
       '@agentpey/agent':
         specifier: workspace:*
         version: link:../agent
@@ -127,6 +133,24 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.23.1
+
+  packages/activity:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../core
+      '@agentpey/directory':
+        specifier: workspace:*
+        version: link:../directory
+      '@agentpey/mandate':
+        specifier: workspace:*
+        version: link:../mandate
+      '@agentpey/vault':
+        specifier: workspace:*
+        version: link:../vault
+      '@stellar/stellar-sdk':
+        specifier: ^17.0.1
+        version: 17.0.1(debug@4.4.3)
 
   packages/cli:
     dependencies:

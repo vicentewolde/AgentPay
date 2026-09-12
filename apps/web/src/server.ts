@@ -76,7 +76,7 @@ import {
   withVault,
   type PolicyRail,
   type PolicyRailPayer,
-} from "@agentpey/agent";
+  readRailUsdcBalance,} from "@agentpey/agent";
 
 import { readEnv as readEnvFrom, requireEnv, requireSecretKey } from "./env.js";
 import { createIssuerRegistrationLimiter } from "./issuer-registration-limit.js";
@@ -89,6 +89,7 @@ import { ensureSharedPayerIdentity, ensureVisitorTenant } from "./shared-identit
 import { ensureTenantAgent } from "./tenant-agent.js";
 import { ensureTenantPolicyRail } from "./tenant-rail.js";
 import { executeTenantPurchase } from "./tenant-purchase.js";
+import { readTenantActivity } from "./tenant-activity.js";
 import {
   createPostgresWalletSessionStore,
   type PendingConsentSessionPayload,
@@ -1127,6 +1128,16 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       body: await readJsonBody(req),
       directory,
       baseUrl: resolveBaseUrl(req, env),
+      readActivity: async (tenantId) =>
+        readTenantActivity(
+          {
+            directory,
+            vaultFactory: (id) =>
+              createPostgresMandateVault({ connectionString: requireEnv(env, "DATABASE_URL"), tenantId: id }),
+            readBalance: readRailUsdcBalance,
+          },
+          tenantId,
+        ),
       executePurchase: async (purchase) =>
         executeTenantPurchase(
           {

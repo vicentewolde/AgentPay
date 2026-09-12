@@ -1,12 +1,19 @@
 /**
- * The only piece of `status.ts` that reads Stellar directly (T71). A SEP-41
- * `balance()` simulation of a tenant's `policy_rail` (F6/T58) — never a
- * `transfer` — same call `scripts/check-rail-balances.ts` (T60) already
- * makes as an operator script; this makes the same read reachable from the
- * dashboard, per tenant, instead of only a full server-wide CLI listing.
+ * A SEP-41 `balance()` simulation of a tenant's `policy_rail` (F6/T58) —
+ * never a `transfer` — the same read `scripts/check-rail-balances.ts` (T60)
+ * makes as an operator script.
+ *
+ * Written for the status dashboard in T71 and moved here in T76, when
+ * `/v1/tenants/{id}/activity` needed the same number. It sits next to
+ * `BAZAAR_USDC_ISSUER` and `fromScaledAmount`, the two things it reads, and
+ * both callers now import the one implementation rather than keeping a copy
+ * each — a second way to read a balance is a second way for two screens to
+ * disagree about the same rail.
  */
-import { BAZAAR_USDC_ISSUER, fromScaledAmount } from "@agentpey/agent";
 import { Networks, contract } from "@stellar/stellar-sdk";
+
+import { BAZAAR_USDC_ISSUER } from "../catalog/bazaar.js";
+import { fromScaledAmount } from "../scope/amount.js";
 
 const RPC_URL = "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = Networks.TESTNET;

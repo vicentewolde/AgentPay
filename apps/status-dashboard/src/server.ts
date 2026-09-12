@@ -7,9 +7,9 @@ import { fileURLToPath } from "node:url";
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
 import { createDirectory, type Directory } from "@agentpey/directory";
 import { createPostgresMandateVault, type VaultRecord } from "@agentpey/vault";
+import { readRailUsdcBalance } from "@agentpey/agent";
 import { z } from "zod";
 
-import { readRailUsdcBalance } from "./rail-balance.js";
 import {
   readMandatesStatus,
   readPerDayUsage,

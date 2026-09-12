@@ -297,6 +297,7 @@ function baseRequest(overrides: Partial<Parameters<typeof routePartnerRequest>[0
     baseUrl: "https://agentpay.example",
     // The default port settles. Tests that care about a refusal override it.
     executePurchase: settlingPurchase,
+    readActivity: async (tenantId: string) => ({ tenant_id: tenantId, mandate: null, per_day: null, rail: null, purchases: [], refusals: [] }),
     ...overrides,
   };
 }
@@ -794,17 +795,46 @@ describe("routePartnerRequest — GET /v1/purchases/{id}", () => {
   });
 });
 
-describe("routePartnerRequest — GET /v1/tenants/{id}/activity (still frozen, T76 implements it)", () => {
-  it("answers 501 behind vault:read", async () => {
+describe("routePartnerRequest — GET /v1/tenants/{id}/activity", () => {
+  it("returns the tenant's activity behind vault:read", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_A });
     const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity` }));
-    expect(result.status).toBe(501);
+    expect(result.status).toBe(200);
+    expect((result.body as { data: { tenant_id: string } }).data.tenant_id).toBe(tenant.id);
   });
 
-  it("404s another partner's tenant", async () => {
+  it("refuses a key without vault:read", async () => {
     const tenant = directory.seedTenant({ partnerId: PARTNER_B });
-    const result = await routePartnerRequest(baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity` }));
+    const result = await routePartnerRequest(
+      baseRequest({ pathname: `/v1/tenants/${tenant.id}/activity`, authorizationHeader: `Bearer ${SECRET_B}` }),
+    );
+    expect(result.status).toBe(403);
+  });
+
+  it("404s another partner's tenant, and never reads a figure about it", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_B });
+    let called = false;
+    const result = await routePartnerRequest(
+      baseRequest({
+        pathname: `/v1/tenants/${tenant.id}/activity`,
+        readActivity: async (id: string) => {
+          called = true;
+          return { tenant_id: id, mandate: null, per_day: null, rail: null, purchases: [], refusals: [] };
+        },
+      }),
+    );
     expect(result.status).toBe(404);
+    expect(called).toBe(false);
+  });
+
+  it("rejects every write method on it — this route only ever reads", async () => {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      const result = await routePartnerRequest(
+        baseRequest({ method, pathname: `/v1/tenants/${tenant.id}/activity`, body: {} }),
+      );
+      expect(result.status).toBe(404);
+    }
   });
 
   it("does not shadow GET /v1/tenants/{id}, which still returns the tenant", async () => {

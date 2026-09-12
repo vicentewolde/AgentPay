@@ -8,6 +8,9 @@
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/directory" },
+    { "path": "../../packages/activity" },
+    { "path": "../../packages/mandate" },
+    { "path": "../agent" },
     { "path": "../../packages/vault" }
   ]
 }

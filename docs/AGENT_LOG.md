@@ -4279,3 +4279,58 @@ decidir juntos los límites del rail y los precios de SignalDesk (hoy `per_tx`
 0.002 / `per_day` 0.01 hacen inusable 1 USDC por tenant — propuesta en
 `PILOTO-F9.md` § 12.2), y falta pagar la instancia de `agentpey-web` en
 Render (medido: 38.8 s de arranque en frío estando dormida).
+
+---
+
+## 2026-09-12 (13) — main / cc/t76-activity-route
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t75-purchases-route` a `main` con confirmación
+del usuario. Además el usuario cerró los números del piloto (`C-80`): 1 USDC
+por tenant, rail `per_tx` 0.30 / `per_day` 0.60, informe 0.25, créditos 0.10,
+20 tenants, alerta a los 5 restantes — elegidos así para que una segunda
+compra del informe supere el tope diario dentro de la misma sesión de prueba
+(caso de aceptación 4). Aportó también que puede fondear la reserva con 20
+USDC testnet una vez por día; la aritmética quedó registrada en `C-80` y **no
+aprieta**: el drenaje real del piloto entero es ~13 USDC, el saldo actual
+cubre unos 60 tenants, y el tope de 20 se agota mucho antes que los fondos.
+
+Misma sesión, **T76**: `GET /v1/tenants/{id}/activity`, la última ruta que
+seguía en `501`.
+
+Lo central no es la ruta sino de dónde salen sus números. Los tres cálculos
+que `apps/status-dashboard` (T71) ya hacía —uso de `perDay`, rechazos, saldo
+de rail— se mudaron a **`packages/activity`** y ahora el panel interno y la
+vista del usuario importan el mismo código. Reimplementarlos del lado de
+`/v1` habría sido la violación literal de `C-73`. El dashboard quedó
+re-exportando desde el paquete: mismo comportamiento, mismas pruebas.
+`readRailUsdcBalance` se movió a `apps/agent`, junto a las dos cosas que lee
+— ponerlo en el paquete nuevo habría hecho que un paquete dependiera de una
+app, o habría duplicado el formateo de montos.
+
+`apps/web/src/tenant-activity.ts` solo arma el recurso; su única aritmética
+propia es restar gasto de límite en enteros escalados, sin floats y sin
+devolver negativos. La ruta responde `404` ante el tenant de otro partner
+**antes de leer una cifra sobre él**, con un test que cuenta llamadas.
+
+Verificado: **1001 tests** (eran 977), `typecheck` y `build` limpios, OpenAPI
+regenerado — ya no queda ninguna ruta congelada en `501`.
+
+Documentación tocada: `DECISIONES.md` (`C-80`, `C-81`), `BITACORA.md` (hito
+T76 + tabla + estado actual), `PILOTO-F9.md` (§ 12.2 y la tabla de D6, con
+los números confirmados). Archivos de código: `packages/activity/**` (nuevo,
+con su `vitest.config.ts` y 11 pruebas), `apps/status-dashboard/src/{status,
+server}.ts`, `apps/agent/src/policy/rail-balance.ts` (movido) e `index.ts`,
+`apps/web/src/{tenant-activity,partner-routes,server}.ts` (+ tests),
+`tsconfig.json` raíz y los de las dos apps, `scripts/generate-openapi.ts`.
+
+Pendiente: **mergear `cc/t76-activity-route`** (espera confirmación).
+Siguiente hito **T77**: controles de la reserva — precheck de saldo antes de
+patrocinar, tope de rails patrocinados, el arreglo del doble fondeo
+(`PILOTO-F9.md` § 13.2: `ensureTenantPolicyRail` despliega, fondea y recién
+después persiste), y el cambio de las constantes de `tenant-rail.ts` a los
+números de `C-80` — mismo archivo, mismo tema. Anotado como tarea operativa
+de T77: un barrido que devuelva a la reserva el USDC acumulado en SignalDesk.
+Del lado del usuario sigue pendiente pagar la instancia de `agentpey-web` en
+Render (38.8 s de arranque en frío medidos).

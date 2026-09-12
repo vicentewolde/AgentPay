@@ -12,6 +12,7 @@
   "dependencies": {
     "@agentpass/core": "workspace:*",
     "@agentpass/sdk": "workspace:*",
+    "@agentpey/activity": "workspace:*",
     "@agentpey/agent": "workspace:*",
     "@agentpey/directory": "workspace:*",
     "@agentpey/mandate": "workspace:*",
