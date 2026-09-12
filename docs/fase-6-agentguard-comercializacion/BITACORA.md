@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T79 (SignalDesk) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T80 (RealOps) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -99,7 +99,16 @@ su cuenta y el recibo de cada entrega se verifica con nada más que la clave
 pública del comercio, sin AgentPey de por medio. Es un servicio aparte a
 propósito —claves propias, proceso propio, tablas propias— porque un comercio
 que pudiera meterse en la autorización de AgentPey haría que el piloto no
-probara nada (T79, `C-87` a `C-90`).
+probara nada (T79, `C-87` a `C-90`). Y ya está la tercera pata: **RealOps**,
+la plataforma donde una persona se registra con su correo, contrata un agente y
+le pone límites. Lo importante es lo que RealOps *no* puede hacer: no tiene
+ninguna clave Stellar, no ve un Mandato, y no puede autorizar un pago — su
+único poder va a ser preguntarle a AgentPey, que decide. Antes de firmar, la
+pantalla muestra **literalmente** el permiso que se va a firmar, con una marca
+por cada control diciendo quién lo hace cumplir: firmado, revalidado por el
+contrato en Stellar, o solamente de RealOps. Y el correo vive solo ahí:
+AgentPey identifica a la persona con un código aleatorio que no se calcula a
+partir de nada suyo (T80, `C-91` a `C-94`).
 
 ### Progreso
 
@@ -148,6 +157,7 @@ probara nada (T79, `C-87` a `C-90`).
 | T77 | F9: controles del crédito patrocinado — arreglo del doble fondeo, pre-chequeo tipado de la reserva, y los números de `C-80` en el rail | ✅ cerrado 2026-09-12 |
 | T78 | F9: descubrimiento público — adaptador sobre Periplo, índice propio sobre `venues.json` en `GET /discovery/search`, y fallback entre los dos | ✅ cerrado 2026-09-12 |
 | T79 | F9: SignalDesk, el comercio del piloto — dos productos, catálogo humano, `402`, entrega tras liquidar y recibo firmado verificable sin AgentPey | ✅ cerrado 2026-09-12 |
+| T80 | F9: RealOps, la plataforma de agentes — enlace mágico, permisos, las cinco pantallas, y el grant literal con quién hace cumplir cada permiso | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -3123,3 +3133,78 @@ cubría una app).
 mágico, perfil, permisos— y su conexión con `/v1`. Después el despliegue
 público de los tres servicios (T81) y la suite de los diez casos de aceptación
 (T82).
+
+---
+
+## T80 · RealOps, la plataforma de agentes — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras simples.**
+
+Ya existe el lugar donde una persona entra. Pone su correo, recibe un enlace de
+un solo uso, elige uno de los dos agentes, le pone cuánto puede gastar por
+compra y por día, y hasta cuándo vale el permiso.
+
+**Lo importante es lo que RealOps no puede hacer.** No tiene ninguna clave de
+Stellar. No ve un Mandato. No puede autorizar un pago. Su único poder —desde el
+próximo hito— va a ser *preguntarle* a AgentPey, que decide. Si alguien se
+apoderara de RealOps entero, lo máximo que conseguiría es pedir compras que
+serán rechazadas.
+
+**Antes de firmar, se ve exactamente lo que se firma.** No un resumen amable:
+el permiso literal, tal como se manda y tal como la wallet lo va a mostrar. Y
+cada línea lleva una marca de **quién lo hace cumplir**: *firmado* (lo verifica
+AgentPey contra el Mandato), *on-chain* (además lo revalida el contrato en
+Stellar, así que la red rechaza aunque todo lo demás fallara), o *RealOps*
+(solo de esta plataforma, y no cambia lo que el agente puede hacer). Mostrarlos
+todos igual sería prometer garantías que el sistema no da. Hoy exactamente una
+línea dice "RealOps": el nombre que le pusiste a tu agente.
+
+**Tu correo vive solo ahí.** AgentPey te conoce por un código aleatorio.
+Deliberadamente aleatorio y no un hash de tu correo: un hash sigue siendo un
+identificador tuyo, y con un diccionario de direcciones comunes se revierte en
+segundos. Un código aleatorio no se puede revertir porque nunca codificó nada.
+
+**Y no adivina.** Si le escribís algo que no entiende, lo dice, te muestra qué
+leyó, y te ofrece los dos productos como botones. Un agente con permiso de
+gastar que adivina compra lo que no le pediste, y eso no lo devuelve nadie.
+
+**Evidencia técnica.**
+
+- `apps/realops/**`: cuentas, sesiones, enlaces mágicos, agentes, las cinco
+  pantallas, almacenamiento propio (memoria y Postgres `realops_*`) y barrido
+  de retención.
+- **El navegador nunca manda un `tenant_id`**: la cookie resuelve a una cuenta
+  y ningún handler lee de la entrada a quién pertenece un dato. El agente de
+  otra persona es `404`, nunca `403` — misma postura que `/v1` (`C-91`).
+- **El enlace mágico se guarda hasheado**, dura 15 minutos, y **la redención es
+  la escritura** (`update` condicional): dos clics no pueden ganar los dos. La
+  prueba corre las dos redenciones en paralelo, no una después de la otra
+  (`C-92`).
+- **La ventana de vigencia se calcula del reloj, nunca de la entrada** — una
+  validez que el navegador pudiera elegir es una que un atacante podría elegir
+  (`C-93`).
+- **Sin proveedor de correo, el enlace se muestra en pantalla y la página dice
+  que en ese modo no se verifica la dirección.** Con `RESEND_API_KEY`, sí.
+- **1164 tests verdes** (eran 1113), `typecheck` y `build` limpios, 51 pruebas
+  nuevas y ninguna toca la red ni Postgres.
+- **Verificado en el navegador**, no solo con pruebas: el recorrido completo
+  —entrar, configurar, revisar— con consola sin errores, tema claro y oscuro, y
+  móvil a 375px.
+
+**Un defecto encontrado por un test:** el vocabulario de interpretación
+matcheaba palabras exactas, así que "compra dos **informes** XLM/USDC" —plural
+perfectamente normal— no se reconocía. Ahora matchea raíces por prefijo, con
+las palabras de dos letras en coincidencia exacta: una regla de prefijo sobre
+`ia` o `ai` reclamaría media lengua, y un vocabulario que matchea de más deja
+de rechazar.
+
+**Decisiones nuevas:** `C-91` (RealOps no puede autorizar, estructuralmente),
+`C-92` (el correo vive solo ahí, y la referencia es aleatoria y no un hash),
+`C-93` (el grant literal con quién hace cumplir cada permiso), `C-94` (la
+interpretación rechaza en vez de adivinar).
+
+**Qué sigue.** **T81**: el cableado real con `/v1` — crear la consent session,
+la **lista blanca de URLs de retorno** (la fila 8 del modelo de amenazas, lo
+único de seguridad que F9 todavía no construyó), pedir la compra, llenar "Mis
+servicios" con entregas y rechazos, y la revocación. Después el despliegue
+público de los tres servicios y la suite de los diez casos de aceptación.

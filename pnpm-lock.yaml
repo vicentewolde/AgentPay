@@ -60,6 +60,25 @@ importers:
         specifier: ^4.5.4
         version: 4.5.4
 
+  apps/realops:
+    dependencies:
+      '@agentpass/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@agentpey/mandate':
+        specifier: workspace:*
+        version: link:../../packages/mandate
+      zod:
+        specifier: ^4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.11.0
+        version: 8.23.1
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.0
+
   apps/signaldesk:
     dependencies:
       '@agentpass/core':

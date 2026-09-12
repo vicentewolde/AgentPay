@@ -4,8 +4,22 @@
     {
       "name": "agentpey-web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["run", "web"],
+      "runtimeArgs": [
+        "run",
+        "web"
+      ],
       "port": 8787
+    },
+    {
+      "name": "realops",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@agentpey/realops",
+        "run",
+        "dev"
+      ],
+      "port": 4040
     }
   ]
 }

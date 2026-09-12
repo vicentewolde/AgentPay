@@ -115,3 +115,36 @@ services:
         sync: false
       - key: SIGNALDESK_PUBLIC_URL
         value: https://agentpey-signaldesk.onrender.com
+
+  # T80 — RealOps, the pilot's agent platform. It holds no Stellar key and
+  # cannot authorise a payment; from T81 its only credential is an AgentPey
+  # /v1 API key. Free plan: a cold start costs a visitor a slow first page.
+  - type: web
+    name: agentpey-realops
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm --filter @agentpey/realops run start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: COREPACK_INTEGRITY_KEYS
+        value: ""
+      # Its own tables (`realops_*`). The email lives here and nowhere else.
+      - key: DATABASE_URL
+        sync: false
+      # Without this, magic links are shown on screen and the address is NOT
+      # verified — the page says so. Set it once agentpey.com is verified.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: REALOPS_PUBLIC_URL
+        value: https://agentpey-realops.onrender.com
+      - key: SIGNALDESK_PUBLIC_URL
+        value: https://agentpey-signaldesk.onrender.com
+      - key: PILOT_VENUE_ID
+        value: signaldesk:GB4D4PLLFEIKZK6MDW42MZRQ5XMPC6QRJN4FFRODO6D3PRB3MDGGYOOF
+      - key: PILOT_ASSET_ID
+        value: USDC:CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
+      - key: PILOT_PAY_TO
+        value: GB4D4PLLFEIKZK6MDW42MZRQ5XMPC6QRJN4FFRODO6D3PRB3MDGGYOOF

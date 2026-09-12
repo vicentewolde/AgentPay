@@ -3528,3 +3528,123 @@ línea que faltaba en `tsconfig.json` es la causa, y los tres errores son lo que
 la causa dejó entrar. Sumar SignalDesk sin cerrar esto habría significado
 agregar una cuarta app a un `typecheck` que ya estaba mintiendo sobre su
 cobertura.
+
+---
+
+### C-91 · T80: RealOps no puede autorizar nada, y eso es estructural · `Vigente`
+**Fecha:** 2026-09-12
+
+`apps/realops` **no tiene ninguna clave Stellar**. No firma, no ancla, no ve un
+Mandato, y desde T81 su único credencial va a ser una API key de `/v1`, que le
+compra exactamente un poder: **preguntar**.
+
+Es la regla `PILOTO-F9.md` § 1.2 —"RealOps pide, AgentPey decide"— hecha
+propiedad del código y no promesa de documento. Un RealOps comprometido puede
+pedir compras que serán rechazadas, y nada más.
+
+Dos consecuencias que se hicieron explícitas en el diseño:
+
+- **El navegador nunca manda un `tenant_id`.** La cookie de sesión resuelve a
+  una cuenta, la cuenta resuelve a sus propios agentes, y ningún handler lee de
+  la entrada a quién pertenece un dato. No es una validación que se pueda
+  olvidar: no hay nada que validar, porque no entra.
+- **El agente de otra persona es `404`, nunca `403`.** Misma postura que `/v1`
+  toma desde T49, y por la misma razón: un `403` confirma que el id existe.
+
+---
+
+### C-92 · T80: el correo vive solo en RealOps, y la referencia es aleatoria, no un hash · `Vigente`
+**Fecha:** 2026-09-12
+
+AgentPey conoce a una cuenta de RealOps como `rop_<ulid>` **aleatorio**.
+
+**Por qué no un hash del correo**, que era la opción cómoda: un hash de un
+email sigue siendo un identificador *de esa persona*, y con un diccionario de
+direcciones comunes se revierte en segundos. Un id aleatorio no se puede
+revertir porque nunca codificó nada. `external-ref.ts` (T49) ya rechaza un
+`external_ref` con forma de correo, RUT o teléfono; F9 no necesita construir
+esa defensa, necesita **no tener nada personal que mandar**.
+
+**El enlace mágico se guarda hasheado, nunca tal cual**, con el mismo criterio
+que `directory_api_keys`: leer la tabla no alcanza para entrar. Dura 15 minutos,
+sirve una vez, y **la redención es la escritura** —un `update` condicional con
+`used_at is null` en el `where`—, no una lectura seguida de una escritura. Dos
+clics sobre el mismo enlace no pueden ganar los dos; es la ventana que `C-82`
+cerró en el fondeo, aplicada acá.
+
+**Los tres rechazos del enlace se mantienen distintos** (no existe / venció / ya
+se usó) porque significan cosas distintas para quien lo tiene en la mano.
+Colapsarlos en "enlace inválido" es cómo un piloto genera una pregunta de
+soporte que no puede responder.
+
+**Borrar la cuenta borra el correo, el alias y las sesiones — y no borra el
+Mandato ni el vault**, y la página lo dice con todas las letras: son evidencia
+firmada y anclada en una cadena pública, y borrarlos rompería la cadena de
+hashes que es el producto entero. Esa tensión es real y se exhibe en vez de
+esconderse.
+
+**Sin proveedor de correo, el enlace se muestra en pantalla** — y la página dice
+que en ese modo **no se está verificando** que la dirección sea de quien la
+escribió. No es un bypass para un tercero (solo lo ve el navegador que mandó el
+formulario), pero tampoco es prueba de posesión, y decir lo contrario sería la
+clase de exageración silenciosa que este proyecto no hace. Con `RESEND_API_KEY`
+configurada, se verifica.
+
+---
+
+### C-93 · T80: la pantalla de revisión muestra el grant literal, con quién hace cumplir cada permiso · `Vigente`
+**Fecha:** 2026-09-12
+
+`translatePermissions` es una función pura y probada que convierte lo que la
+persona marcó en el `MandateGrant` que se va a firmar. La pantalla renderiza
+**ese objeto**, en JSON, sin parafrasearlo.
+
+**Por qué no un resumen amable:** la persona está por firmar ese objeto exacto.
+Si la traducción viviera dentro de una plantilla, la pantalla y la petición
+podrían separarse, y la separación sería invisible justamente porque las dos se
+verían bien. Una función lo construye, la pantalla muestra lo construido, y T81
+manda lo mismo.
+
+**Y cada control lleva quién lo hace cumplir**, porque la diferencia entre
+*firmado*, *on-chain* y *RealOps* es la diferencia entre una garantía y una
+promesa:
+
+| Marca | Qué significa |
+|---|---|
+| `firmado` | AgentPey lo verifica contra el Mandato firmado |
+| `on-chain` | además lo revalida el contrato `policy_rail`, así que la red rechaza aunque todo lo de arriba fallara |
+| `RealOps` | es solo de esta plataforma y no cambia lo que el agente puede hacer |
+
+Una UI que los mostrara igual estaría reclamando garantías que el sistema no da.
+Hoy exactamente un control es `RealOps` (el nombre del agente) y lo dice.
+
+**La ventana de vigencia se calcula del reloj, nunca de la entrada.** Una
+validez que el navegador pudiera elegir es una validez que un atacante podría
+elegir.
+
+---
+
+### C-94 · T80: la interpretación no adivina, y por eso puede ser reemplazada por un LLM sin cambiar nada · `Vigente`
+**Fecha:** 2026-09-12
+
+`interpretInstruction` reconoce dos familias de instrucción y **rechaza en vez
+de adivinar**: lo que no entiende vuelve como `InstructionNotUnderstood` y la
+página ofrece los dos productos como botones, sin preseleccionar ninguno.
+
+Adivinar es exactamente lo que un agente con permiso de gastar no puede hacer:
+una suposición equivocada acá es una compra real de lo que no se pidió, que no
+devuelve nadie.
+
+**Esta es la capa que tiene permitido equivocarse.** La frontera de confianza
+(`PILOTO-F9.md` § 4.1) pasa justo después: interpretar y descubrir son de
+RealOps, decidir y ejecutar son de AgentPey. Un error acá puede elegir el
+producto equivocado; no puede otorgar un venue, un activo ni un monto que el
+Mandato no permita ya. Por eso un LLM podría reemplazar este archivo entero sin
+cambiar una sola garantía — que era la pregunta del brief § 5.
+
+**Un defecto encontrado por un test, no leyendo:** el vocabulario matcheaba
+palabras exactas, así que `"informes"` en plural no se reconocía. Ahora matchea
+raíces por prefijo, con las palabras de dos letras (`ia`, `ai`) en coincidencia
+exacta — una regla de prefijo sobre esas reclamaría media lengua, y un
+vocabulario que matchea de más deja de rechazar, que es el mismo fallo que uno
+que matchea de menos.

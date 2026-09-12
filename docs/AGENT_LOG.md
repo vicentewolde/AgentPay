@@ -4560,3 +4560,74 @@ de lo de siempre (`RESERVE_ADDRESS` en Render, instancia Starter de
 `SIGNALDESK_SECRET_KEY` y `SIGNALDESK_FACILITATOR_SECRET` en su panel — están
 en `.env.local`, generadas por `pnpm run signaldesk:setup`. Siguiente hito
 **T80**: RealOps y su conexión con `/v1`.
+
+---
+
+## 2026-09-12 (17) — main / cc/t80-realops
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t79-signaldesk` a `main` (fast-forward) con
+confirmación del usuario, que además ya cargó `SIGNALDESK_SECRET_KEY` y
+`SIGNALDESK_FACILITATOR_SECRET` en Render. Misma sesión, **T80**: RealOps, la
+plataforma de agentes. Sigue sin delegarse nada a Codex, a pedido del usuario.
+
+**Alcance dividido a propósito.** `PILOTO-F9.md` § 9 tenía RealOps y su
+cableado con `/v1` como dos hitos; se mantuvo esa división. T80 es la
+plataforma sola: cuentas, enlace mágico, sesiones, agentes con permisos, las
+cinco pantallas, interpretación determinista y retención. El cableado con `/v1`
+—consent, retorno, compra, revocación— es T81, que es la mitad que toca
+autorización y merece su propia revisión.
+
+Cuatro cosas que valen más que el CRUD:
+
+1. **RealOps no puede autorizar nada, y es estructural** (`C-91`). No tiene
+   ninguna clave Stellar, no importa `@agentpey/agent` ni `vault` ni
+   `directory`, y su único credencial futuro es una API key de `/v1`. Además:
+   el navegador nunca manda un `tenant_id` —la cookie resuelve a una cuenta y
+   ningún handler lee de la entrada a quién pertenece un dato— y el agente de
+   otra persona es `404`, nunca `403`.
+2. **El correo vive solo ahí, y la referencia es aleatoria, no un hash**
+   (`C-92`). Un hash de un email sigue siendo un identificador de esa persona y
+   un diccionario lo revierte; un `rop_<ulid>` aleatorio no. El enlace mágico
+   se guarda hasheado, dura 15 min, y **la redención es la escritura** (update
+   condicional), con la prueba corriendo las dos redenciones en paralelo.
+3. **La pantalla de revisión muestra el grant literal**, en JSON, con una marca
+   por control de quién lo hace cumplir: `firmado` / `on-chain` / `RealOps`
+   (`C-93`). Una función pura lo construye, la pantalla muestra lo construido, y
+   T81 manda lo mismo — así no pueden separarse. La ventana de vigencia se
+   calcula del reloj, nunca de la entrada.
+4. **La interpretación rechaza en vez de adivinar** (`C-94`), y por eso un LLM
+   podría reemplazar ese archivo sin cambiar una garantía: interpretar está del
+   lado de la frontera que tiene permitido equivocarse.
+
+Verificado: **1164 tests** (eran 1113), `typecheck` y `build` limpios. Y en el
+navegador, no solo con pruebas: el recorrido completo (entrar → enlace →
+configurar agente → pantalla de revisión con el grant literal), consola sin
+errores, tema claro y oscuro, y móvil a 375px sin desbordes.
+
+**Un defecto encontrado por un test**, no leyendo el código: el vocabulario
+matcheaba palabras exactas, así que `"compra dos informes XLM/USDC"` —plural
+normal— no se reconocía. Ahora matchea raíces por prefijo, con las palabras de
+dos letras (`ia`, `ai`) en coincidencia exacta.
+
+**Anotado y dicho en la propia página:** sin `RESEND_API_KEY` el enlace mágico
+se muestra en pantalla, y en ese modo **no se verifica** que la dirección sea de
+quien la escribió. No es un bypass para un tercero, pero tampoco es prueba de
+posesión, y la página lo dice con esas palabras. Se activa la verificación al
+configurar Resend sobre `agentpey.com`.
+
+Documentación tocada: `DECISIONES.md` (`C-91` a `C-94`), `BITACORA.md` (hito
+T80 + tabla + estado actual), `evidencia/T80.md` (nuevo). Archivos de código:
+`apps/realops/**` (nuevo, 51 pruebas), `tsconfig.json`, `package.json`,
+`.env.example`, `render.yaml`, `.claude/launch.json`.
+
+Pendiente: **mergear `cc/t80-realops`** (espera confirmación). Siguiente hito
+**T81**: el cableado con `/v1` — crear la consent session, la **lista blanca de
+URLs de retorno** (fila 8 del modelo de amenazas de `PILOTO-F9.md` § 8, lo único
+de seguridad que F9 todavía no construyó), pedir la compra, llenar "Mis
+servicios" con entregas y rechazos, y la revocación. Del lado del usuario, para
+cuando se despliegue: `agentpey-realops` es un servicio nuevo en `render.yaml`
+y va a pedir `DATABASE_URL`; `RESEND_API_KEY` queda vacía hasta que exista el
+dominio. Sigue pendiente comprar `agentpey.com` y pagar la instancia Starter de
+`agentpey-web`.
