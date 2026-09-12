@@ -652,7 +652,7 @@ components:
           pattern: ^ptn_[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}:[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$
         venue:
           type: string
-          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*:C[A-Z2-7]{55}$
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*:[CG][A-Z2-7]{55}$
         product_id:
           type: string
           minLength: 1
@@ -711,7 +711,7 @@ components:
             - type: "null"
         venue:
           type: string
-          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*:C[A-Z2-7]{55}$
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*:[CG][A-Z2-7]{55}$
         product_id:
           type: string
           minLength: 1
@@ -964,7 +964,7 @@ components:
                   - type: "null"
               venue:
                 type: string
-                pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*:C[A-Z2-7]{55}$
+                pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*:[CG][A-Z2-7]{55}$
               product_id:
                 type: string
                 minLength: 1

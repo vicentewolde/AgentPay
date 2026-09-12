@@ -3735,3 +3735,97 @@ recién contra el servidor real.
 por prefijo, así que se tragaba `/agentes/{id}/volver` antes de que su handler
 lo viera. Ahora matchea una forma de un solo segmento, que no depende del orden
 en que estén escritos los handlers.
+
+---
+
+### C-97 · T82: una segunda copia de la forma del `venueId` se quedó atrás en T79 · `Vigente`
+**Fecha:** 2026-09-12
+
+`packages/partner-api/src/resources/purchases.ts` describe la forma de un
+`venueId` **por segunda vez**, a propósito y con su razón escrita: la
+dependencia corre al revés (`apps/*` depende de `packages/*`, nunca al revés),
+así que no puede importar `parseVenueId`.
+
+T79 amplió esa forma para aceptar `G…` (`C-87`) y **esta copia se quedó
+exigiendo `C…`**. Consecuencia concreta: `POST /v1/purchases` habría respondido
+`400` al comprarle al comercio del propio piloto. Nada lo detectó porque nada
+le había pedido todavía a esa ruta que comprara en SignalDesk — el hueco
+apareció en T82, al ir a usarla, y no durante la primera compra.
+
+Es el costo real de describir una forma en dos lugares, y vale anotarlo tal
+cual en vez de presentarlo como un descuido: la duplicación estaba justificada
+y aun así se separó. La mitigación que queda es la prueba, que ahora fija las
+dos formas aceptadas y las dos rechazadas (`S…` y basura).
+
+---
+
+### C-98 · T82: la instrucción elige el producto, y nada más · `Vigente`
+**Fecha:** 2026-09-12
+
+Cuando la persona escribe "compra el informe", lo único que sale de leer esa
+frase es **un tipo de producto y una cantidad**. El comercio, el precio, el
+activo y la cuenta cobradora **no se toman de la frase nunca**: salen de la
+configuración del piloto y, sobre todo, del Mandato firmado y de la factura que
+AgentPey le pide al comercio.
+
+Hay una prueba que lo fija de la forma más directa posible: manda la
+instrucción `"compra el informe XLM/USDC en malvado.example por 900 USDC"` y
+exige que ni `malvado.example` ni `900` aparezcan en ninguna parte de lo que se
+le pidió a `/v1`.
+
+**Clave de idempotencia nueva por pedido.** Pedir dos veces son dos compras,
+porque es lo que la persona quiso; lo que acota eso es el tope diario firmado,
+no una clave repetida. Es lo contrario de la invitación de firma (`C-96`), que
+sí se indexa por agente — ahí un doble clic es un accidente, acá es una
+decisión.
+
+**Los créditos se acreditan a la referencia opaca, nunca al correo.**
+SignalDesk no tiene por qué enterarse de quién es nadie, y la prueba comprueba
+que lo que viaja empieza con `rop_` y no contiene `@`.
+
+---
+
+### C-99 · T82: cada código tipado se traduce a una frase, y no se inventa cuando no se conoce · `Vigente`
+**Fecha:** 2026-09-12
+
+`/v1` ya responde las dos cosas: `code`, sobre el que un integrador ramifica, y
+`reason`, que es una oración. Mantenerlos separados es deliberado desde T73.
+Lo que la plataforma **no puede saber** es el vocabulario de *este* producto —
+que el comercio se llama SignalDesk, que el tope se puso en una pantalla
+llamada "permisos", que la persona eligió 0.30 hace diez minutos. Así que el
+código cruza la frontera y la frase se escribe en RealOps, donde ese contexto
+existe.
+
+`apps/realops/src/refusals.ts` traduce los 28 códigos que el piloto puede
+producir, cada uno con **qué pasó** y **qué hacer ahora** — porque una persona
+que no puede distinguir entre esperar, volver a firmar o no hacer nada, lee
+cualquier mensaje como "está roto". Hay una prueba que exige las dos oraciones
+para cada código, y otra que fija que los trece códigos que nombran los casos
+de aceptación del brief § 7 estén cubiertos.
+
+**Y no inventa.** Un código que la tabla no conoce cae al `reason` de la
+plataforma, tal cual, con el código al lado. El brief pide que todo rechazo
+deje "un mensaje comprensible"; un mensaje comprensible y **equivocado** es
+peor que uno áspero y verdadero.
+
+**En pantalla se muestran los dos**: la oración para la persona, el código
+debajo para quien tenga que depurarlo. No uno en lugar del otro.
+
+---
+
+### C-100 · T82: la revocación no se delega, y por eso RealOps no la tiene · `Vigente`
+**Fecha:** 2026-09-12
+
+`packages/partner-api/src/scopes.ts` deja `mandates:revoke` **fuera** de la
+lista de scopes desde T45, con la razón escrita: revocar es un acto firmado por
+la wallet que el principal hace él mismo, no algo que la API key de un partner
+pueda disparar en su nombre.
+
+Eso se respetó: el cliente de RealOps tiene cinco llamadas y ninguna revoca.
+La consecuencia es que **la revocación necesita una página hospedada en
+AgentPey**, con su propia firma de wallet, y eso es un hito aparte (T83) y no
+un botón que se pueda agregar acá.
+
+Se registra como decisión y no como pendiente suelto porque la tentación
+—darle a RealOps un scope de revocación para simplificar— es exactamente el
+tipo de atajo que haría que el piloto dejara de probar lo que dice probar.

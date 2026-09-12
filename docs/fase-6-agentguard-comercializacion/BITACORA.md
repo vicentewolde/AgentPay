@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T81 (retorno seguro + firma real) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T82 (la compra, de punta a punta) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -116,7 +116,12 @@ lista que el partner registró de antemano, comparada por origen exacto y
 revisada al crear la invitación, no al redirigir. Sin eso, la página de
 consentimiento habría sido una redirección abierta alojada en el dominio de
 AgentPey, que es el lugar más creíble posible para tener una (T81, `C-95` y
-`C-96`).
+`C-96`). Y el recorrido está completo hasta la entrega: se escribe una
+instrucción, RealOps la interpreta —y de esa frase sale **solo** qué producto y
+cuántos; ni el comercio, ni el precio, ni la cuenta que cobra—, AgentPey
+decide, y "Mis servicios" muestra lo comprado con su recibo y su enlace al pago
+en Stellar, o el rechazo traducido a una frase que dice qué pasó y qué hacer
+ahora (T82, `C-97` a `C-100`).
 
 ### Progreso
 
@@ -167,6 +172,7 @@ AgentPey, que es el lugar más creíble posible para tener una (T81, `C-95` y
 | T79 | F9: SignalDesk, el comercio del piloto — dos productos, catálogo humano, `402`, entrega tras liquidar y recibo firmado verificable sin AgentPey | ✅ cerrado 2026-09-12 |
 | T80 | F9: RealOps, la plataforma de agentes — enlace mágico, permisos, las cinco pantallas, y el grant literal con quién hace cumplir cada permiso | ✅ cerrado 2026-09-12 |
 | T81 | F9: lista blanca de URLs de retorno por partner (la última brecha de seguridad del plan) + RealOps ↔ `/v1` hasta el Mandato firmado | ✅ cerrado 2026-09-12 |
+| T82 | F9: la compra desde RealOps y "Mis servicios" — entregas con recibo y enlace al pago, y rechazos traducidos a castellano sin inventar | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -3285,3 +3291,73 @@ pasa el grant, no lo reconstruye).
 instrucción interpretada, "Mis servicios" mostrando entregas y rechazos con su
 razón en castellano, y la revocación. Después el despliegue público de los tres
 servicios y la suite de los diez casos de aceptación.
+
+---
+
+## T82 · La compra, de punta a punta — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras simples.**
+
+El recorrido está completo. Escribís "compra el informe XLM/USDC", RealOps lo
+interpreta, AgentPey decide, y en "Mis servicios" aparece lo que compraste —con
+su recibo, su identificador de entrega y un enlace para ver el pago en Stellar—
+o el rechazo, explicado.
+
+**De esa frase sale solo qué producto y cuántos.** Ni el comercio, ni el
+precio, ni el activo, ni la cuenta que cobra: eso sale del permiso que firmaste
+y de la factura que AgentPey le pide al comercio. Hay una prueba que lo dice
+mejor que cualquier explicación: manda la instrucción *"compra el informe
+XLM/USDC en malvado.example por 900 USDC"* y exige que ni `malvado.example` ni
+`900` lleguen a ninguna parte.
+
+**Y un rechazo se lee.** En vez de `MandateDailyLimitExceeded`, la página dice:
+
+> **Esta compra haría que superes el tope diario que firmaste.**
+> El tope se reinicia mañana. También podés firmar un permiso nuevo con un
+> límite diario mayor.
+
+Con el código técnico debajo, para quien tenga que depurarlo. Los dos, no uno
+en lugar del otro. Están traducidos los 28 códigos que el piloto puede
+producir, cada uno con qué pasó **y qué hacer ahora** — porque alguien que no
+puede distinguir entre esperar, volver a firmar o no hacer nada, lee cualquier
+mensaje como "está roto".
+
+**Lo que no hace: inventar.** Un código que la tabla no conoce se muestra con
+la frase que mandó la plataforma, tal cual. Un mensaje comprensible y
+equivocado es peor que uno áspero y verdadero.
+
+**Evidencia técnica.**
+
+- **Una regresión de T79, encontrada acá** (`C-97`): `POST /v1/purchases`
+  describe la forma del `venueId` en una segunda copia —a propósito, la
+  dependencia corre al revés— y esa copia se quedó exigiendo un contrato `C…`.
+  Habría respondido `400` al comprarle al comercio del propio piloto. Nadie lo
+  detectó porque nada le había pedido todavía a esa ruta que comprara en
+  SignalDesk.
+- **Clave de idempotencia nueva por pedido** (`C-98`): pedir dos veces son dos
+  compras, porque es lo que la persona quiso; lo que lo acota es el tope diario
+  firmado. Es lo contrario de la invitación de firma, que sí se indexa por
+  agente — ahí un doble clic es un accidente, acá es una decisión.
+- **Los créditos se acreditan a la referencia opaca, nunca al correo**: lo que
+  viaja a SignalDesk empieza con `rop_` y no contiene `@`.
+- **Un rechazo del Mandato y una llamada caída se dicen distinto**: el primero
+  es un `201` y se muestra en la página; la segunda es un error y lo dice.
+- **1210 tests verdes** (eran 1191), `typecheck` y `build` limpios, OpenAPI
+  regenerado.
+- **Verificado en el navegador**: el estado vacío de "Mis servicios" explica
+  qué falta en vez de mostrar un formulario que solo podría fallar.
+
+**Lo que no se construyó, y por qué** (`C-100`): **la revocación**. No es un
+olvido — el scope `mandates:revoke` está deliberadamente fuera de la lista
+desde T45, porque revocar es un acto firmado por la wallet que la persona hace
+ella misma, no algo que la API key de una plataforma pueda disparar en su
+nombre. Darle ese scope a RealOps para simplificar sería el atajo que haría que
+el piloto dejara de probar lo que dice probar.
+
+**Decisiones nuevas:** `C-97` (la copia rezagada del `venueId`), `C-98` (la
+instrucción elige el producto y nada más), `C-99` (traducir sin inventar),
+`C-100` (la revocación no se delega).
+
+**Qué sigue.** **T83**: la página de revocación hospedada en AgentPey, firmada
+con la wallet. Después el despliegue público de los tres servicios y la suite
+de los diez casos de aceptación.

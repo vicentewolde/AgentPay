@@ -24,6 +24,9 @@ import { agentKindSchema, type AgentKind } from "./accounts.js";
 /** The one pair the pilot's brief covers. A closed dictionary, not a parser. */
 export const KNOWN_PAIRS = ["XLM/USDC"] as const;
 
+/** The pair used when the person picks the product from a button instead of typing. */
+export const SUPPORTED_PAIR: string = KNOWN_PAIRS[0];
+
 export interface Interpretation {
   readonly kind: AgentKind;
   readonly quantity: number;

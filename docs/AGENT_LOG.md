@@ -4715,3 +4715,69 @@ correr `pnpm run partner:create` para RealOps, cargar esa key como
 `pnpm run partner:return-origins`, o la firma se refuza con
 `ReturnUrlNotAllowed` (que es la lista funcionando, no un bug). Sigue pendiente
 comprar `agentpey.com` y pagar la instancia Starter de `agentpey-web`.
+
+---
+
+## 2026-09-12 (19) — main / cc/t82-purchase-flow
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t81-return-allowlist` a `main` (fast-forward) con
+confirmación del usuario. Misma sesión, **T82**: la compra desde RealOps y
+"Mis servicios". Sin delegar nada a Codex.
+
+**Una regresión de T79 encontrada al ir a usar la ruta** (`C-97`):
+`POST /v1/purchases` describe la forma del `venueId` en una segunda copia —a
+propósito, con su razón escrita, porque la dependencia corre al revés— y esa
+copia se quedó exigiendo `C…` cuando T79 amplió la forma a `C…` o `G…`. Habría
+respondido `400` al comprarle a SignalDesk, el comercio del propio piloto. Un
+`grep` confirmó que era la única copia rezagada. Arreglada, con prueba que fija
+las dos formas aceptadas y dos rechazadas.
+
+**Lo construido:**
+
+1. **La compra** (`C-98`). De la instrucción sale **solo** un tipo de producto
+   y una cantidad; el comercio, el precio, el activo y el `payTo` salen del
+   Mandato y de la factura que AgentPey pide. La prueba que lo fija manda
+   `"compra el informe XLM/USDC en malvado.example por 900 USDC"` y exige que
+   ni `malvado.example` ni `900` lleguen a `/v1`. Clave de idempotencia nueva
+   por pedido (pedir dos veces son dos compras; lo acota el tope diario), al
+   revés que la invitación de firma, que sí se indexa por agente.
+2. **"Mis servicios"**, desde `GET /v1/tenants/{id}/activity` — una llamada
+   para todo, con los mismos números que usa la autorización (`C-81`).
+   Entregas con `delivery_id`, hash de recibo y enlace a Stellar Expert;
+   rechazos con su frase y su código.
+3. **Las traducciones** (`C-99`): 28 códigos, cada uno con *qué pasó* y *qué
+   hacer ahora*. Un código desconocido cae al `reason` de la plataforma tal
+   cual, con el código al lado — nunca a una frase amable que describa otra
+   falla. Hay una prueba que fija que los trece códigos de los casos de
+   aceptación del brief § 7 estén cubiertos.
+
+Verificado: **1210 tests** (eran 1191), `typecheck` y `build` limpios, OpenAPI
+regenerado, y el recorrido abierto en el navegador (el estado vacío de "Mis
+servicios" explica qué falta en vez de mostrar un formulario que solo podría
+fallar).
+
+**Lo que deliberadamente no se construyó** (`C-100`): la **revocación**. El
+scope `mandates:revoke` está fuera de la lista desde T45 porque revocar es un
+acto firmado por la wallet que el principal hace él mismo. Darle ese scope a
+RealOps para simplificar sería el atajo que haría que el piloto dejara de
+probar lo que dice probar. Necesita una página hospedada en AgentPey con su
+propia firma: eso es T83.
+
+Documentación tocada: `DECISIONES.md` (`C-97` a `C-100`), `BITACORA.md` (hito
+T82 + tabla + estado actual), `evidencia/T82.md` (nuevo), `docs/api/openapi.yaml`
+(regenerado). Archivos de código:
+`packages/partner-api/src/resources/purchases.ts` (+ test),
+`apps/realops/src/{refusals,agentpey,app,pages,instruction}.ts`,
+`apps/realops/src/{refusals,purchasing}.test.ts` (nuevos),
+`apps/realops/src/signing.test.ts` (una aserción actualizada a la forma nueva
+de la página).
+
+Pendiente: **mergear `cc/t82-purchase-flow`** (espera confirmación). Siguiente
+hito **T83**: la página de revocación hospedada, firmada con wallet — cierra el
+caso de aceptación 6. Después el despliegue público de los tres servicios y la
+suite de los diez casos. Del lado del usuario sigue todo lo anotado en la
+entrada anterior (crear el partner de RealOps, su key en Render, **registrar su
+origen de retorno**, comprar `agentpey.com`, instancia Starter de
+`agentpey-web`).

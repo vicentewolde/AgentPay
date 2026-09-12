@@ -24,8 +24,19 @@ describe("venueIdSchema", () => {
     expect(venueIdSchema.safeParse("signaldesk").success).toBe(false);
   });
 
-  it("refuses a slug paired with a classic account — a venue is a contract", () => {
-    expect(venueIdSchema.safeParse("signaldesk:GAK6E5E7L63ZYFZZZFXDTYVG6MVAKILSHI5FITGH5U4ORACEZQ4GFP2K").success).toBe(false);
+  /**
+   * T79 widened a venue's identity: an HTTP merchant is not a Soroban contract
+   * and never will be, so the account it is paid at is its identity. This copy
+   * of the shape kept refusing it, which would have made `POST /v1/purchases`
+   * answer `400` for the pilot's own merchant (`C-97`).
+   */
+  it("accepts a slug paired with a classic account, since T79", () => {
+    expect(venueIdSchema.safeParse("signaldesk:GB4D4PLLFEIKZK6MDW42MZRQ5XMPC6QRJN4FFRODO6D3PRB3MDGGYOOF").success).toBe(true);
+  });
+
+  it("still refuses an address that is neither form", () => {
+    expect(venueIdSchema.safeParse("signaldesk:SB4D4PLLFEIKZK6MDW42MZRQ5XMPC6QRJN4FFRODO6D3PRB3MDGGYOOF").success).toBe(false);
+    expect(venueIdSchema.safeParse("signaldesk:not-an-address").success).toBe(false);
   });
 
   it("refuses an uppercase or underscored slug, so one venue has one spelling", () => {

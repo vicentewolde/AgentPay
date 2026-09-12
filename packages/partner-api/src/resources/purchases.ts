@@ -30,18 +30,27 @@ import { z } from "zod";
 export { purchaseIdSchema };
 
 /**
- * `<slug>:<contract id>` — the venue identity `apps/agent`'s catalogue mints
- * and a signed `PurchaseIntent` carries. Described here rather than imported
- * because the dependency runs the other way (`apps/*` depends on
- * `packages/*`, never the reverse), the same reason `consent-sessions.ts`
- * hand-rolled its id schemas before `@agentpey/directory` had the table.
+ * `<slug>:<address>` — the venue identity `apps/agent`'s catalogue mints and a
+ * signed `PurchaseIntent` carries. Described here rather than imported because
+ * the dependency runs the other way (`apps/*` depends on `packages/*`, never
+ * the reverse), the same reason `consent-sessions.ts` hand-rolled its id
+ * schemas before `@agentpey/directory` had the table.
+ *
  * Deliberately structural and not a registry lookup: this schema's job is to
- * refuse a malformed string, and deciding whether a venue is *payable* is
- * the platform's job, at a point where refusing means refusing a payment.
+ * refuse a malformed string, and deciding whether a venue is *payable* is the
+ * platform's job, at a point where refusing means refusing a payment.
+ *
+ * **The address may be a contract (`C…`) or an account (`G…`).** That is the
+ * cost of describing a shape in two places: T79 widened `parseVenueId` for
+ * SignalDesk, which is an HTTP merchant with no contract, and this copy kept
+ * refusing what the rest of the system had started accepting — so
+ * `POST /v1/purchases` would have answered `400` for the pilot's own merchant.
+ * Nothing caught it, because nothing had yet asked this route to buy from
+ * SignalDesk. Found in T82, before the first purchase rather than during it.
  */
 export const venueIdSchema = z
   .string()
-  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*:C[A-Z2-7]{55}$/, "expected a venue id (<slug>:C...)");
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*:[CG][A-Z2-7]{55}$/, "expected a venue id (<slug>:C… or <slug>:G…)");
 
 /**
  * What the partner may ask for. `strictObject`, so a field this route does

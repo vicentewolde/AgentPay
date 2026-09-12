@@ -50,6 +50,12 @@ function fakeAgentPey() {
     async listMandates() {
       return [];
     },
+    async purchase() {
+      throw new Error("signing.test.ts does not buy — see purchasing.test.ts");
+    },
+    async readActivity(tenantId) {
+      return { tenant_id: tenantId, mandate: null, per_day: null, rail: null, purchases: [], refusals: [] };
+    },
   };
 
   return {
@@ -193,16 +199,23 @@ describe("coming back from signing", () => {
     expect(review).toContain("Firmado");
   });
 
-  it("shows the signed permission under Mis servicios", async () => {
+  /**
+   * Signing is what unlocks asking for something. Before it, "Mis servicios"
+   * says so instead of showing a form that could only fail.
+   */
+  it("unlocks the instruction form on Mis servicios once a permission is signed", async () => {
     const cookie = await signIn("servicios@ejemplo.cl");
     const agentId = await configureAgent(cookie);
+
+    const before = await (await fetch(`${baseUrl}/servicios`, { headers: { cookie } })).text();
+    expect(before).toContain("Todavía no tenés ningún agente con permiso firmado");
+    expect(before).not.toContain('name="instruction"');
+
     await fetch(`${baseUrl}/agentes/${agentId}/firmar`, form({}, cookie));
     await fetch(`${baseUrl}/agentes/${agentId}/volver`, { headers: { cookie }, redirect: "manual" });
 
-    const html = await (await fetch(`${baseUrl}/servicios`, { headers: { cookie } })).text();
-
-    expect(html).toContain("Permisos firmados");
-    expect(html).toContain("mnd_01J7QW8VQEJPAXEPAYREALOPS09");
+    const after = await (await fetch(`${baseUrl}/servicios`, { headers: { cookie } })).text();
+    expect(after).toContain('name="instruction"');
   });
 
   it("404s a return for an agent that never started signing", async () => {

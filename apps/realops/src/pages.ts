@@ -14,8 +14,10 @@
  * asks for it on every page, and the way to guarantee "every" is to make it
  * impossible to render a page without it.
  */
+import type { PurchaseResource, TenantActivity } from "./agentpey.js";
 import type { AgentConfig, Account, AgentKind } from "./accounts.js";
 import { FALLBACK_CHOICES } from "./instruction.js";
+import { explainRefusal } from "./refusals.js";
 import type { ExplainedControl, ProposedGrant } from "./permissions.js";
 
 export function escape(value: string): string {
@@ -310,40 +312,108 @@ function signState(agent: AgentConfig): string {
     tu wallet y firmes. Cuando termines, volvés acá.</p>`;
 }
 
-export interface SignedMandateRow {
-  readonly label: string;
-  readonly mandateId: string;
-  readonly validUntil: string;
+export interface ServicesInput {
+  readonly account: Account;
+  /** `null` when this instance has no AgentPey behind it, or the call failed. */
+  readonly activity: TenantActivity | null;
+  /** Why the activity is missing, if it is. */
+  readonly activityError?: string;
+  readonly agents: readonly AgentConfig[];
 }
 
-export function servicesPage(account: Account, mandates: readonly SignedMandateRow[] = []): string {
+/** One purchase, settled — what the person actually got. */
+function deliveryCard(purchase: PurchaseResource): string {
+  const links: string[] = [];
+  if (purchase.delivery?.artifact_url != null) {
+    links.push(`<a class="button" href="${escape(purchase.delivery.artifact_url)}">Ver lo que compraste</a>`);
+  }
+  if (purchase.explorer_url !== null) {
+    links.push(`<a href="${escape(purchase.explorer_url)}">Ver el pago en Stellar</a>`);
+  }
+
+  return `<div class="card">
+    <span class="tag tag-signed">entregado</span>
+    <h3 style="margin:.5rem 0 .25rem">${escape(purchase.product_id)}</h3>
+    <p style="margin:0 0 .5rem">${escape(purchase.total ?? "?")} ${escape((purchase.asset ?? "").split(":")[0] ?? "")} · ${escape(purchase.created_at)}</p>
+    <p class="meta" style="font-size:.85rem;color:var(--muted);margin:0 0 .75rem">
+      ${purchase.delivery?.delivery_id == null ? "" : `Entrega <code>${escape(purchase.delivery.delivery_id)}</code><br>`}
+      ${purchase.delivery?.receipt_hash == null ? "" : `Recibo <code>${escape(purchase.delivery.receipt_hash)}</code>`}
+    </p>
+    ${links.join(" ")}
+  </div>`;
+}
+
+/** One purchase, refused — said in words the person can act on. */
+function refusalCard(purchase: PurchaseResource): string {
+  const explained = explainRefusal(purchase.code ?? "unknown", purchase.reason);
+  return `<div class="card error">
+    <span class="tag tag-realops">rechazado</span>
+    <h3 style="margin:.5rem 0 .25rem">${escape(purchase.product_id)}</h3>
+    <p style="margin:0 0 .35rem"><strong>${escape(explained.what)}</strong></p>
+    ${explained.next === "" ? "" : `<p style="margin:0 0 .5rem">${escape(explained.next)}</p>`}
+    <p style="font-size:.85rem;color:var(--muted);margin:0">
+      ${escape(purchase.created_at)} · código <code>${escape(purchase.code ?? "unknown")}</code>
+    </p>
+  </div>`;
+}
+
+function spendingCard(activity: TenantActivity): string {
+  if (activity.per_day === null && activity.rail === null) return "";
+  const perDay =
+    activity.per_day === null
+      ? ""
+      : `<p style="margin:0 0 .35rem">Hoy llevás gastado <strong>${escape(activity.per_day.spent_today)}</strong> de
+      <strong>${escape(activity.per_day.limit)} ${escape(activity.per_day.currency)}</strong>.
+      ${activity.per_day.near_limit ? "<strong>Estás cerca del tope.</strong>" : `Te quedan ${escape(activity.per_day.remaining)}.`}</p>`;
+  const rail =
+    activity.rail === null
+      ? ""
+      : `<p style="margin:0;font-size:.9rem;color:var(--muted)">Saldo del contrato que paga:
+      <strong>${escape(activity.rail.balance)} ${escape(activity.rail.asset)}</strong>.
+      ${activity.rail.sponsored ? "Es crédito de prueba que pone el piloto, no dinero tuyo." : ""}</p>`;
+
+  return `<div class="card">${perDay}${rail}</div>`;
+}
+
+export function servicesPage(input: ServicesInput): string {
+  const { account, activity } = input;
+  const settled = (activity?.purchases ?? []).filter((purchase) => purchase.outcome === "settled");
+  const refused = (activity?.purchases ?? []).filter((purchase) => purchase.outcome === "refused");
+  const signable = input.agents.filter((agent) => agent.mandateId !== null);
+
   return layout({
     title: "Mis servicios",
     signedIn: true,
     body: `
   <h1>Mis servicios</h1>
-  <p class="lede">Acá van a aparecer las entregas —con su recibo, su <code>delivery_id</code> y el enlace a
-  la transacción en Stellar— y también los intentos rechazados, con su razón.</p>
-  <div class="card">
-    <p><em>Las compras se habilitan en el próximo hito.</em></p>
-    <p style="color:var(--muted);font-size:.9rem">Un rechazo no es una ausencia: se guarda igual que una
-    compra, para que "¿por qué mi agente no compró esto?" tenga respuesta.</p>
-  </div>
+  <p class="lede">Todo lo que tu agente compró —y todo lo que intentó y le rechazaron— con su prueba.</p>
 
-  <h2>Permisos firmados</h2>
+  ${input.activityError === undefined ? "" : `<p class="card error">${escape(input.activityError)}</p>`}
+  ${activity === null ? "" : spendingCard(activity)}
+
   ${
-    mandates.length === 0
-      ? '<p class="card">Todavía no firmaste ningún permiso.</p>'
-      : `<table class="card" style="padding:.4rem .6rem">
-    <thead><tr><th>Agente</th><th>Mandato</th><th>Vence</th></tr></thead>
-    <tbody>
-      ${mandates
-        .map(
-          (row) => `<tr><td>${escape(row.label)}</td><td><code>${escape(row.mandateId)}</code></td><td>${escape(row.validUntil)}</td></tr>`,
-        )
-        .join("\n      ")}
-    </tbody>
-  </table>`
+    signable.length === 0
+      ? '<p class="card">Todavía no tenés ningún agente con permiso firmado. <a href="/agentes">Empezá por ahí</a>.</p>'
+      : `<form class="card" method="post" action="/instruccion">
+    <label for="instruction">Decile qué comprar</label>
+    <input id="instruction" name="instruction" required maxlength="500" placeholder="compra el informe XLM/USDC">
+    <button type="submit">Pedirlo</button>
+    <p style="font-size:.88rem;color:var(--muted);margin:.75rem 0 0">RealOps interpreta la frase. Después
+    <strong>AgentPey decide</strong>: vuelve a resolver el comercio, pide él mismo la factura, y compara todo
+    contra lo que firmaste antes de pagar.</p>
+  </form>`
+  }
+
+  <h2>Entregas</h2>
+  ${settled.length === 0 ? '<p class="card">Todavía no compraste nada.</p>' : settled.map(deliveryCard).join("\n  ")}
+
+  <h2>Rechazos</h2>
+  ${
+    refused.length === 0
+      ? '<p class="card">Ningún intento rechazado.</p>'
+      : `<p style="color:var(--muted);font-size:.9rem">Un rechazo no es una ausencia: queda guardado igual que
+      una compra, para que "¿por qué mi agente no compró esto?" tenga respuesta.</p>
+  ${refused.map(refusalCard).join("\n  ")}`
   }
 
   <h2>Tu cuenta</h2>

@@ -3,9 +3,14 @@
  * can do to the payment system.
  *
  * Reading this file is the fastest way to check the claim the pilot rests on.
- * There are four calls: create a tenant, create a consent session, read a
- * consent session, list mandates. Every one of them **asks**. None of them
- * grants anything, and there is no key here that could.
+ * There are five calls: create a tenant, create a consent session, read a
+ * consent session, list mandates, and ask for a purchase. Every one of them
+ * **asks**. None of them grants anything, and there is no key here that could.
+ *
+ * Note what is *not* here and cannot be: revoking a Mandate. `scopes.ts` keeps
+ * `mandates:revoke` out of the scope list on purpose — revocation is a
+ * wallet-signed act the principal takes themselves, not something a partner's
+ * API key can do on their behalf.
  *
  * **The grant is passed through, not rebuilt.** `translatePermissions` produced
  * the object the review screen displayed; this sends that same object. A second
@@ -49,6 +54,59 @@ export interface MandateResource {
   readonly valid_until: string;
 }
 
+export interface PurchaseDelivery {
+  readonly delivery_id: string | null;
+  readonly artifact_url: string | null;
+  readonly receipt_hash: string | null;
+}
+
+export interface PurchaseResource {
+  readonly id: string;
+  readonly outcome: "settled" | "refused";
+  /** The typed code of whichever layer refused. `null` when settled. */
+  readonly code: string | null;
+  /** AgentPey's own sentence. RealOps rewrites it for a person; see `refusals.ts`. */
+  readonly reason: string | null;
+  readonly product_id: string;
+  readonly total: string | null;
+  readonly asset: string | null;
+  readonly transaction_hash: string | null;
+  readonly explorer_url: string | null;
+  readonly delivery: PurchaseDelivery | null;
+  readonly created_at: string;
+}
+
+export interface Refusal {
+  readonly at: string;
+  readonly code: string;
+  readonly reason: string;
+  readonly intent_id: string | null;
+}
+
+export interface PerDayUsage {
+  readonly limit: string;
+  readonly spent_today: string;
+  readonly remaining: string;
+  readonly currency: string;
+  readonly near_limit: boolean;
+}
+
+export interface RailStatus {
+  readonly contract_id: string;
+  readonly balance: string;
+  readonly asset: string;
+  readonly sponsored: boolean;
+}
+
+export interface TenantActivity {
+  readonly tenant_id: string;
+  readonly mandate: { readonly id: string; readonly status: string; readonly valid_until: string } | null;
+  readonly per_day: PerDayUsage | null;
+  readonly rail: RailStatus | null;
+  readonly purchases: readonly PurchaseResource[];
+  readonly refusals: readonly Refusal[];
+}
+
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 function failed(message: string, details: Record<string, unknown>, cause?: unknown): AgentPassError {
@@ -73,6 +131,23 @@ export interface AgentPeyClient {
   }): Promise<ConsentSessionResource>;
   readConsentSession(id: string): Promise<ConsentSessionResource>;
   listMandates(tenantId: string): Promise<readonly MandateResource[]>;
+  /**
+   * Asks for one purchase.
+   *
+   * A refusal comes back as a `201` with `outcome: "refused"` and a typed
+   * `code`, not as a thrown error — the Mandate saying no is the system
+   * working, and this client keeps that distinction rather than flattening it
+   * into an exception the caller would have to re-classify.
+   */
+  purchase(input: {
+    readonly tenantId: string;
+    readonly venue: string;
+    readonly productId: string;
+    readonly quantity: number;
+    readonly routeParams?: Readonly<Record<string, string | number>>;
+    readonly idempotencyKey: string;
+  }): Promise<PurchaseResource>;
+  readActivity(tenantId: string): Promise<TenantActivity>;
 }
 
 export function createAgentPeyClient(config: AgentPeyConfig): AgentPeyClient {
@@ -158,6 +233,27 @@ export function createAgentPeyClient(config: AgentPeyConfig): AgentPeyClient {
     async listMandates(tenantId) {
       const result = await call("GET", `/v1/mandates?tenant_id=${encodeURIComponent(tenantId)}`);
       return unwrap<readonly MandateResource[]>(result, "/v1/mandates");
+    },
+
+    async purchase(input) {
+      const result = await call("POST", "/v1/purchases", {
+        body: {
+          tenant_id: input.tenantId,
+          venue: input.venue,
+          product_id: input.productId,
+          quantity: input.quantity,
+          ...(input.routeParams === undefined ? {} : { route_params: input.routeParams }),
+        },
+        idempotencyKey: input.idempotencyKey,
+      });
+      // `201` for both outcomes, so `unwrap` returns the refusal too and the
+      // caller reads `outcome` instead of catching.
+      return unwrap<PurchaseResource>(result, "/v1/purchases");
+    },
+
+    async readActivity(tenantId) {
+      const result = await call("GET", `/v1/tenants/${encodeURIComponent(tenantId)}/activity`);
+      return unwrap<TenantActivity>(result, "/v1/tenants/{id}/activity");
     },
   };
 }

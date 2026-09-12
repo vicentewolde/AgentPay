@@ -20,6 +20,7 @@
  * "now it is" leaves a window where two requests both pass — the same class of
  * bug `C-82` closed on the funding path.
  */
+import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { AgentPassError, isAgentPassError } from "@agentpass/core";
@@ -27,6 +28,7 @@ import { AgentPassError, isAgentPassError } from "@agentpass/core";
 import {
   agentKindSchema,
   agentPermissionsSchema,
+  type AgentKind,
   aliasSchema,
   checkMagicLink,
   emailSchema,
@@ -39,7 +41,7 @@ import {
   type RealOpsStore,
 } from "./accounts.js";
 import type { AgentPeyClient } from "./agentpey.js";
-import { interpretInstruction } from "./instruction.js";
+import { SUPPORTED_PAIR, interpretInstruction } from "./instruction.js";
 import {
   agentsPage,
   errorPage,
@@ -49,7 +51,6 @@ import {
   reviewPage,
   servicesPage,
   signInPage,
-  type SignedMandateRow,
 } from "./pages.js";
 import { translatePermissions, type PilotTargets } from "./permissions.js";
 
@@ -136,6 +137,24 @@ function messageFor(error: unknown): string {
     return `AgentPey no aceptó la petición (${code}): ${error.message}`;
   }
   return "No pudimos hablar con AgentPey. Probá de nuevo en un momento.";
+}
+
+/**
+ * The values the merchant's paid route declares as required.
+ *
+ * These fill a URL the merchant itself published; they are not a way in for
+ * anything that decides. The price that comes back is still reconciled against
+ * the signed Mandate like any other.
+ */
+function routeParamsFor(
+  kind: AgentKind,
+  pair: string | undefined,
+  account: string,
+): Readonly<Record<string, string | number>> {
+  // The credits route credits an address. It is the *tenant's* opaque
+  // reference and never the person's email — SignalDesk has no business
+  // learning who anyone is.
+  return kind === "market_brief" ? { pair: pair ?? SUPPORTED_PAIR } : { account };
 }
 
 export function createRealOpsServer(config: RealOpsConfig): Server {
@@ -357,36 +376,98 @@ export function createRealOpsServer(config: RealOpsConfig): Server {
 
     if (method === "GET" && pathname === "/servicios") {
       const agents = await config.store.listAgents(account.id);
-      const signed: SignedMandateRow[] = [];
-      for (const agent of agents) {
-        if (agent.mandateId === null) continue;
-        const until = translatePermissions(agent.kind, agent.permissions, config.targets, agent.createdAt).grant
-          .validUntil;
-        signed.push({ label: agent.label, mandateId: agent.mandateId, validUntil: until });
+      const tenantId = agents.find((agent) => agent.tenantId !== null)?.tenantId ?? null;
+
+      // One call for everything this page shows. The numbers come from the
+      // same code that runs the authorisation (`@agentpey/activity`, C-81), so
+      // the figure a person reads is the figure a purchase is checked against.
+      let activity = null;
+      let activityError: string | undefined;
+      if (config.agentpey !== undefined && tenantId !== null) {
+        try {
+          activity = await config.agentpey.readActivity(tenantId);
+        } catch (error) {
+          activityError = messageFor(error);
+        }
       }
-      sendHtml(response, 200, servicesPage(account, signed));
+
+      sendHtml(response, 200, servicesPage({ account, activity, activityError, agents }));
       return;
     }
 
+    /**
+     * Ask for a purchase.
+     *
+     * Note the order and what it means: the instruction is read here, and the
+     * *only* thing that reading produces is a product kind and a quantity. The
+     * venue, the price, the asset and the payee are never taken from the
+     * sentence — they come from the signed Mandate and from the merchant's own
+     * invoice, on AgentPey's side. A misreading buys the wrong product; it
+     * cannot buy at the wrong place, for the wrong amount, or from the wrong
+     * account.
+     */
     if (method === "POST" && pathname === "/instruccion") {
       const form = await readForm(request);
       const chosen = agentKindSchema.safeParse(form.get("kind"));
+      const instruction = form.get("instruction") ?? "";
+
+      let kind: AgentKind;
+      let quantity = 1;
+      let pair: string | undefined;
       if (chosen.success) {
         // The fallback buttons: a kind chosen explicitly, with nothing guessed.
-        redirect(response, "/servicios");
+        kind = chosen.data;
+        pair = kind === "market_brief" ? SUPPORTED_PAIR : undefined;
+      } else {
+        try {
+          const read = interpretInstruction(instruction);
+          kind = read.kind;
+          quantity = read.quantity;
+          pair = read.pair;
+        } catch (error) {
+          if (isAgentPassError(error) && error.code === "InstructionNotUnderstood") {
+            sendHtml(response, 200, notRecognisedPage(error.message, String(error.details.instruction ?? "")));
+            return;
+          }
+          throw error;
+        }
+      }
+
+      const agents = await config.store.listAgents(account.id);
+      const agent = agents.find((candidate) => candidate.kind === kind && candidate.mandateId !== null);
+      if (agent === undefined || agent.tenantId === null) {
+        sendHtml(
+          response,
+          409,
+          errorPage(409, "No tenés un agente con permiso firmado para eso. Configurá uno y firmalo primero."),
+        );
         return;
       }
-      const instruction = form.get("instruction") ?? "";
-      try {
-        interpretInstruction(instruction);
-        redirect(response, "/servicios");
-      } catch (error) {
-        if (isAgentPassError(error) && error.code === "InstructionNotUnderstood") {
-          sendHtml(response, 200, notRecognisedPage(error.message, String(error.details.instruction ?? "")));
-          return;
-        }
-        throw error;
+      if (config.agentpey === undefined) {
+        sendHtml(response, 503, errorPage(503, "Esta instancia no está conectada a AgentPey todavía."));
+        return;
       }
+
+      try {
+        await config.agentpey.purchase({
+          tenantId: agent.tenantId,
+          venue: config.targets.venueId,
+          productId: config.targets.products[kind][0]!,
+          quantity,
+          routeParams: routeParamsFor(kind, pair, account.externalRef),
+          // A fresh key per request: this is a person asking for something new,
+          // not a retry. Re-asking is a second purchase, which is what they
+          // meant, and the daily limit is what stops it from being unbounded.
+          idempotencyKey: `buy-${agent.id}-${randomUUID()}`,
+        });
+      } catch (error) {
+        // A refusal is a `201` and lands on the page below. Reaching here means
+        // the request itself failed, which is a different thing and says so.
+        sendHtml(response, 502, errorPage(502, messageFor(error)));
+        return;
+      }
+
+      redirect(response, "/servicios");
       return;
     }
 
