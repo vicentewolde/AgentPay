@@ -71,6 +71,14 @@ export const partnerSchema = z.strictObject({
   id: partnerIdSchema,
   name: z.string().min(1).max(200),
   status: partnerStatusSchema,
+  /**
+   * Origins this partner may send a principal back to after signing (T81).
+   *
+   * Empty means "may not use `return_url` at all" — the fail-closed reading of
+   * an empty list this project has applied since `B-1`. Origins only: scheme,
+   * host and port, compared exactly.
+   */
+  returnOrigins: z.array(z.string()),
   createdAt: z.date(),
   updatedAt: z.date(),
 });
@@ -227,6 +235,14 @@ export const consentSessionRecordSchema = z.strictObject({
   grant: z.record(z.string(), z.unknown()),
   validFrom: z.date(),
   validUntil: z.date(),
+  /**
+   * Where the principal is sent after signing (T81), or `null`.
+   *
+   * Stored already validated: `requireAllowedReturnUrl` runs against the
+   * partner's registered origins before this row is written, so whatever
+   * renders the redirect can trust it without re-deriving the allowlist.
+   */
+  returnUrl: z.string().nullable(),
   /** Set once a principal signs — the Mandate this consent session produced. */
   mandateId: mandateIdSchema.nullable(),
   createdAt: z.date(),

@@ -37,6 +37,9 @@ const consentSession = {
   tenant_id: TENANT_ID,
   status: "pending",
   consent_url: "https://agentpay.test/consent/session-1",
+  // T81: the server always sends it, null when the partner asked for no
+  // redirect. Required-and-nullable, like the two fields around it.
+  return_url: null,
   mandate_id: null,
   created_at: "2026-09-10T00:00:00.000Z",
   expires_at: "2026-09-10T01:00:00.000Z",

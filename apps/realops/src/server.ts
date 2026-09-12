@@ -9,6 +9,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+import { createAgentPeyClient } from "./agentpey.js";
 import { createRealOpsServer, type MagicLinkDelivery } from "./app.js";
 import { createMemoryStore, EMAIL_RETENTION_DAYS, type RealOpsStore } from "./accounts.js";
 import { createPostgresStore, REALOPS_SCHEMA_SQL, sweepExpired, sweepStaleEmails, type SqlClient } from "./store-postgres.js";
@@ -109,8 +110,22 @@ const delivery: MagicLinkDelivery =
 
 const { store, client } = await buildStore();
 
+/**
+ * The only credential RealOps holds. Without it the screens still work and
+ * the sign button says so — a platform that cannot reach AgentPey is a
+ * platform that cannot get anything authorised, which is the correct
+ * failure.
+ */
+const partnerKey = env.get("REALOPS_AGENTPEY_API_KEY");
+const agentpeyBaseUrl = env.get("AGENTPEY_BASE_URL") ?? "https://agentpey-web.onrender.com";
+const agentpey =
+  partnerKey === undefined || partnerKey === ""
+    ? undefined
+    : createAgentPeyClient({ baseUrl: agentpeyBaseUrl, apiKey: partnerKey });
+
 const server = createRealOpsServer({
   store,
+  agentpey,
   targets,
   signalDeskUrl,
   baseUrl,
@@ -120,6 +135,11 @@ const server = createRealOpsServer({
 
 server.listen(port, () => {
   process.stdout.write(`RealOps · ${baseUrl} · magic links: ${delivery.mode}\n`);
+  process.stdout.write(
+    agentpey === undefined
+      ? "  (no REALOPS_AGENTPEY_API_KEY: signing is disabled)\n"
+      : `  AgentPey: ${agentpeyBaseUrl}\n`,
+  );
   if (delivery.mode === "onscreen") {
     process.stdout.write("  (no RESEND_API_KEY: links are shown on screen and email is NOT verified)\n");
   }

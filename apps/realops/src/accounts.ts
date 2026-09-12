@@ -195,6 +195,14 @@ export interface RealOpsStore {
   saveAgent(agent: AgentConfig): Promise<void>;
   listAgents(accountId: string): Promise<readonly AgentConfig[]>;
   findAgent(accountId: string, agentId: string): Promise<AgentConfig | undefined>;
+  /**
+   * Finds an agent by the consent session AgentPey minted for it.
+   *
+   * Scoped by account like every other read here: the return from signing
+   * arrives as a request from a browser, and a browser is never trusted to
+   * say whose agent it is talking about.
+   */
+  findAgentByConsentSession(accountId: string, consentSessionId: string): Promise<AgentConfig | undefined>;
 }
 
 export function newAccount(email: string, alias: string, now: Date = new Date()): Account {
@@ -287,6 +295,11 @@ export function createMemoryStore(): RealOpsStore {
     async findAgent(accountId, agentId) {
       const agent = agents.get(agentId);
       return agent?.accountId === accountId ? agent : undefined;
+    },
+    async findAgentByConsentSession(accountId, consentSessionId) {
+      return [...agents.values()].find(
+        (agent) => agent.accountId === accountId && agent.consentSessionId === consentSessionId,
+      );
     },
   };
 }

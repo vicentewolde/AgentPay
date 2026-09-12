@@ -148,3 +148,11 @@ services:
         value: USDC:CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
       - key: PILOT_PAY_TO
         value: GB4D4PLLFEIKZK6MDW42MZRQ5XMPC6QRJN4FFRODO6D3PRB3MDGGYOOF
+      # T81 — the partner key RealOps asks with. Mint it with
+      # `pnpm run partner:create`, and register this service's own origin as a
+      # return origin for that partner, or the signature flow is refused with
+      # ReturnUrlNotAllowed (which is the allowlist working, not a bug).
+      - key: REALOPS_AGENTPEY_API_KEY
+        sync: false
+      - key: AGENTPEY_BASE_URL
+        value: https://agentpey-web.onrender.com

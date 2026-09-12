@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T80 (RealOps) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T81 (retorno seguro + firma real) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -108,7 +108,15 @@ pantalla muestra **literalmente** el permiso que se va a firmar, con una marca
 por cada control diciendo quién lo hace cumplir: firmado, revalidado por el
 contrato en Stellar, o solamente de RealOps. Y el correo vive solo ahí:
 AgentPey identifica a la persona con un código aleatorio que no se calcula a
-partir de nada suyo (T80, `C-91` a `C-94`).
+partir de nada suyo (T80, `C-91` a `C-94`). Y las tres piezas ya están
+conectadas: desde RealOps se puede apretar "firmar", ir al sitio de AgentPey y
+volver — con la última brecha de seguridad del plan cerrada, que era justamente
+esa vuelta. Adónde se puede mandar a una persona después de firmar ahora es una
+lista que el partner registró de antemano, comparada por origen exacto y
+revisada al crear la invitación, no al redirigir. Sin eso, la página de
+consentimiento habría sido una redirección abierta alojada en el dominio de
+AgentPey, que es el lugar más creíble posible para tener una (T81, `C-95` y
+`C-96`).
 
 ### Progreso
 
@@ -158,6 +166,7 @@ partir de nada suyo (T80, `C-91` a `C-94`).
 | T78 | F9: descubrimiento público — adaptador sobre Periplo, índice propio sobre `venues.json` en `GET /discovery/search`, y fallback entre los dos | ✅ cerrado 2026-09-12 |
 | T79 | F9: SignalDesk, el comercio del piloto — dos productos, catálogo humano, `402`, entrega tras liquidar y recibo firmado verificable sin AgentPey | ✅ cerrado 2026-09-12 |
 | T80 | F9: RealOps, la plataforma de agentes — enlace mágico, permisos, las cinco pantallas, y el grant literal con quién hace cumplir cada permiso | ✅ cerrado 2026-09-12 |
+| T81 | F9: lista blanca de URLs de retorno por partner (la última brecha de seguridad del plan) + RealOps ↔ `/v1` hasta el Mandato firmado | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -3208,3 +3217,71 @@ la **lista blanca de URLs de retorno** (la fila 8 del modelo de amenazas, lo
 único de seguridad que F9 todavía no construyó), pedir la compra, llenar "Mis
 servicios" con entregas y rechazos, y la revocación. Después el despliegue
 público de los tres servicios y la suite de los diez casos de aceptación.
+
+---
+
+## T81 · El retorno seguro, y la firma de verdad — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras simples.**
+
+Ahora las tres piezas están conectadas. Desde RealOps apretás "Firmar en
+AgentPey", te lleva al sitio de AgentPey, conectás tu wallet, firmás, y volvés.
+Al volver, RealOps **le pregunta a AgentPey qué pasó** — no le cree al
+navegador — y recién si AgentPey dice que se completó, guarda tu Mandato y lo
+muestra en "Mis servicios".
+
+**Y se cerró la última brecha de seguridad que el plan tenía anotada sin
+construir.** Una firma termina con una redirección: la persona vuelve a algún
+lado. Si la plataforma pudiera decir "mandámela a cualquier parte", esa
+redirección viviría en el dominio de AgentPey — el lugar más creíble del mundo
+para una estafa, porque es exactamente adonde se le dijo a la persona que fuera
+a firmar.
+
+Ahora **cada plataforma registra de antemano a dónde se la puede mandar**, y se
+compara el origen exacto: ni parecidos, ni "empieza con", ni trucos. Hay
+pruebas para siete formas distintas de disfrazar un destino ajeno, incluida la
+clásica de esconder el dominio permitido en la parte de usuario de la URL.
+
+Dos detalles que no son de forma:
+
+- **Se revisa al crear la invitación, no al momento de redirigir.** Así el
+  integrador se entera mientras integra, y no una persona a mitad de una firma.
+- **La lista empieza vacía, y vacía no permite nada.** Toda plataforma que
+  existiera antes de hoy queda sin poder redirigir hasta que alguien registre
+  un destino a propósito.
+
+**Evidencia técnica.**
+
+- Esquema versión 8: `directory_partners.return_origins` (con `default '{}'`,
+  que es la lectura fail-closed de `B-1`) y
+  `directory_consent_sessions.return_url`.
+- Coincidencia por **origen exacto**, con pruebas para cuatro señuelos de host
+  parecido, credenciales embebidas, esquema y puerto distintos, `javascript:` y
+  `data:` (`C-95`).
+- La ruta **refuza antes de escribir**: la prueba cuenta las llamadas a
+  `createConsentSession` y exige que no hayan crecido.
+- La página de consent **nunca lee el retorno de su propia URL** — lo lee de la
+  sesión, donde se escribió ya validado.
+- El registro es un script de operador y **reemplaza** en vez de agregar: una
+  lista que solo crece es una de la que nadie puede sacar una entrada.
+- El cliente de RealOps tiene **cuatro llamadas, todas de pedir**, y ninguna
+  clave capaz de otorgar nada. El grant que manda es el mismo objeto que la
+  pantalla mostró, fijado por una prueba que compara el HTML visto con lo
+  enviado (`C-96`).
+- **1191 tests verdes** (eran 1164), `typecheck` y `build` limpios, OpenAPI
+  regenerado.
+
+**Tres defectos propios encontrados acá:** dos por leer las rutas reales en vez
+de asumirlas (el cliente tenía un camino de "ya existe" innecesario y apuntaba
+a una ruta de mandatos que no existe), y uno por un test — `GET /agentes/{id}`
+matcheaba por prefijo y se tragaba `/agentes/{id}/volver`. Ese último se
+arregló matcheando una forma de un solo segmento, no reordenando handlers: el
+arreglo por orden habría funcionado hasta que alguien moviera un bloque.
+
+**Decisiones nuevas:** `C-95` (la lista blanca de retorno), `C-96` (RealOps
+pasa el grant, no lo reconstruye).
+
+**Qué sigue.** **T82**: la compra desde RealOps — `POST /v1/purchases` con la
+instrucción interpretada, "Mis servicios" mostrando entregas y rechazos con su
+razón en castellano, y la revocación. Después el despliegue público de los tres
+servicios y la suite de los diez casos de aceptación.

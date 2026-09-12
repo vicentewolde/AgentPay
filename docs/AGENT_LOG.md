@@ -4631,3 +4631,87 @@ cuando se despliegue: `agentpey-realops` es un servicio nuevo en `render.yaml`
 y va a pedir `DATABASE_URL`; `RESEND_API_KEY` queda vacía hasta que exista el
 dominio. Sigue pendiente comprar `agentpey.com` y pagar la instancia Starter de
 `agentpey-web`.
+
+---
+
+## 2026-09-12 (18) — main / cc/t81-return-allowlist
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t80-realops` a `main` (fast-forward) con
+confirmación del usuario. Misma sesión, **T81**: la lista blanca de URLs de
+retorno y el cableado de RealOps con `/v1` hasta el Mandato firmado. Sin
+delegar nada a Codex.
+
+**La pieza de seguridad, que era la última fila sin construir del modelo de
+amenazas** (`PILOTO-F9.md` § 8, fila 8). Una consent session termina con una
+redirección; si el partner pudiera nombrar cualquier destino, la URL de consent
+sería una **redirección abierta alojada en el dominio de AgentPey** — el lugar
+más creíble posible para una, porque es exactamente adonde a la persona se le
+dijo que fuera a firmar. Ahora:
+
+- **Origen exacto**, nunca prefijo ni sufijo — misma regla que `C-85`. Pruebas
+  para cuatro señuelos de host parecido, credenciales embebidas
+  (`https://realops.example@attacker.test`), esquema y puerto distintos, y
+  `javascript:`/`data:`.
+- **Validado al crear la sesión, no al redirigir**: el integrador se entera
+  mientras integra, con `ReturnUrlNotAllowed` → `400`, y nada sin validar se
+  escribe nunca, así que lo que renderiza la redirección puede confiar en el
+  valor guardado.
+- **Lista vacía = no permite nada** (`B-1`). Todo partner anterior a T81 queda
+  sin poder redirigir hasta que alguien registre un origen a propósito.
+- **Script de operador, que reemplaza en vez de agregar**
+  (`pnpm run partner:return-origins`): un partner que editara su propia lista
+  blanca por la red derrotaría el propósito, y una lista que solo crece es una
+  de la que nadie puede sacar una entrada.
+- La página de consent **nunca lee el retorno de su propia URL** — lo lee de la
+  sesión. Ver `C-95`.
+
+Esquema versión 8: `directory_partners.return_origins text[] default '{}'` y
+`directory_consent_sessions.return_url text`.
+
+**El cableado**: `apps/realops/src/agentpey.ts`, cuatro llamadas, todas de
+pedir, sin ninguna clave capaz de otorgar nada. El grant que manda es el objeto
+que `translatePermissions` construyó y la pantalla mostró — hay una prueba que
+toma el HTML visto por la persona y exige que cada valor del grant enviado
+aparezca ahí. La invitación se indexa por agente, así que un doble clic la
+reutiliza. Y el retorno **no le cree al navegador**: le pregunta a AgentPey qué
+pasó, y encuentra la sesión desde el agente de esa cuenta (`C-96`).
+
+Verificado: **1191 tests** (eran 1164), `typecheck` y `build` limpios, OpenAPI
+regenerado con `return_url` en el request y en el recurso.
+
+**Tres defectos propios, todos encontrados corriendo o leyendo, no suponiendo:**
+el cliente tenía un camino de "ya existe → leer de vuelta" para el tenant que
+sobra (`POST /v1/tenants` ya responde `200` con el existente); apuntaba a
+`/v1/tenants/{id}/mandates`, que no existe (es `GET /v1/mandates?tenant_id=`);
+y `GET /agentes/{id}` matcheaba por prefijo, tragándose
+`/agentes/{id}/volver` — arreglado matcheando una forma de un solo segmento y
+no reordenando handlers, porque el arreglo por orden aguanta hasta que alguien
+mueve un bloque.
+
+**Nota de contrato:** `return_url` es requerido-y-nullable en el recurso, igual
+que `consent_url` y `mandate_id`. Eso rompió dos fixtures del
+`@agentpey/partner-sdk`, que simulan un servidor y no lo mandaban — arreglados.
+Es aditivo para un consumidor real: el servidor siempre lo manda.
+
+Documentación tocada: `DECISIONES.md` (`C-95`, `C-96`), `BITACORA.md` (hito T81
++ tabla + estado actual), `evidencia/T81.md` (nuevo), `docs/api/openapi.yaml`
+(regenerado). Archivos de código: `packages/partner-api/src/return-urls.ts`
+(nuevo, + test) e `index.ts`, `packages/partner-api/src/resources/consent-sessions.ts`,
+`packages/directory/src/{entities,schema-sql,directory}.ts`,
+`packages/core/src/errors.ts`, `apps/web/src/{partner-routes,server}.ts`
+(+ tests), `apps/web/public/consent.html`, `apps/realops/src/{agentpey,app,
+pages,accounts,store-postgres,server}.ts` (+ `signing.test.ts`),
+`scripts/partner-return-origins.ts` (nuevo), `.env.example`, `render.yaml`,
+`package.json`, y fixtures de `partner-sdk`.
+
+Pendiente: **mergear `cc/t81-return-allowlist`** (espera confirmación).
+Siguiente hito **T82**: la compra desde RealOps —`POST /v1/purchases` con la
+instrucción interpretada, "Mis servicios" con entregas y rechazos en
+castellano, y la revocación—. Del lado del usuario, para el despliegue: hay que
+correr `pnpm run partner:create` para RealOps, cargar esa key como
+`REALOPS_AGENTPEY_API_KEY` en Render, y **registrar el origen de RealOps** con
+`pnpm run partner:return-origins`, o la firma se refuza con
+`ReturnUrlNotAllowed` (que es la lista funcionando, no un bug). Sigue pendiente
+comprar `agentpey.com` y pagar la instancia Starter de `agentpey-web`.

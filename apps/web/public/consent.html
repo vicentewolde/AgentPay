@@ -148,6 +148,7 @@
     <h2>Mandato anclado</h2>
     <p class="notice">Tu consentimiento fue firmado y anclado correctamente en Stellar Testnet.</p>
     <dl id="success-facts" class="result"></dl>
+    <p id="return-row" hidden><a id="return-link" class="button">Volver</a></p>
   </section>
 </main>
 
@@ -156,6 +157,16 @@ var TESTNET_PASSPHRASE = "Test SDF Network ; September 2015";
 var consentId = "";
 var consentPath = "";
 var walletAddress = "";
+/**
+ * Where to send the person after they sign, or "" for nowhere.
+ *
+ * Never read from the URL of this page, and never from anything the browser
+ * can influence: it comes from the consent session, where it was written only
+ * after being checked against the partner's registered origins (T81). A page
+ * that took its redirect from its own query string would be the open redirect
+ * the allowlist exists to prevent.
+ */
+var returnUrl = "";
 
 async function api(path, options) {
   const res = await fetch(path, options);
@@ -267,6 +278,13 @@ function renderSuccess(anchored) {
   document.getElementById("wallet-panel").hidden = true;
   document.getElementById("sign-panel").hidden = true;
   document.getElementById("success-panel").hidden = false;
+
+  if (returnUrl) {
+    var link = document.getElementById("return-link");
+    link.href = returnUrl;
+    link.textContent = "Volver a " + new URL(returnUrl).host;
+    document.getElementById("return-row").hidden = false;
+  }
 }
 
 async function connectWallet() {
@@ -387,6 +405,8 @@ async function loadConsentSession() {
     consentPath = "/api/consent/" + encodeURIComponent(consentId);
     const { body: session } = await api(consentPath);
     if (!session.ok) throw { body: session };
+
+    returnUrl = typeof session.returnUrl === "string" ? session.returnUrl : "";
 
     renderGrant(session);
     document.getElementById("grant-panel").hidden = false;

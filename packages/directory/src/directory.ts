@@ -186,6 +186,12 @@ export interface CreateConsentSessionInput {
   readonly validUntil: Date;
   /** The invitation link's own window — distinct from `validUntil`, the resulting Mandate's window. */
   readonly expiresAt: Date;
+  /**
+   * Already checked against the partner's registered origins by the route.
+   * This package stores it; it does not judge it — the same posture it takes
+   * with `grant`.
+   */
+  readonly returnUrl?: string | null;
 }
 
 export interface CreatePurchaseInput {
@@ -221,6 +227,9 @@ function toPartner(row: Record<string, unknown>): Partner {
     id: row.id,
     name: row.name,
     status: row.status,
+    // Postgres hands back a real array for `text[]`; the default is `'{}'`,
+    // so a partner registered before T81 reads as "may not redirect anywhere".
+    returnOrigins: row.return_origins ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -367,6 +376,7 @@ function toConsentSession(row: Record<string, unknown>): ConsentSessionRecord {
     grant: row.proposed_grant,
     validFrom: row.valid_from,
     validUntil: row.valid_until,
+    returnUrl: row.return_url ?? null,
     mandateId: row.mandate_id,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
@@ -379,6 +389,12 @@ export interface Directory {
   createPartner(input: { readonly name: string }): Promise<Partner>;
   findPartner(id: string): Promise<Partner | undefined>;
   setPartnerStatus(id: string, status: PartnerStatus): Promise<Partner>;
+  /**
+   * Replaces this partner's allowed return origins (T81). Replaces rather than
+   * appends: an allowlist that only ever grows is one nobody can take an
+   * entry out of, and removing a compromised origin has to be possible.
+   */
+  setPartnerReturnOrigins(id: string, origins: readonly string[]): Promise<Partner>;
 
   issueApiKey(input: { readonly partnerId: string; readonly name: string; readonly scopes: readonly string[] }): Promise<IssuedApiKey>;
   /** Constant-time lookup by secret. `undefined` for unknown or revoked. */
@@ -530,6 +546,18 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
 
     findPartner(id) {
       return one("select * from directory_partners where id = $1", [id], toPartner);
+    },
+
+    async setPartnerReturnOrigins(id, origins) {
+      const row = await one(
+        "update directory_partners set return_origins = $2, updated_at = now() where id = $1 returning *",
+        [id, [...origins]],
+        toPartner,
+      );
+      if (row === undefined) {
+        throw new AgentPassError("PartnerNotFound", `no partner with id "${id}"`, { details: { partnerId: id } });
+      }
+      return row;
     },
 
     async setPartnerStatus(id, status) {
@@ -1023,9 +1051,17 @@ export async function createDirectory(options: DirectoryOptions): Promise<Direct
       const id = newId("consentSession");
       const row = await one(
         `insert into directory_consent_sessions
-           (id, tenant_id, status, proposed_grant, valid_from, valid_until, expires_at)
-         values ($1, $2, 'pending', $3, $4, $5, $6) returning *`,
-        [id, input.tenantId, JSON.stringify(input.grant), input.validFrom, input.validUntil, input.expiresAt],
+           (id, tenant_id, status, proposed_grant, valid_from, valid_until, expires_at, return_url)
+         values ($1, $2, 'pending', $3, $4, $5, $6, $7) returning *`,
+        [
+          id,
+          input.tenantId,
+          JSON.stringify(input.grant),
+          input.validFrom,
+          input.validUntil,
+          input.expiresAt,
+          input.returnUrl ?? null,
+        ],
         toConsentSession,
       );
       if (row === undefined) throw wrap("inserting a consent session returned no row", undefined, { consentSessionId: id });

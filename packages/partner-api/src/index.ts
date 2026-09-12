@@ -30,6 +30,12 @@ export {
 export { errorEnvelopeSchema, successEnvelope, toErrorEnvelope, type ErrorEnvelope } from "./envelope.js";
 
 export {
+  requireAllowedReturnUrl,
+  returnOriginSchema,
+  returnOriginsSchema,
+} from "./return-urls.js";
+
+export {
   signWebhookPayload,
   verifyWebhookSignature,
   webhookEventSchema,

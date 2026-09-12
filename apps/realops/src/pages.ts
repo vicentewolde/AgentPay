@@ -287,13 +287,36 @@ export function reviewPage(agent: AgentConfig, grant: ProposedGrant, controls: r
   <div class="card">
     <p><strong>La firma ocurre en el sitio de AgentPey, no acá.</strong> Si alguna vez ves una pantalla
     pidiéndote firmar un Mandato en el dominio de RealOps, no es nuestra.</p>
-    <p><em>Conectar la wallet y firmar se habilita en el próximo hito (T81).</em></p>
+    ${signState(agent)}
   </div>
 `,
   });
 }
 
-export function servicesPage(account: Account): string {
+/** What the review card offers, given how far this agent has got. */
+function signState(agent: AgentConfig): string {
+  if (agent.mandateId !== null) {
+    return `<p>✓ Firmado. Mandato <code>${escape(agent.mandateId)}</code>.</p>
+    <p><a href="/servicios">Ir a Mis servicios</a></p>`;
+  }
+  if (agent.consentSessionId !== null) {
+    return `<p>Ya empezaste a firmar este permiso y no terminaste, o la invitación venció.</p>
+    <form method="post" action="/agentes/${escape(agent.id)}/firmar"><button type="submit">Reintentar la firma</button></form>`;
+  }
+  return `<form method="post" action="/agentes/${escape(agent.id)}/firmar">
+      <button type="submit">Firmar en AgentPey</button>
+    </form>
+    <p style="color:var(--muted);font-size:.88rem">Te vamos a llevar al sitio de AgentPey para que conectes
+    tu wallet y firmes. Cuando termines, volvés acá.</p>`;
+}
+
+export interface SignedMandateRow {
+  readonly label: string;
+  readonly mandateId: string;
+  readonly validUntil: string;
+}
+
+export function servicesPage(account: Account, mandates: readonly SignedMandateRow[] = []): string {
   return layout({
     title: "Mis servicios",
     signedIn: true,
@@ -302,10 +325,26 @@ export function servicesPage(account: Account): string {
   <p class="lede">Acá van a aparecer las entregas —con su recibo, su <code>delivery_id</code> y el enlace a
   la transacción en Stellar— y también los intentos rechazados, con su razón.</p>
   <div class="card">
-    <p><em>Se llena en T81, cuando RealOps empiece a pedirle compras a AgentPey.</em></p>
+    <p><em>Las compras se habilitan en el próximo hito.</em></p>
     <p style="color:var(--muted);font-size:.9rem">Un rechazo no es una ausencia: se guarda igual que una
     compra, para que "¿por qué mi agente no compró esto?" tenga respuesta.</p>
   </div>
+
+  <h2>Permisos firmados</h2>
+  ${
+    mandates.length === 0
+      ? '<p class="card">Todavía no firmaste ningún permiso.</p>'
+      : `<table class="card" style="padding:.4rem .6rem">
+    <thead><tr><th>Agente</th><th>Mandato</th><th>Vence</th></tr></thead>
+    <tbody>
+      ${mandates
+        .map(
+          (row) => `<tr><td>${escape(row.label)}</td><td><code>${escape(row.mandateId)}</code></td><td>${escape(row.validUntil)}</td></tr>`,
+        )
+        .join("\n      ")}
+    </tbody>
+  </table>`
+  }
 
   <h2>Tu cuenta</h2>
   <div class="card">

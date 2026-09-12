@@ -24,7 +24,7 @@
  */
 
 /** Bumped when the layout changes incompatibly. Mirrors the contracts' own convention. */
-export const DIRECTORY_SCHEMA_VERSION = 7;
+export const DIRECTORY_SCHEMA_VERSION = 8;
 
 export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   `create sequence if not exists directory_key_index_seq as bigint start with 0 minvalue 0`,
@@ -242,4 +242,25 @@ export const DIRECTORY_SCHEMA_SQL: readonly string[] = [
   // claim and is funded on the next attempt, and a rail that spent its
   // balance down to zero is never mistaken for one that was never funded.
   `alter table directory_agents add column if not exists policy_rail_funded_at timestamptz`,
+
+  // Schema version 8 (T81/F9): where a partner may send a principal back to
+  // after they sign, and where a given session actually sends them.
+  //
+  // This closes the last security gap `PILOTO-F9.md` § 8 listed as unbuilt
+  // (row 8, open redirect). A consent session ends with a redirect; if the
+  // partner could name any destination, the consent URL would be an open
+  // redirect hosted on AgentPey's own domain — the single most credible place
+  // for one, because it is exactly where the person was told to go and sign.
+  //
+  // The default of `'{}'` is not a placeholder: an empty list means this
+  // partner may not supply a `return_url` at all. That is the fail-closed
+  // reading of an empty list this project has used since `B-1`, and it means
+  // every partner that existed before this column is, correctly, not allowed
+  // to redirect anywhere until someone registers an origin on purpose.
+  `alter table directory_partners add column if not exists return_origins text[] not null default '{}'`,
+
+  // Validated against that list when the session is created, so whatever
+  // renders the redirect can trust the stored value without re-deriving the
+  // allowlist. Null means "no redirect": the person stays on AgentPey.
+  `alter table directory_consent_sessions add column if not exists return_url text`,
 ];

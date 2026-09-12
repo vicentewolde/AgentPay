@@ -32,6 +32,16 @@ export const createConsentSessionRequestSchema = z.strictObject({
   /** Defaults to now, same as `@agentpey/mandate`'s `createMandate`. */
   valid_from: z.iso.datetime().optional(),
   valid_until: z.iso.datetime(),
+  /**
+   * Where to send the principal once they have signed (T81).
+   *
+   * Only a URL whose **origin** the partner registered in advance is accepted,
+   * and the check runs here, when the session is created — see
+   * `return-urls.ts` for why it is an allowlist and not a parameter. A shape
+   * check is all this schema does; the allowlist lives with the partner's own
+   * data and is applied by the route.
+   */
+  return_url: z.url().max(2048).optional(),
 });
 
 export type CreateConsentSessionRequest = z.infer<typeof createConsentSessionRequestSchema>;
@@ -42,6 +52,8 @@ export const consentSessionResourceSchema = z.strictObject({
   status: consentSessionStatusSchema,
   /** The page to redirect the principal to. Present only while `"pending"`. */
   consent_url: z.url().nullable(),
+  /** Where the principal is sent after signing, if the partner asked for one and it was allowed. */
+  return_url: z.url().nullable(),
   /** Set once the principal signs and the Mandate is anchored. */
   mandate_id: mandateIdSchema.nullable(),
   created_at: z.iso.datetime(),
@@ -82,6 +94,7 @@ export function toConsentSessionResource(
     tenant_id: session.tenantId,
     status,
     consent_url: status === "pending" ? consentUrl : null,
+    return_url: session.returnUrl,
     mandate_id: session.mandateId,
     created_at: session.createdAt.toISOString(),
     expires_at: session.expiresAt.toISOString(),

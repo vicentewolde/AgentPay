@@ -60,6 +60,10 @@ describe("consentSessionResourceSchema", () => {
       tenant_id: tenantId,
       status: "pending",
       consent_url: "https://agentpay.example/consent/abc",
+      // T81: always present in a response, null when the partner asked for no
+      // redirect — the same required-but-nullable shape the two fields around
+      // it already use.
+      return_url: null,
       mandate_id: null,
       created_at: "2026-09-10T00:00:00.000Z",
       expires_at: "2026-09-10T01:00:00.000Z",
@@ -76,6 +80,7 @@ function fakeSession(overrides: Partial<ConsentSessionRecord> = {}): ConsentSess
     grant: validGrant,
     validFrom: new Date("2026-09-10T00:00:00.000Z"),
     validUntil: new Date("2026-12-01T00:00:00.000Z"),
+    returnUrl: null,
     mandateId: null,
     createdAt: new Date("2026-09-10T00:00:00.000Z"),
     expiresAt: new Date("2026-09-10T01:00:00.000Z"),

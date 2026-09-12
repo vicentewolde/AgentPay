@@ -3648,3 +3648,90 @@ raíces por prefijo, con las palabras de dos letras (`ia`, `ai`) en coincidencia
 exacta — una regla de prefijo sobre esas reclamaría media lengua, y un
 vocabulario que matchea de más deja de rechazar, que es el mismo fallo que uno
 que matchea de menos.
+
+---
+
+### C-95 · T81: la URL de retorno es una lista blanca por partner, validada al crear la sesión · `Vigente`
+**Fecha:** 2026-09-12
+
+La última fila del modelo de amenazas de `PILOTO-F9.md` § 8 que seguía sin
+construir (fila 8, redirección abierta).
+
+**Por qué importa más de lo que parece.** Una consent session termina con una
+redirección. Si el partner pudiera nombrar cualquier destino, la URL de consent
+se convierte en una **redirección abierta alojada en el dominio de AgentPey** —
+el lugar más creíble posible para tener una, porque es exactamente adonde a la
+persona se le dijo que fuera a firmar.
+
+**La regla: el origen de la URL de retorno tiene que ser uno que el partner
+registró de antemano.** No un patrón, no un prefijo, no un sufijo: un **origen**
+comparado exacto. Es la misma regla que `resolveCandidateVenue` aplica a un
+venue (`C-85`) y por la misma razón — una comparación por prefijo es cómo
+`https://realops.example.attacker.test` termina aceptado como
+`https://realops.example`. Hay pruebas dedicadas para cuatro señuelos distintos
+de host parecido, para el truco de meter el host permitido en las credenciales
+(`https://realops.example@attacker.test`), para esquema y puerto distintos, y
+para `javascript:` y `data:`.
+
+**Se valida al crear la sesión, no al redirigir.** Dos razones, y la segunda
+pesa más: el integrador se entera mientras integra, con un error tipado
+(`ReturnUrlNotAllowed`, `400`), en vez de que una persona lo descubra a mitad de
+una firma; y como nada sin validar se escribe nunca, lo que renderiza la
+redirección puede confiar en el valor guardado sin volver a derivar la lista.
+
+**La lista empieza vacía y una lista vacía no permite nada** — la lectura
+fail-closed de `B-1` otra vez. En concreto: todo partner que existía antes de
+T81 queda, correctamente, sin poder redirigir a ningún lado hasta que alguien
+registre un origen a propósito.
+
+**Se registra con un script de operador**, no por API: un partner que pudiera
+editar su propia lista blanca por la red derrotaría el propósito de tenerla.
+`pnpm run partner:return-origins` **reemplaza** en vez de agregar — una lista
+que solo crece es una de la que nadie puede sacar una entrada, y sacar un origen
+comprometido tiene que ser posible.
+
+**La página de consent nunca lee el retorno de su propia URL.** Lo lee de la
+sesión, donde se escribió ya validado. Una página que tomara su redirección de
+su propio query string sería exactamente la redirección abierta que esto
+previene.
+
+Esquema versión 8: `directory_partners.return_origins text[] default '{}'` y
+`directory_consent_sessions.return_url text`.
+
+---
+
+### C-96 · T81: RealOps pasa el grant, no lo reconstruye · `Vigente`
+**Fecha:** 2026-09-12
+
+`apps/realops/src/agentpey.ts` es todo lo que RealOps puede hacerle al sistema
+de pagos: **cuatro llamadas**, todas de pedir (crear tenant, crear consent
+session, leerla, listar mandatos). No hay ninguna clave en ese archivo que
+pudiera otorgar algo. Leerlo es la forma más rápida de comprobar la afirmación
+sobre la que se apoya el piloto.
+
+**El grant que se manda es el que `translatePermissions` construyó y la
+pantalla mostró.** No se recalcula acá. Una segunda construcción sería una
+segunda cosa que puede separarse de la primera, y la prueba lo fija: toma el
+HTML que vio la persona y exige que cada valor del grant enviado aparezca en
+esa página.
+
+**La invitación se indexa por agente** (`Idempotency-Key: consent-<agentId>`),
+así que un doble clic reutiliza la invitación en vez de acuñar una segunda para
+el mismo permiso.
+
+**El retorno no le cree al navegador.** Cuando la persona vuelve, RealOps le
+pregunta a AgentPey qué pasó con la sesión, y encuentra esa sesión desde el
+agente *de esa cuenta*, nunca desde un parámetro. Un `mandate_id` solo se
+guarda si AgentPey dice que la sesión se completó.
+
+**Dos errores propios, encontrados leyendo las rutas reales en vez de
+asumirlas:** el cliente tenía un camino de "ya existe → leer de vuelta" para el
+tenant que no hacía falta (`POST /v1/tenants` ya responde `200` con el tenant
+existente) y apuntaba a `/v1/tenants/{id}/mandates`, que no existe — los
+mandatos se listan con `GET /v1/mandates?tenant_id=`. Los dos habrían fallado
+recién contra el servidor real.
+
+**Y un tercero, encontrado por un test:** la ruta `GET /agentes/{id}` matcheaba
+por prefijo, así que se tragaba `/agentes/{id}/volver` antes de que su handler
+lo viera. Ahora matchea una forma de un solo segmento, que no depende del orden
+en que estén escritos los handlers.

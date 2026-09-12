@@ -38,6 +38,7 @@ import {
   type Account,
   type RealOpsStore,
 } from "./accounts.js";
+import type { AgentPeyClient } from "./agentpey.js";
 import { interpretInstruction } from "./instruction.js";
 import {
   agentsPage,
@@ -48,6 +49,7 @@ import {
   reviewPage,
   servicesPage,
   signInPage,
+  type SignedMandateRow,
 } from "./pages.js";
 import { translatePermissions, type PilotTargets } from "./permissions.js";
 
@@ -71,6 +73,14 @@ export interface MagicLinkDelivery {
 
 export interface RealOpsConfig {
   readonly store: RealOpsStore;
+  /**
+   * AgentPey's `/v1`, or `undefined` to run the UI with no platform behind it.
+   *
+   * Optional on purpose: the screens, the sign-in flow and the review page are
+   * worth being able to open without a database, an API key or a network — and
+   * a missing client produces a clear message, not a crash.
+   */
+  readonly agentpey?: AgentPeyClient;
   readonly targets: PilotTargets;
   readonly signalDeskUrl: string;
   /** This service's own origin, for building magic links. */
@@ -117,6 +127,15 @@ async function readForm(request: IncomingMessage): Promise<URLSearchParams> {
     chunks.push(chunk as Buffer);
   }
   return new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+}
+
+/** A message a person can read, from whatever went wrong talking to AgentPey. */
+function messageFor(error: unknown): string {
+  if (isAgentPassError(error)) {
+    const code = typeof error.details.code === "string" ? error.details.code : error.code;
+    return `AgentPey no aceptó la petición (${code}): ${error.message}`;
+  }
+  return "No pudimos hablar con AgentPey. Probá de nuevo en un momento.";
 }
 
 export function createRealOpsServer(config: RealOpsConfig): Server {
@@ -244,8 +263,12 @@ export function createRealOpsServer(config: RealOpsConfig): Server {
       return;
     }
 
-    if (method === "GET" && pathname.startsWith("/agentes/")) {
-      const agentId = pathname.slice("/agentes/".length);
+    // One segment only. `startsWith` alone also matched `/agentes/{id}/volver`
+    // and swallowed it before the handler below could see it — found by a
+    // test, and the reason this matches a shape instead of a prefix.
+    const agentMatch = /^\/agentes\/([^/]+)$/.exec(pathname);
+    if (method === "GET" && agentMatch?.[1] !== undefined) {
+      const agentId = agentMatch[1];
       // Scoped to this account: another person's agent is a 404, not a 403 —
       // the same posture `/v1` takes, so an id cannot be probed for existence.
       const agent = await config.store.findAgent(account.id, agentId);
@@ -258,8 +281,90 @@ export function createRealOpsServer(config: RealOpsConfig): Server {
       return;
     }
 
+    /**
+     * Start signing: make sure AgentPey has a tenant for this account, propose
+     * the grant, and send the person to AgentPey's own consent page.
+     *
+     * The grant sent is the one `translatePermissions` built — the same object
+     * the review screen rendered. Nothing is recomputed here, so the screen and
+     * the request cannot say different things.
+     */
+    if (method === "POST" && pathname.startsWith("/agentes/") && pathname.endsWith("/firmar")) {
+      const agentId = pathname.slice("/agentes/".length, -"/firmar".length);
+      const agent = await config.store.findAgent(account.id, agentId);
+      if (agent === undefined) {
+        sendHtml(response, 404, errorPage(404, "No existe ese agente."));
+        return;
+      }
+      if (config.agentpey === undefined) {
+        sendHtml(response, 503, errorPage(503, "Esta instancia no está conectada a AgentPey todavía."));
+        return;
+      }
+
+      try {
+        const tenant = await config.agentpey.ensureTenant(account.externalRef);
+        const { grant } = translatePermissions(agent.kind, agent.permissions, config.targets, now());
+        const session = await config.agentpey.createConsentSession({
+          tenantId: tenant.id,
+          grant,
+          // Where AgentPey sends them back to. It only works because this
+          // origin is registered for this partner — see `return-urls.ts`.
+          returnUrl: `${config.baseUrl.replace(/\/+$/, "")}/agentes/${agent.id}/volver`,
+          // Keyed on the agent, so a double click reuses the invitation
+          // instead of minting a second one for the same permission.
+          idempotencyKey: `consent-${agent.id}`,
+        });
+
+        await config.store.saveAgent({ ...agent, tenantId: tenant.id, consentSessionId: session.id });
+
+        if (session.consent_url === null) {
+          sendHtml(response, 409, errorPage(409, "Esa invitación ya no está disponible. Probá de nuevo."));
+          return;
+        }
+        redirect(response, session.consent_url);
+      } catch (error) {
+        sendHtml(response, 502, errorPage(502, messageFor(error)));
+      }
+      return;
+    }
+
+    /**
+     * The return from signing. Nothing here believes the browser: it asks
+     * AgentPey what actually happened to the session, and the session is found
+     * from *this account's* own agent, never from a parameter.
+     */
+    if (method === "GET" && pathname.startsWith("/agentes/") && pathname.endsWith("/volver")) {
+      const agentId = pathname.slice("/agentes/".length, -"/volver".length);
+      const agent = await config.store.findAgent(account.id, agentId);
+      if (agent === undefined || agent.consentSessionId === null) {
+        sendHtml(response, 404, errorPage(404, "No hay ninguna firma pendiente para ese agente."));
+        return;
+      }
+      if (config.agentpey !== undefined) {
+        try {
+          const session = await config.agentpey.readConsentSession(agent.consentSessionId);
+          if (session.status === "completed" && session.mandate_id !== null) {
+            await config.store.saveAgent({ ...agent, mandateId: session.mandate_id });
+          }
+        } catch {
+          // A read that failed is not a reason to lose the page: the review
+          // screen below shows whatever state is actually stored.
+        }
+      }
+      redirect(response, `/agentes/${agent.id}`);
+      return;
+    }
+
     if (method === "GET" && pathname === "/servicios") {
-      sendHtml(response, 200, servicesPage(account));
+      const agents = await config.store.listAgents(account.id);
+      const signed: SignedMandateRow[] = [];
+      for (const agent of agents) {
+        if (agent.mandateId === null) continue;
+        const until = translatePermissions(agent.kind, agent.permissions, config.targets, agent.createdAt).grant
+          .validUntil;
+        signed.push({ label: agent.label, mandateId: agent.mandateId, validUntil: until });
+      }
+      sendHtml(response, 200, servicesPage(account, signed));
       return;
     }
 

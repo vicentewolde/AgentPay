@@ -21,6 +21,7 @@ import {
   createConsentSessionRequestSchema,
   createTenantRequestSchema,
   hashRequestBody,
+  requireAllowedReturnUrl,
   resolveIdempotency,
   successEnvelope,
   toAgentResource,
@@ -50,6 +51,9 @@ export type PartnerRoutesDirectory = Pick<
   | "recordIdempotentResponse"
   | "createConsentSession"
   | "findConsentSession"
+  // T81: the return-URL allowlist is the partner's own data, so the route
+  // reads the partner to apply it.
+  | "findPartner"
 >;
 
 /**
@@ -138,6 +142,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   ConsentSessionNotFound: 404,
   ConsentSessionExpired: 410,
   ConsentSessionAlreadyCompleted: 409,
+  /** T81: the partner asked to redirect somewhere it never registered. Their mistake, not ours. */
+  ReturnUrlNotAllowed: 400,
   PurchaseNotFound: 404,
   /**
    * T73 froze the execution routes before T75 implements them. `501` and not
@@ -307,12 +313,29 @@ async function handleCreateConsentSession(input: PartnerRouteRequest, now: Date)
     await requireOwnedTenant(input.directory, request.tenant_id, auth.partnerId);
 
     const validFrom = request.valid_from === undefined ? now : new Date(request.valid_from);
+
+    // T81: checked here, when the session is created, and not when the
+    // redirect happens. The integrator finds out while integrating, with a
+    // typed error; and nothing unvalidated is ever written, so whatever
+    // renders the redirect can trust the stored value.
+    let returnUrl: string | null = null;
+    if (request.return_url !== undefined) {
+      const partner = await input.directory.findPartner(auth.partnerId);
+      if (partner === undefined) {
+        throw new AgentPassError("PartnerNotFound", `no partner with id "${auth.partnerId}"`, {
+          details: { partnerId: auth.partnerId },
+        });
+      }
+      returnUrl = requireAllowedReturnUrl(request.return_url, partner.returnOrigins);
+    }
+
     const session = await input.directory.createConsentSession({
       tenantId: request.tenant_id,
       grant: request.grant,
       validFrom,
       validUntil: new Date(request.valid_until),
       expiresAt: new Date(now.getTime() + CONSENT_SESSION_TTL_MS),
+      returnUrl,
     });
 
     const consentUrl = `${input.baseUrl}/consent/${session.id}`;

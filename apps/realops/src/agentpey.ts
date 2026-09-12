@@ -1,0 +1,163 @@
+/**
+ * RealOps' client for AgentPey's `/v1` — the entirety of what this platform
+ * can do to the payment system.
+ *
+ * Reading this file is the fastest way to check the claim the pilot rests on.
+ * There are four calls: create a tenant, create a consent session, read a
+ * consent session, list mandates. Every one of them **asks**. None of them
+ * grants anything, and there is no key here that could.
+ *
+ * **The grant is passed through, not rebuilt.** `translatePermissions` produced
+ * the object the review screen displayed; this sends that same object. A second
+ * construction here would be a second thing to drift.
+ *
+ * **And AgentPey does not take it on faith either.** It re-resolves the venue
+ * against its own `venues.json`, asks the merchant for the invoice itself, and
+ * compares everything against what the person actually signed. The worst a
+ * broken or hostile RealOps can do through this file is propose a grant nobody
+ * signs, or ask for a purchase that gets refused.
+ */
+import { AgentPassError } from "@agentpass/core";
+
+import type { ProposedGrant } from "./permissions.js";
+
+export interface AgentPeyConfig {
+  readonly baseUrl: string;
+  /** The partner API key. The only credential RealOps holds. */
+  readonly apiKey: string;
+  readonly fetchImpl?: typeof fetch;
+  readonly timeoutMs?: number;
+}
+
+export interface TenantResource {
+  readonly id: string;
+  readonly external_ref: string;
+}
+
+export interface ConsentSessionResource {
+  readonly id: string;
+  readonly status: "pending" | "completed" | "expired" | "cancelled";
+  readonly consent_url: string | null;
+  readonly return_url: string | null;
+  readonly mandate_id: string | null;
+  readonly expires_at: string;
+}
+
+export interface MandateResource {
+  readonly id: string;
+  readonly status: string;
+  readonly valid_until: string;
+}
+
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+function failed(message: string, details: Record<string, unknown>, cause?: unknown): AgentPassError {
+  return new AgentPassError("NetworkError", message, { cause, details });
+}
+
+export interface AgentPeyClient {
+  /**
+   * The tenant for this account, created on first use.
+   *
+   * Safe to call on every request: `external_ref` is unique per partner and
+   * `POST /v1/tenants` answers `200` with the existing tenant when the same
+   * reference is asserted again. That matters because this runs behind a
+   * person clicking a button twice.
+   */
+  ensureTenant(externalRef: string): Promise<TenantResource>;
+  createConsentSession(input: {
+    readonly tenantId: string;
+    readonly grant: ProposedGrant;
+    readonly returnUrl: string;
+    readonly idempotencyKey: string;
+  }): Promise<ConsentSessionResource>;
+  readConsentSession(id: string): Promise<ConsentSessionResource>;
+  listMandates(tenantId: string): Promise<readonly MandateResource[]>;
+}
+
+export function createAgentPeyClient(config: AgentPeyConfig): AgentPeyClient {
+  const baseUrl = config.baseUrl.replace(/\/+$/, "");
+  const fetchImpl = config.fetchImpl ?? fetch;
+  const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  async function call<T>(
+    method: string,
+    path: string,
+    options: { readonly body?: unknown; readonly idempotencyKey?: string } = {},
+  ): Promise<{ readonly status: number; readonly body: unknown }> {
+    const headers: Record<string, string> = { authorization: `Bearer ${config.apiKey}` };
+    if (options.body !== undefined) headers["content-type"] = "application/json";
+    if (options.idempotencyKey !== undefined) headers["idempotency-key"] = options.idempotencyKey;
+
+    let response: Response;
+    try {
+      response = await fetchImpl(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (error) {
+      throw failed("no se pudo hablar con AgentPey", { path }, error);
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = await response.json();
+    } catch (error) {
+      throw failed("AgentPey no respondió JSON", { path, status: response.status }, error);
+    }
+    return { status: response.status, body: parsed };
+  }
+
+  /** Unwraps `/v1`'s envelope, turning `{ ok: false, code }` into a typed error. */
+  function unwrap<T>(result: { readonly status: number; readonly body: unknown }, path: string): T {
+    const body = result.body as { ok?: boolean; data?: T; code?: string; message?: string };
+    if (body.ok === true && body.data !== undefined) return body.data;
+    throw new AgentPassError("CommandFailed", body.message ?? "AgentPey rechazó la petición", {
+      // The code is carried through unchanged: a refusal is only useful to the
+      // person if the reason survives the hop.
+      details: { path, status: result.status, code: body.code ?? "unknown" },
+    });
+  }
+
+  return {
+    async ensureTenant(externalRef) {
+      // One call, and no branch for "already exists": `POST /v1/tenants`
+      // answers `200` with the existing tenant when this partner already
+      // registered that `external_ref`, because asserting the same fact twice
+      // is not an error. A client that reimplemented that as a catch-and-read
+      // would be guessing at behaviour the route already defines — which is
+      // exactly what the first draft of this file did, before the route was
+      // read instead of assumed.
+      const created = await call("POST", "/v1/tenants", {
+        body: { external_ref: externalRef },
+        idempotencyKey: `tenant-${externalRef}`,
+      });
+      return unwrap<TenantResource>(created, "/v1/tenants");
+    },
+
+    async createConsentSession(input) {
+      const result = await call("POST", "/v1/consent_sessions", {
+        body: {
+          tenant_id: input.tenantId,
+          grant: input.grant,
+          valid_until: input.grant.validUntil,
+          return_url: input.returnUrl,
+        },
+        idempotencyKey: input.idempotencyKey,
+      });
+      return unwrap<ConsentSessionResource>(result, "/v1/consent_sessions");
+    },
+
+    async readConsentSession(id) {
+      const result = await call("GET", `/v1/consent_sessions/${encodeURIComponent(id)}`);
+      return unwrap<ConsentSessionResource>(result, "/v1/consent_sessions/{id}");
+    },
+
+    async listMandates(tenantId) {
+      const result = await call("GET", `/v1/mandates?tenant_id=${encodeURIComponent(tenantId)}`);
+      return unwrap<readonly MandateResource[]>(result, "/v1/mandates");
+    },
+  };
+}

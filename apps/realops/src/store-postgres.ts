@@ -244,6 +244,15 @@ export function createPostgresStore(client: SqlClient): RealOpsStore {
       return (rows as AgentRow[]).map(toAgent);
     },
 
+    async findAgentByConsentSession(accountId, consentSessionId) {
+      const { rows } = await client.query(
+        `select * from realops_agents where account_id = $1 and consent_session_id = $2`,
+        [accountId, consentSessionId],
+      );
+      const row = rows[0] as AgentRow | undefined;
+      return row === undefined ? undefined : toAgent(row);
+    },
+
     async findAgent(accountId, agentId) {
       // Scoped by account in the query itself, so "another person's agent"
       // cannot come back and then be filtered out by a caller who forgot to.

@@ -30,6 +30,8 @@ interface FakeDirectory extends PartnerRoutesDirectory {
   revoke(secret: string): void;
   createTenantCalls: number;
   createConsentSessionCalls: number;
+  /** T81: what this partner is allowed to redirect back to. */
+  setReturnOrigins(origins: readonly string[]): void;
 }
 
 function fakeApiKeyRecord(partnerId: string, scopes: readonly string[]): ApiKey {
@@ -58,6 +60,7 @@ function createFakeDirectory(): FakeDirectory {
   const purchases = new Map<string, PurchaseRecord>();
   let createTenantCalls = 0;
   let createConsentSessionCalls = 0;
+  let returnOrigins: readonly string[] = [];
   let purchaseSeq = 0;
 
   return {
@@ -67,6 +70,21 @@ function createFakeDirectory(): FakeDirectory {
 
     get createConsentSessionCalls() {
       return createConsentSessionCalls;
+    },
+
+    setReturnOrigins(origins) {
+      returnOrigins = origins;
+    },
+
+    async findPartner(id) {
+      return {
+        id,
+        name: "test partner",
+        status: "active",
+        returnOrigins: [...returnOrigins],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
     },
 
     async createPurchase(input) {
@@ -173,6 +191,7 @@ function createFakeDirectory(): FakeDirectory {
         grant: { actions: ["catalog:read"], venues: [], assets: [], limits: { perTx: "1", perDay: "1", currency: "USDC" } },
         validFrom: now,
         validUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        returnUrl: null,
         mandateId: null,
         createdAt: now,
         expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
@@ -253,6 +272,7 @@ function createFakeDirectory(): FakeDirectory {
         grant: input.grant,
         validFrom: input.validFrom,
         validUntil: input.validUntil,
+        returnUrl: input.returnUrl ?? null,
         mandateId: null,
         createdAt: new Date(),
         expiresAt: input.expiresAt,
@@ -539,6 +559,73 @@ describe("routePartnerRequest — POST /v1/consent_sessions", () => {
     );
     expect(result.status).toBe(400);
     expect(directory.createConsentSessionCalls).toBe(0);
+  });
+});
+
+/**
+ * T81. A consent session ends with a redirect, so an unchecked `return_url`
+ * would make the consent page an open redirect hosted on AgentPey's own
+ * domain — the most credible possible place for one, since it is exactly
+ * where the person was told to go and sign.
+ */
+describe("routePartnerRequest — POST /v1/consent_sessions return_url allowlist", () => {
+  const validBody = {
+    tenant_id: "",
+    grant: { actions: ["catalog:read"], venues: [], assets: [], limits: { perTx: "1", perDay: "1", currency: "USDC" } },
+    valid_until: "2026-12-01T00:00:00.000Z",
+  };
+
+  async function create(returnUrl: string | undefined, key: string) {
+    const tenant = directory.seedTenant({ partnerId: PARTNER_A });
+    return routePartnerRequest(
+      baseRequest({
+        method: "POST",
+        pathname: "/v1/consent_sessions",
+        body: { ...validBody, tenant_id: tenant.id, ...(returnUrl === undefined ? {} : { return_url: returnUrl }) },
+        idempotencyKeyHeader: key,
+        baseUrl: "https://agentpay.example",
+      }),
+    );
+  }
+
+  it("accepts a return_url whose origin the partner registered", async () => {
+    directory.setReturnOrigins(["https://realops.example"]);
+    const result = await create("https://realops.example/agentes/rag_1", "ru-1");
+
+    expect(result.status).toBe(201);
+    expect((result.body as { data: { return_url: string } }).data.return_url).toBe("https://realops.example/agentes/rag_1");
+  });
+
+  it("refuses an origin the partner never registered, without creating a session", async () => {
+    directory.setReturnOrigins(["https://realops.example"]);
+    const before = directory.createConsentSessionCalls;
+    const result = await create("https://attacker.test/volver", "ru-2");
+
+    expect(result.status).toBe(400);
+    expect((result.body as { code: string }).code).toBe("ReturnUrlNotAllowed");
+    expect(directory.createConsentSessionCalls).toBe(before);
+  });
+
+  it("refuses a lookalike host", async () => {
+    directory.setReturnOrigins(["https://realops.example"]);
+    const result = await create("https://realops.example.attacker.test/volver", "ru-3");
+
+    expect(result.status).toBe(400);
+  });
+
+  it("refuses every return_url for a partner that registered none", async () => {
+    directory.setReturnOrigins([]);
+    const result = await create("https://realops.example/volver", "ru-4");
+
+    expect(result.status).toBe(400);
+  });
+
+  it("still creates a session with no return_url at all — the redirect is optional", async () => {
+    directory.setReturnOrigins([]);
+    const result = await create(undefined, "ru-5");
+
+    expect(result.status).toBe(201);
+    expect((result.body as { data: { return_url: string | null } }).data.return_url).toBeNull();
   });
 });
 

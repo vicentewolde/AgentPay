@@ -102,6 +102,8 @@ export type AgentPassErrorCode =
   | "VenueNotRegistered"
   /** No discovery catalogue could answer — not "nothing is for sale", but "nobody replied". */
   | "CatalogUnavailable"
+  /** The return URL's origin is not one this partner registered in advance. */
+  | "ReturnUrlNotAllowed"
   /** The total exceeds the ceiling the partner itself declared for this purchase. */
   | "PurchaseCeilingExceeded"
   /** The paid route needs an input this purchase did not supply. */

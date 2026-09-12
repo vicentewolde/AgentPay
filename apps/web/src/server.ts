@@ -1455,6 +1455,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         grant: session.grant,
         validUntil: session.validUntil.toISOString(),
         expiresAt: session.expiresAt.toISOString(),
+        // T81. Safe to hand to the page because it was checked against the
+        // partner's registered origins *before this row was written*
+        // (`requireAllowedReturnUrl`), so the browser is never given an
+        // unvalidated destination to navigate to.
+        returnUrl: session.returnUrl,
       });
     } catch (error) {
       logError("consent session read failed", error, { method: req.method ?? "unknown", path: pathname, status: 400 });

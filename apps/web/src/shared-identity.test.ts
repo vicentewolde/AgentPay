@@ -14,7 +14,7 @@ const ADDRESS = Keypair.random().publicKey();
 const DID = stellarAddressToDid(ADDRESS, "testnet");
 
 function fakePartner(id: string): Partner {
-  return { id, name: "x", status: "active", createdAt: new Date(), updatedAt: new Date() };
+  return { id, name: "x", status: "active", returnOrigins: [], createdAt: new Date(), updatedAt: new Date() };
 }
 
 function fakeTenant(id: string, partnerId: string): Tenant {
