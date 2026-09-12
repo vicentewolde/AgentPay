@@ -1153,7 +1153,26 @@ Claude Code congele el contrato.
 | T63 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | ✅ cerrado 2026-09-12 (PR #19) — `logging.ts` tipa los campos como primitivos (`LogFields`), así que un error crudo no compila como argumento; `logError` solo extrae `.message`. Test reproduce el escenario exacto de `C-32` (`connectionParameters.password`) y confirma que nunca llega al log |
 | T64 | Codex | T61 mergeado | Bajo — mide, no decide | `scripts/loadtest-perday.ts` (nuevo) | ✅ cerrado 2026-09-12 (PR #20) — reprodujo la condición de carrera de `perDay` con cuatro procesos reales (12.00 grabados contra un límite de 10.00, sin crashear); identificado correctamente como un hueco de T61, no un fallo del harness — ver `C-68` |
 | T66 | Claude | T64 mergeado | 🔴 Alto — enforcement de `perDay`, no delegable | `apps/agent/src/ledger/spend-ledger.ts`, `apps/agent/src/policy/policy-rail.ts`, `packages/vault/src/vault.ts`, `packages/vault/src/postgres-vault.ts`, `scripts/loadtest-perday.ts` | ✅ cerrado 2026-09-12 — `ledger.atomically()` cierra la carrera de decisión que T64 encontró (el gap que `M-15` ya había anotado desde T19). Test de integración nuevo + 29 tests de concurrencia existentes sin cambios + `loadtest:perday --atomic` repetido tres veces, siempre dentro del límite. Ver `C-68` |
-| T65 | Claude | T61, T62, T63, T64, T66 mergeados | — | — | Corrida personal de T64; revisión final de todo el hito antes de cerrar |
+| T65 | Claude | T61, T62, T63, T64, T66 mergeados | — | — | ✅ cerrado 2026-09-12 — corrida personal de T64 (ambos modos), revisión de los cinco tickets juntos, sin nada suelto |
+
+> **T61–T66 cerrados, todos el 2026-09-12 — F8 completa según su "listo
+> cuando" explícito** ("dos instancias corren sin exceder `perDay` ni
+> romper la cadena del vault"): confirmado con procesos reales y
+> separados, no solo instancias en un mismo proceso — `--atomic`
+> repetido tres veces, siempre dentro del límite, cadena íntegra en cada
+> corrida. Detalle completo en `BITACORA.md` → T61, T62/T63, T64/T66, y
+> las decisiones en `DECISIONES.md` → `C-67`, `C-68`.
+>
+> **Lo que queda fuera de este cierre, a propósito.** La sección
+> "Alcance" de arriba mencionaba también `G12` (estado de wallet-connect
+> compartido entre instancias), métricas, alertas y política de
+> retención — pero la delegación real (§ "Delegación Claude Code /
+> Codex" arriba) y la tabla de tickets nunca los desglosaron en un T61–T66
+> concreto; solo `G4` (T61/T66) y `G11` (T62) tuvieron ticket. Cierro F8
+> contra su "listo cuando" explícito, que es solo sobre `perDay`, y anoto
+> `G12`/métricas/alertas/retención como trabajo real y todavía sin
+> ticket — no resuelto, no descartado — para cuando el usuario decida
+> priorizarlo (F9 o una ronda de hardening aparte).
 
 ---
 

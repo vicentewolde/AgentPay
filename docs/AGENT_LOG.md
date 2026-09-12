@@ -3741,3 +3741,37 @@ que `CLAUDE.md` pide tratar con más cuidado (enforcement de
 Pendiente: mergear `cc/t66-atomic-perday` a `main` y pushear. T65
 (revisión final de F8 completo, T61–T66 juntos) — mío, no delegable,
 siguiente en esta misma sesión.
+
+---
+
+## 2026-09-12 (3) — main (T65, F8 completa)
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t66-atomic-perday` (fast-forward). T65:
+revisión final de F8 completo (T61 a T66 juntos) — confirmé que
+`checkDailyLimit`/`checkMandate`/`checkScope` no se tocaron en ningún
+hito de la fase, que `policy_rail` (Soroban) no depende de nada de
+esto, y corrí `pnpm run loadtest:perday` en ambos modos varias veces
+más: `racy` sigue reproduciendo el hallazgo original sin cambios,
+`--atomic` se mantuvo siempre dentro del límite. Suite completa
+(919 tests) y los 9 tests de integración de `packages/vault` contra
+Postgres real, sin regresiones. F8 marcada completa en
+`PLATAFORMA-PARTNERS.md` contra su "listo cuando" explícito.
+
+Anotado explícitamente, no resuelto en silencio: `G12` (wallet-connect
+en memoria, mismo patrón que `G4` antes de T61) y
+métricas/alertas/retención — mencionados en la sección "Alcance" de F8
+pero nunca desglosados en un ticket real dentro de T61–T66 — quedan
+como trabajo pendiente, con ticket futuro a decidir con el usuario
+(F9 o una ronda de hardening aparte).
+
+Por qué: cerraba el ciclo que arrancó con la revisión del PR #20 de
+Codex (T64) al inicio de esta sesión — el hallazgo real (T64) llevó a
+un fix real (T66), y F8 no podía darse por completa sin verificar los
+seis hitos juntos, no uno por uno.
+
+Pendiente: nada de F8. Sigue pendiente comprar `agentpey.com` y
+Custom Domains en Render (sin apuro), y decidir qué sigue en F9 —
+incluida la conversación sobre `G12`/métricas/alertas/retención de
+arriba.

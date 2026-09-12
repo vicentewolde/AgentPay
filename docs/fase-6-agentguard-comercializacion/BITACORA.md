@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T66 (F8, `atomically()` cierra la carrera de decisión de `perDay` entre procesos) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T65 (revisión final, **F8 completa**) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -2087,3 +2087,54 @@ Detalle técnico completo, incluidas las alternativas descartadas, en
 
 Pendiente: T65 — revisión final de F8 completo (T61 a T66 juntos, sin
 nada suelto) y marcar F8 completa en `PLATAFORMA-PARTNERS.md`.
+
+---
+
+## T65 · Revisión final de F8 — cerrado 2026-09-12, **F8 completa**
+
+**Qué quedó funcionando, en palabras llanas.** F8 se propuso una cosa
+concreta: que el límite diario de gasto aguante más de un proceso
+corriendo a la vez, sin exceder el límite ni romper el historial. Los
+cinco hitos anteriores (T61 a T66) construyen esa garantía en dos
+capas — la escritura (T61) y la decisión (T66) — y esta revisión
+confirma que las dos encajan sin nada suelto entre medio.
+
+**Revisión de conjunto, no solo hito por hito:**
+
+- `checkDailyLimit`, `checkMandate` y `checkScope` no se tocaron en
+  ningún momento de F8 — el "fuera de alcance" explícito de la fase se
+  cumplió de punta a punta; todo el trabajo cambió *de dónde* viene el
+  número o *cuándo* se puede leer/escribir, nunca *qué se decide* con
+  él.
+- El camino `policy_rail` (Soroban, por tenant desde T58) no depende de
+  nada de esto — su propio contrato ya hacía cumplir `per_day` on-chain
+  desde antes de F8. Todo el trabajo de F8 es exclusivamente del camino
+  clásico sin wallet.
+- `pnpm run loadtest:perday` corrido personalmente en ambos modos,
+  varias veces cada uno: `racy` (default) sigue reproduciendo el
+  hallazgo original de T64 sin cambios — prueba de que el harness no se
+  "arregló" para que pase, sino que el código sí cambió; `--atomic`
+  se mantuvo siempre dentro del límite de referencia en cada corrida.
+  Sin filas `loadtest-*` sobrantes en Postgres al terminar, en ningún
+  caso.
+- Suite completa del monorepo (`typecheck`/`build`/`test`, 919 tests) y
+  los 9 tests de integración de `packages/vault` contra Postgres real,
+  todos en verde, sin regresiones acumuladas entre T61 y T66.
+
+**Lo que F8 no cubrió, dicho explícitamente en vez de dejarlo implícito
+al cerrar.** `G12` (estado de wallet-connect en memoria, el mismo tipo
+de límite que `G4` tenía antes de T61) y las métricas/alertas/política
+de retención que la sección "Alcance" de `PLATAFORMA-PARTNERS.md`
+mencionaba nunca tuvieron un ticket real dentro de T61–T66 — la
+delegación efectiva (§ "Delegación Claude Code / Codex" de esa sección)
+solo desglosó `G4` y `G11`. F8 cierra contra su "listo cuando" explícito
+(`perDay` entre procesos), no contra la lista completa de "Alcance".
+Anotado en `PLATAFORMA-PARTNERS.md` para que quede como trabajo
+pendiente y con ticket futuro, no como algo resuelto en silencio.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (F8 marcada completa,
+con la nota de qué queda fuera), `BITACORA.md` (este cierre).
+
+Pendiente: decidir con el usuario si `G12`/métricas/alertas/retención
+abren una ronda nueva de hardening o esperan a F9. Fuera de esto, sin
+nada pendiente de F8.
