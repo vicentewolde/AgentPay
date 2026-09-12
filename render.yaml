@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: corepack enable && corepack prepare pnpm@11.24.0 --activate && pnpm install --frozen-lockfile && pnpm build
-    startCommand: pnpm --filter @agentpay/web run start
+    startCommand: pnpm --filter @agentpey/web run start
     envVars:
       # pnpm@11.24.0 (pinned via packageManager in package.json) requires
       # Node >=22.13 to run under Corepack — 22.11.0 makes Corepack crash
@@ -46,7 +46,7 @@ services:
       - key: DATABASE_URL
         sync: false
       # F4/T40 — the master seed each tenant's own derived Stellar identity
-      # comes from (`@agentpay/tenancy`). Required for any wallet session:
+      # comes from (`@agentpey/tenancy`). Required for any wallet session:
       # without it, `MASTER_MNEMONIC is missing` at "Iniciar sesión", the
       # same class of omission `ADMIN_SECRET_KEY` already taught (T35). Not
       # generated or set by this commit — this line only reserves the name
