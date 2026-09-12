@@ -83,6 +83,18 @@ lleva gastado cada tenant hoy, sus rechazos más recientes, y el saldo
 USDC de su `policy_rail` si tiene uno — todo de solo lectura, sin
 ninguna ruta nueva capaz de escribir.
 
+**F9 ya tiene dirección de producto, todavía no implementación.** El piloto
+público usará RealOps Agent como plataforma de referencia y SignalDesk como
+comercio x402 independiente. Una persona externa podrá registrarse con email
+y alias, firmar el Mandato desde el consentimiento hospedado, instruir uno de
+dos agentes y ver el servicio entregado, sus rechazos y su actividad. El
+crédito USDC de prueba será patrocinado por una reserva prefondeada, pero solo
+después de que la primera compra autorizada cree el rail propio del tenant;
+conectar o firmar una wallet no mueve fondos. Falta F9.0: Claude Code debe
+revisar la arquitectura de sesiones, PII, runner, fondos y lecturas antes de
+que se abra el primer ticket de implementación. Plan completo:
+[PLAN-F9-REALOPS.md](PLAN-F9-REALOPS.md).
+
 ### Progreso
 
 | Hito | Qué es | Estado |

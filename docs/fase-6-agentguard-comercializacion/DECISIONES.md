@@ -2736,3 +2736,43 @@ Documentación tocada: `BITACORA.md` (nuevo hito T71),
 `apps/status-dashboard/package.json`.
 
 ---
+
+### C-74 · F9 usa RealOps Agent y SignalDesk como partner y comercio públicos de referencia · `Vigente`
+**Fecha:** 2026-09-12
+
+El usuario resolvió las decisiones que bloqueaban F9. El partner de
+referencia será **RealOps Agent**, plataforma pública construida por el
+proyecto; el comercio independiente será **SignalDesk**, que vende un informe
+de mercado de demostración y créditos ficticios de IA no transferibles. El
+éxito es que una persona externa complete por navegador, wallet Stellar de
+testnet y guía pública el recorrido completo y sus rechazos guiados, sin
+terminal ni intervención humana en tiempo real.
+
+RealOps registra email y alias mediante enlace mágico. El email es PII que
+solo guarda RealOps: no cruza a AgentPey, Mandato, Stellar, vault ni logs. El
+visitante usa crédito de USDC testnet patrocinado: su primera compra
+autorizada crea perezosamente el rail propio, que recibe XLM de Friendbot para
+el despliegue y USDC de una reserva de testnet fondeada previamente por el
+usuario. Conectar o firmar no mueve fondos.
+
+La primera versión del agente es determinista: descubre SignalDesk en un
+catálogo x402 público, pero descubrir nunca equivale a permiso. Solo paga si
+producto, venue, asset, monto y payTo siguen cubiertos por scope, Mandato y
+rail. Un LLM posterior solo puede convertir lenguaje natural en una solicitud
+estructurada; no adquiere autoridad de pago.
+
+**Motivo.** Prueba de punta a punta la relación B2B2C —persona, partner,
+agente, comercio, autorización y pago— sin esperar a un tercero ni falsear la
+integración. Servicios públicos y entrega visible evitan que el piloto se
+reduzca a un script de backend; separar el email mantiene fuera de AgentPey
+la PII que no necesita.
+
+**Alternativas descartadas:** esperar un partner/comercio externo; usar el
+bazaar como único comercio; dar autoridad de pago a un LLM; pedir al
+visitante que fondee su rail en el primer recorrido; y emitir un activo Stellar
+transferible solo para simular tokens. Se anotó además como trabajo posterior
+probar una segunda wallet con soporte móvil de auth entries; F9 se declara de
+escritorio hasta que exista esa prueba.
+
+El plan completo, límites y matriz de aceptación viven en
+[PLAN-F9-REALOPS.md](PLAN-F9-REALOPS.md).

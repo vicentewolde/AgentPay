@@ -1,5 +1,14 @@
 # Prompt de continuación — arrancar F9 (piloto externo en testnet)
 
+> **Actualización 2026-09-12 — este prompt fue superado para F9.** Las dos
+> decisiones que la versión original dice pendientes ya fueron tomadas por el
+> usuario: partner de referencia RealOps Agent, comercio SignalDesk y éxito
+> definido como recorrido externo completo más variantes guiadas. Antes de
+> diseñar o escribir código, usar
+> [PLAN-F9-REALOPS.md](../fase-6-agentguard-comercializacion/PLAN-F9-REALOPS.md)
+> y C-74 en las decisiones de Fase 6. La sección antigua “Lo que sigue” se
+> conserva como contexto histórico y no se debe seguir.
+
 > Generado el 2026-09-12, al cerrar T71, para pegar como primer mensaje en un
 > chat nuevo de Claude Code dentro de esta misma carpeta (`AgentPay/`).
 

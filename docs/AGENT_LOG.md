@@ -4024,3 +4024,29 @@ métricas, alertas, retención — repartido en tres rondas: T61–T66,
 T67–T69, T70–T71). F9 sigue sin arrancar: falta que el usuario decida
 el partner real y la métrica de éxito del piloto — ninguna de las dos
 respondidas todavía.
+---
+
+## 2026-09-12 — codex/f9-realops-pilot-plan
+
+Agente: Codex
+
+Qué: se registraron las decisiones explícitas que desbloquean F9 en C-74 y
+se escribió el plan de alcance PLAN-F9-REALOPS.md. El piloto será un partner
+público de referencia, **RealOps Agent**, y un comercio x402 independiente,
+**SignalDesk**. El visitante se registra por email y alias con enlace mágico,
+firma el Mandato hospedado, usa crédito USDC testnet patrocinado en su rail y
+recibe el servicio comprado en la plataforma más una notificación por email.
+El plan fija dos agentes, créditos ficticios de IA no transferibles,
+descubrimiento x402 público pero nunca autoritativo, matriz de rechazos y el
+criterio de cierre con una persona externa. También se actualizó el prompt de
+continuidad de F9, que decía que partner y métrica seguían sin decidir.
+
+Por qué: el usuario pidió que F9 simule una experiencia B2B2C pública y
+completa antes de ofrecer AgentPey a partners externos. Este cambio es solo
+documentación; runner, llaves, fondos, firmas, contratos y rutas de
+autorización quedan para arquitectura y revisión de Claude Code.
+
+Pendiente: revisión del plan por usuario y Claude Code; F9.0 debe diseñar la
+arquitectura antes de abrir tickets de implementación. Compatibilidad móvil
+queda para después: F9 promete Freighter de escritorio hasta probar una
+segunda wallet móvil compatible de punta a punta.

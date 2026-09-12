@@ -1209,46 +1209,55 @@ Claude Code congele el contrato.
 
 ### F9 · Piloto externo en testnet 🟡
 
+> **Decisiones de arranque resueltas el 2026-09-12 (C-74).** El partner de
+> referencia será RealOps Agent y el comercio independiente SignalDesk; ambos
+> deben ser servicios HTTPS públicos. El éxito conserva la regla de C-24,
+> elevada ahora a una persona externa: camino completo más variantes guiadas,
+> sin terminal ni ayuda humana en tiempo real. El plan para que Claude diseñe
+> la arquitectura está en [PLAN-F9-REALOPS.md](PLAN-F9-REALOPS.md). Esta nota
+> no abre aún código: sesión, PII, runner, fondos y lectura deben convertirse
+> primero en una arquitectura revisada.
+
 > **Nota de numeración.** Esta tabla usaba `T60`/`T61` en su borrador
 > original (2026-09-10, T37). El panel de solo lectura (antes `T61`) ya no
-> depende de nada sin cerrar — F5 cerró el 2026-09-11 — así que pasa a ser
-> `T59`, el próximo número real disponible, delegable a Codex ya mismo.
-> Incorporar al partner real (antes `T60`) sigue sin poder arrancar (F8 ni
-> empezó) y queda sin número hasta que le toque.
+> depende de nada sin cerrar — F5 cerró el 2026-09-11 — así que pasó a ser
+> `T59`, que ya cerró como panel interno de solo lectura. F9 no abre aún
+> números nuevos: C-74 resolvió partner y métrica, pero primero Claude Code
+> debe revisar la arquitectura de los bordes sensibles.
 
 - **Objetivo llano.** Que alguien que no somos nosotros lo use.
 - **Alcance.** Un partner real, un caso de compra real, soporte, medición.
 - **Fuera de alcance.** Mainnet, fondos reales, cobro.
-- **Decisiones previas.** Quién es el partner y cuál es la métrica de éxito
-  (preguntas 2 y 6).
-- **Entregables.** Integración viva, guía de incorporación, informe.
-- **Evidencia.** Compras del partner, en su tenant, con su evidencia.
-- **Riesgos.** Que el partner desaparezca. Mitigación: dos candidatos.
-- **Listo cuando.** El partner completó el flujo sin nuestra intervención
-  manual.
+- **Decisiones previas.** Resueltas en C-74: RealOps Agent, SignalDesk y
+  éxito como recorrido externo completo más rechazos guiados.
+- **Entregables.** Dos servicios HTTPS públicos, integración viva, guía de
+  incorporación y evidencia del piloto.
+- **Evidencia.** Compras y entregas del visitante en su tenant, más rechazos
+  explicables y registros durables.
+- **Riesgos.** Exponer PII, sesión o capacidad de pago al construir el
+  piloto. Mitigación: F9.0 primero, sin implementación antes de esa revisión.
+- **Listo cuando.** Una persona externa completa camino feliz y variantes
+  guiadas sin terminal ni ayuda humana en tiempo real.
 
 **Delegación Claude Code / Codex.**
 
-1. **Qué debe hacer Claude Code.** Incorporar al partner real, mediar el
-   piloto, y decidir si se cumplió el criterio de éxito de `C-24`. Es
-   trabajo de producto y de conversación, no de código — se queda en
-   Claude Code por naturaleza, no solo por regla.
-2. **Qué puede delegarse a Codex en paralelo.** Un panel interno de solo
-   lectura (pagos recientes, rechazos, salud de la cadena del vault) para
-   monitorear el piloto mientras corre — siempre que la API de F5 ya
-   exista y el panel no tenga ningún camino de escritura.
-3. **Qué depende de que Claude termine o mergee primero.** T59 ya no
-   depende de nada — F5 cerró el 2026-09-11.
-4. **Tareas independientes asignables a Codex sin colisión.** Solo hay una
-   tarea delegable en esta fase.
-5. **Revisión de seguridad antes de mergear.** Confirmar que el panel no
-   expone ningún endpoint capaz de disparar un pago o una revocación —
-   debe ser estrictamente de lectura.
+1. **Qué debe hacer Claude Code.** Diseñar F9.0 (sesiones, PII, runner,
+   fondos, lecturas y amenazas), descomponerla y dirigir el piloto. Es
+   trabajo de producto, pago y arquitectura sensible.
+2. **Qué puede delegarse a Codex en paralelo.** Solo UI, presentación,
+   fixtures, documentación o tests después de que Claude congele el contrato
+   que corresponda.
+3. **Qué depende de que Claude termine o mergee primero.** Todo ticket de
+   implementación F9 depende de la revisión arquitectónica F9.0.
+4. **Tareas independientes asignables a Codex sin colisión.** Ninguna está
+   definida todavía.
+5. **Revisión de seguridad antes de mergear.** Cada corte debe confirmar que
+   no abre una ruta para pagar, firmar, revocar o leer datos de otro tenant.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T59 | Codex | F5 cerrada ✅ — sin bloqueos, delegable ya | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | ✅ cerrado (PR #18) — las tres rutas conocidas responden 405 a `POST`/`PUT`/`PATCH`/`DELETE`, cubierto por test; interfaces `StatusDirectory`/`VaultReader` estructuralmente sin métodos de escritura; revisado por Claude Code en worktree aislado, `pnpm build`/`typecheck`/`test` (914 tests) y la integración contra Postgres real, más una corrida manual contra un tenant real de T58 |
-| sin número | Claude | F5 a F8 cerradas; partner y métrica de éxito decididos (preguntas 2 y 6) | — | Coordinación, no código | El partner completó el flujo sin intervención manual nuestra |
+| T59 | Codex | F5 cerrada ✅ | Bajo — estrictamente de lectura | `apps/status-dashboard/**` (nuevo) (prohibido: cualquier ruta de escritura o de pago) | ✅ cerrado (PR #18) — las tres rutas conocidas responden 405 a `POST`/`PUT`/`PATCH`/`DELETE`, cubierto por test; interfaces `StatusDirectory`/`VaultReader` estructuralmente sin métodos de escritura; revisado por Claude Code en worktree aislado, `pnpm build`/`typecheck`/`test` (914 tests) y la integración contra Postgres real, más una corrida manual contra un tenant real de T58 |
+| sin número | Claude | C-74 resuelta; F9.0 de arquitectura primero | Alto — sesión, PII, runner y fondos | Diseño y coordinación, sin código todavía | Arquitectura revisada y tickets acotados antes de implementar |
 
 ---
 
