@@ -1849,6 +1849,10 @@ ya corre en producción, no una tercera versión. Detalle completo en
   ahora.
 - `pnpm typecheck`/`test` limpios (nada de TypeScript cambió).
 
-Pendiente: confirmar en Render, después del redeploy que dispara este
-push, que el botón "Comprar" clásico paga de verdad contra el contrato
-nuevo — mismo criterio de verificación que T40/T49/T51/T52.
+**Confirmado en Render real, mismo día.** El redeploy que disparó el
+push tardó un par de minutos (se vio la página de "levantando" de Render
+en el medio); `POST /api/session/start` contra
+`agentpay-web.onrender.com` ya devuelve
+`"policyRail":"CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA"`
+— el contrato nuevo, en producción real, no solo en testnet desde la
+compu. Nada pendiente de este hito.

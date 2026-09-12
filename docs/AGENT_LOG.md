@@ -3554,3 +3554,58 @@ el Render real, no solo contra testnet local.
 Pendiente: comprar `agentpey.com` y conectarlo por Custom Domains
 (decisión del usuario, sin apuro); migrar o no el rail compartido. No
 queda ningún despliegue pendiente de verificar de la lista original.
+
+---
+
+## 2026-09-12 (2) — cc/migrate-shared-rail (rail compartido migrado, C-65/C-66)
+
+Agente: Claude Code
+
+Qué: a pedido explícito del usuario ("explicame qué significa migrar el
+rail compartido" → "arreglemos eso ahora"), se migró el rail compartido
+del piloto (el que usa el camino clásico, sin wallet) del contrato
+desplegado en T31 —sin `principal`, sin forma de retirar fondos— a uno
+nuevo desde el wasm actual de `contracts/policy-rail` (el mismo que T58
+ya usa para cada rail por tenant), con `principal = ADMIN_PUBLIC_KEY`
+—elegido por el usuario en vez de generar una clave nueva.
+
+Antes de tocar el contrato: se encontró que el rename de la sesión
+anterior había editado un comentario dentro de
+`contracts/policy-rail/src/lib.rs` (dos palabras, cero lógica) que
+cambiaba el hash del wasm compilado — confirmado reconstruyendo el
+fuente de antes y después del rename y comparando los hashes
+directamente. Se revirtió ese comentario específico (`C-65`) para que
+el rail compartido nuevo use exactamente el mismo wasm que T58 ya subió,
+no una tercera versión. `cargo test` 32/32 en verde tras revertir.
+
+Desplegado con `pnpm run deploy:policy-rail -- --redeploy --principal
+<ADMIN_PUBLIC_KEY>`: contrato nuevo
+`CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA`, verificado
+por el propio script contra la red (no asumido), fondeado con 0.05
+USDC. Verificado con un pago real: `pnpm run demo:pay-real --
+--payer=policy-rail` liquidó contra testnet real a través del contrato
+nuevo. `render.yaml` actualizado y pusheado; confirmado en producción
+real (no solo en testnet local) que `agentpay-web.onrender.com` ya sirve
+el contrato nuevo en `POST /api/session/start`.
+
+Por qué: el rail viejo tenía exactamente el problema que `G9`/T57
+habían resuelto para los rails por tenant, sin resolverlo en el único
+rail que efectivamente recibe tráfico hoy — cualquier fondo que
+entrara ahí quedaba atrapado para siempre.
+
+Decisiones nuevas: `C-65`, `C-66` en
+`docs/fase-6-agentguard-comercializacion/DECISIONES.md`. Documentación
+tocada: `BITACORA.md` de la misma fase. Archivos tocados:
+`contracts/policy-rail/src/lib.rs` (revertido), `deployments/testnet.json`,
+`render.yaml`. El rail viejo
+(`CCGAGRLVERK2A6PVQNU6YY62ANWNSFO32DM6OMFLRNLVHYJBLLON4G3I`) queda
+abandonado con su saldo simbólico de testnet, sin forma de recuperarlo —
+esa es precisamente la limitación que esta migración corrige hacia
+adelante, no algo que se pudiera resolver retroactivamente.
+
+Pendiente: comprar `agentpey.com` y conectarlo por Custom Domains
+(sin apuro). Siguiente candidato técnico, ya con tickets definidos en
+`PLATAFORMA-PARTNERS.md` § F8: T61 (Claude, `checkDailyLimit`/`spentOn`
+leyendo de un caché en memoria en vez de la base — riesgo alto,
+enforcement de `perDay`), T62–T65 (CA de Postgres, logging, prueba de
+carga).
