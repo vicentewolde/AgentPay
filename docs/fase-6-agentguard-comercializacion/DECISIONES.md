@@ -2054,3 +2054,84 @@ Documentación tocada: `BITACORA.md` (este hito). Archivos tocados:
 commiteado).
 
 ---
+
+### C-67 · T61: `spentOn` lee Postgres en vivo, y `append` serializa `seq` con un advisory lock — no solo un caché más fresco · `Vigente`
+**Fecha:** 2026-09-12
+
+`G4` (`PLATAFORMA-PARTNERS.md` § F8) describía el problema como un caché
+desactualizado: `postgres-vault.ts` calculaba `spentOn()` desde un mapa
+`totals` construido una sola vez, al arrancar el proceso — con dos
+instancias, el `perDay` del camino de cuenta clásica se podía exceder
+porque cada una vivía ciega a lo que la otra ya había escrito.
+
+**La corrección de `spentOn` (el alcance original del ticket):** se
+eliminó el mapa `totals` por completo. Cada llamada a `spentOn` ahora
+hace una consulta SQL en vivo (`sum` de los montos `granted` de ese
+`subject`/`currency`/día) contra la tabla real. `checkDailyLimit`
+(`apps/agent`) no se tocó — sigue siendo la misma función pura,
+solo cambia de dónde viene el número que recibe, exactamente lo que el
+ticket pedía.
+
+**Un segundo bug, encontrado escribiendo el test, no por inspección.**
+El primer test de concurrencia (dos instancias vivas a la vez, no
+reconstruidas en secuencia) hizo caer la suite con
+`duplicate key value violates unique constraint "vault_records_pkey"`.
+Causa: `append()` calculaba `seq` desde `records.length` — el arreglo
+**local** de esta instancia, no una fuente compartida. Dos instancias
+escribiendo la cadena del mismo tenant calculaban ambas `seq = 0` y
+chocaban contra la clave primaria de la tabla. Esto es un bug distinto
+de `G4` (afecta la escritura, no la lectura) pero bloquea exactamente lo
+que `G4` necesita para funcionar de verdad: si dos procesos nunca pueden
+escribir concurrentemente sin reventar, arreglar solo la lectura no
+alcanza para "dos procesos compitiendo, el segundo rechazado
+correctamente" — el segundo terminaría crasheando, no rechazado.
+
+**La corrección, con el visto bueno explícito del usuario para ampliar
+el alcance de T61:** `append()` ahora abre una transacción, toma
+`pg_advisory_xact_lock(hashtext(tenantId))` —un lock del lado de
+Postgres, no de este proceso ni de este pool de conexiones—, lee el
+`seq`/`hash` reales de la cola de la cadena **dentro** de esa
+transacción, y recién ahí inserta. Cualquier otro escritor (este proceso
+u otro cualquiera) que pida el mismo lock espera hasta que la
+transacción anterior haga `commit` o `rollback` — el lock se libera solo
+en esos dos casos, nunca se puede quedar tomado para siempre. Se
+eliminó la cola de promesas en memoria (`writeQueue`) que antes solo
+serializaba dentro de un proceso — el lock de Postgres hace ese trabajo
+mejor, y a través de procesos.
+
+**Verificado, no solo argumentado:** 8 tests de integración contra
+Postgres real (`postgres-vault.integration.test.ts`), tres nuevos —
+una instancia ya viva viendo el gasto de otra sin reconstruirse, dos
+instancias compitiendo por el mismo `perDay` con el segundo cálculo ya
+reflejando el gasto del primero, y una escritura **verdaderamente
+concurrente** (`Promise.all`, no secuencial) que antes del fix
+reproducía el choque de `seq` y ahora deja la cadena completa e íntegra
+(`verify()` en `ok: true`, dos `seq` distintos, `0` y `1`). Suite
+completa del monorepo (`typecheck`/`build`/`test`) sin regresiones,
+incluida la integración de `apps/status-dashboard` (lee esta misma
+vault).
+
+**Qué sigue igual, a propósito:** `list()`/`head()`/`verify()` de una
+instancia siguen reflejando solo lo que esa instancia escribió o cargó
+al construirse — no se vuelven "en vivo" como `spentOn`. Es una
+limitación ya documentada desde T33 (el mismo comentario que describía
+el límite de `writeQueue`) y fuera del alcance de `G4`, que es
+específicamente sobre `perDay`. `hasRecorded`/`seenIntents` tiene el
+mismo límite (deduplicación de `intentId` ciega entre procesos) y
+tampoco se tocó — no es lo que este ticket pedía resolver.
+
+**Alternativa descartada:** dejar el hallazgo del choque de `seq` para
+un ticket aparte y cerrar T61 solo con la lectura en vivo. Se
+consideró, se le mostró la evidencia al usuario (el crash real, no una
+sospecha) antes de decidir, y el usuario pidió explícitamente ampliar
+T61 en vez de partirlo — el argumento de peso: sin esto, el propio
+criterio de "listo" de T61 (dos procesos compitiendo, el segundo
+rechazado) no se podía cumplir, solo aparentar cumplirse hasta que
+alguien de verdad hiciera correr dos procesos a la vez.
+
+Documentación tocada: `PLATAFORMA-PARTNERS.md` (fila `T61` cerrada),
+`BITACORA.md` (nuevo hito, primero de F8). Archivos tocados:
+`packages/vault/src/postgres-vault.ts`,
+`packages/vault/src/postgres-vault.integration.test.ts` (+3 tests).
+
+---

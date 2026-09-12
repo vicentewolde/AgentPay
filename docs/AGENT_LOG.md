@@ -3609,3 +3609,58 @@ Pendiente: comprar `agentpey.com` y conectarlo por Custom Domains
 leyendo de un caché en memoria en vez de la base — riesgo alto,
 enforcement de `perDay`), T62–T65 (CA de Postgres, logging, prueba de
 carga).
+
+---
+
+## 2026-09-12 (3) — cc/t61-perday-race (T61 cerrado, F8 arranca)
+
+Agente: Claude Code
+
+Qué: T61, primer hito de F8 — a pedido explícito del usuario ("Sí,
+arrancá con T61"). `packages/vault/src/postgres-vault.ts`: eliminado el
+mapa `totals` en memoria que `spentOn()` leía (construido una sola vez
+al arrancar el proceso, ciego a lo que cualquier otro proceso escribiera
+después) — ahora hace una consulta SQL en vivo contra `vault_records`
+en cada llamada.
+
+Al escribir el primer test de concurrencia (dos instancias vivas a la
+vez, no reconstruidas en secuencia) apareció un segundo bug, distinto de
+`G4` pero que lo bloqueaba: `append()` calculaba `seq` desde
+`records.length`, el arreglo local de la instancia — dos instancias
+escribiendo la misma cadena de tenant chocaban con
+`duplicate key value violates unique constraint "vault_records_pkey"`.
+Se le mostró el hallazgo al usuario (el crash real, no una sospecha)
+antes de tocar más código; el usuario pidió explícitamente ampliar T61
+en vez de partirlo en un ticket aparte. Corregido: `append()` ahora abre
+una transacción, toma `pg_advisory_xact_lock(hashtext(tenantId))` —del
+lado de Postgres, no de este proceso ni de este pool—, lee la punta real
+de la cadena dentro de esa misma transacción, y recién ahí inserta.
+Eliminada la cola de promesas en memoria (`writeQueue`) que antes solo
+serializaba dentro de un proceso.
+
+Verificado con 8 tests de integración contra Postgres real (3 nuevos):
+una instancia ya viva viendo el gasto de otra sin reconstruirse, dos
+instancias compitiendo por `perDay` con la segunda viendo correctamente
+el gasto de la primera, y una escritura **verdaderamente concurrente**
+(`Promise.all`) que antes del fix reproducía el choque de `seq` y ahora
+deja la cadena íntegra (`verify()` en `ok: true`). `checkDailyLimit` no
+se tocó — sigue siendo la misma función pura, solo cambia de dónde viene
+el número. Suite completa del monorepo (`typecheck`/`build`/`test`) sin
+regresiones, incluida la integración de `apps/status-dashboard`.
+
+Por qué: `G4` (`perDay` se puede exceder con dos instancias) era el
+primer ticket de F8, marcado riesgo alto por tocar enforcement de
+límites — exactamente el tipo de cambio que `CLAUDE.md` pide revisar con
+más cuidado.
+
+Decisión nueva: `C-67` en
+`docs/fase-6-agentguard-comercializacion/DECISIONES.md`. Documentación
+tocada: `BITACORA.md` (T61 cerrado, primero de F8),
+`PLATAFORMA-PARTNERS.md` (fila T61 cerrada). Archivos tocados:
+`packages/vault/src/postgres-vault.ts`,
+`packages/vault/src/postgres-vault.integration.test.ts` (+3 tests).
+
+Pendiente: T62 (CA de Postgres), T63 (logging estructurado), T64
+(prueba de carga que reproduce la condición de carrera — ahora con algo
+real que medir), T65 (revisión final de F8) — delegables a Codex salvo
+T65. Comprar `agentpey.com` sigue pendiente, sin apuro.

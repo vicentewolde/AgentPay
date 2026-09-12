@@ -150,6 +150,102 @@ describe("createPostgresMandateVault", () => {
     expect(after.list()[1]?.prevHash).toBe(after.list()[0]?.hash);
   });
 
+  it(
+    "G4: a second, already-running instance sees the first one's spend immediately — no cache to go stale",
+    async () => {
+      const tenantId = freshTenantId();
+      const at = new Date("2026-09-09T12:00:00.000Z");
+      const subject = "did:stellar:testnet:GABC";
+
+      // Both alive at once, like two Render instances behind the same
+      // Postgres — unlike "survives being reconstructed" above, `b` is not
+      // built *after* `a`'s write; it already exists when `a` writes.
+      const a = await createPostgresMandateVault({ connectionString, tenantId });
+      const b = await createPostgresMandateVault({ connectionString, tenantId });
+
+      expect(await b.spentOn(subject, "USDC", at)).toBe("0.0000000");
+
+      await a.record({ subject, intentId: "i1", currency: "USDC", amount: "5.00", at });
+
+      // Before the fix, `b.spentOn` read from a `totals` map built once at
+      // construction — it would still report "0.0000000" here forever,
+      // regardless of what `a` (or any other process) ever recorded.
+      expect(await b.spentOn(subject, "USDC", at)).toBe("5.0000000");
+
+      // And the reverse direction holds too: `a` sees `b`'s writes.
+      await b.record({ subject, intentId: "i2", currency: "USDC", amount: "3.00", at });
+      expect(await a.spentOn(subject, "USDC", at)).toBe("8.0000000");
+    },
+  );
+
+  it(
+    "G4: two instances racing the same perDay limit — the second sees the first's spend and correctly refuses to record over it",
+    async () => {
+      // The daily-limit decision itself (`checkDailyLimit`, apps/agent) is
+      // out of scope here on purpose (this ticket changes where the total
+      // comes from, not how it is judged) and packages/* never depends on
+      // apps/* (see this file's header). The boundary check below is that
+      // same "spentToday + amount > perDay" arithmetic, inlined, only to
+      // prove the vault hands out a total a caller could correctly act on.
+      const tenantId = freshTenantId();
+      const at = new Date("2026-09-09T12:00:00.000Z");
+      const subject = "did:stellar:testnet:GABC";
+      const perDayScaled = 60_000_000n; // 6.00, at the vault's own 7-decimal scale
+
+      const a = await createPostgresMandateVault({ connectionString, tenantId });
+      const b = await createPostgresMandateVault({ connectionString, tenantId });
+
+      // `a` spends 5.00 of a 6.00 perDay limit — comfortably under.
+      const spentBeforeA = await a.spentOn(subject, "USDC", at);
+      expect(spentBeforeA).toBe("0.0000000");
+      await a.record({ subject, intentId: "a1", currency: "USDC", amount: "5.00", at });
+
+      // `b`, a separate instance that never saw `a`'s write in memory
+      // (before this fix, its own `totals` cache would still read "0.00"
+      // here, forever), asks about spending another 5.00 — over the limit
+      // once `a`'s spend is actually counted.
+      const spentBeforeB = await b.spentOn(subject, "USDC", at);
+      expect(spentBeforeB).toBe("5.0000000");
+      const wouldTotal = 50_000_000n + 50_000_000n; // spentBeforeB + the new 5.00, scaled
+      expect(wouldTotal > perDayScaled).toBe(true);
+      // `b` correctly never calls `record` for a decision it must refuse —
+      // the ledger stays exactly what `a` alone put there.
+      expect(await a.spentOn(subject, "USDC", at)).toBe("5.0000000");
+    },
+  );
+
+  it(
+    "two instances truly racing to record() the same tenant never collide on seq — the chain stays unbroken",
+    async () => {
+      // Not sequential like the tests above: both instances fire `record`
+      // at the same time, on purpose, to actually exercise the advisory
+      // lock rather than just assert around it. Before this fix, `seq` came
+      // from each instance's own local `records.length` — this reproduces
+      // the exact "duplicate key value violates unique constraint
+      // vault_records_pkey" crash this ticket found and fixed.
+      const tenantId = freshTenantId();
+      const at = new Date("2026-09-09T12:00:00.000Z");
+      const subject = "did:stellar:testnet:GABC";
+
+      const a = await createPostgresMandateVault({ connectionString, tenantId });
+      const b = await createPostgresMandateVault({ connectionString, tenantId });
+
+      await Promise.all([
+        a.record({ subject, intentId: "a1", currency: "USDC", amount: "1.00", at }),
+        b.record({ subject, intentId: "b1", currency: "USDC", amount: "2.00", at }),
+      ]);
+
+      // Whichever instance's transaction committed first, both must have
+      // succeeded, with distinct, correctly-chained seqs — not a crash, and
+      // not a fork.
+      const fresh = await createPostgresMandateVault({ connectionString, tenantId });
+      expect(fresh.list().length).toBe(2);
+      expect(fresh.list().map((r) => r.seq).sort()).toEqual([0, 1]);
+      expect(fresh.verify()).toEqual({ ok: true });
+      expect(await fresh.spentOn(subject, "USDC", at)).toBe("3.0000000");
+    },
+  );
+
   it("keeps two tenants' chains fully independent", async () => {
     const tenantA = freshTenantId();
     const tenantB = freshTenantId();

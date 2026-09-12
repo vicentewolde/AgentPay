@@ -1148,7 +1148,7 @@ Claude Code congele el contrato.
 
 | Ticket | Dueño | Dependencias | Riesgo | Archivos permitidos | Verificación requerida |
 |---|---|---|---|---|---|
-| T61 | Claude | Ninguna | 🔴 Alto — enforcement de `perDay` | `packages/vault/src/postgres-vault.ts` | Dos procesos compitiendo por el mismo `perDay`, el segundo rechazado correctamente |
+| T61 | Claude | Ninguna | 🔴 Alto — enforcement de `perDay` | `packages/vault/src/postgres-vault.ts` | ✅ cerrado 2026-09-12 — `spentOn` lee la base en vivo, `append` serializa el `seq`/`prevHash` con un advisory lock de Postgres por `tenantId`. 8 tests de integración contra Postgres real, incluida una escritura verdaderamente concurrente (`Promise.all`) que antes del fix rompía la unicidad de `seq` |
 | T62 | Codex | Ninguna | Medio — seguridad de transporte, revisión cercana | `packages/vault/src/postgres-vault.ts` (solo opción `ssl`), `packages/directory/src/directory.ts` (solo opción `ssl`) | Falla cerrado si la CA no verifica, no degrada en silencio |
 | T63 | Codex | Ninguna | Bajo | `apps/web/src/*`, `apps/web/src/logging.ts` (nuevo) | Ningún log serializa un error crudo (`C-32`) — cubierto por test |
 | T64 | Codex | T61 mergeado | Bajo — mide, no decide | `scripts/loadtest-perday.ts` (nuevo) | Reproduce la condición de carrera que T61 corrige |

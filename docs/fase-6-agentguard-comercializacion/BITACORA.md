@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** rename a AgentPey + deploy a Render verificado en producción (T40/T49/T51/T52) — sin numerar · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T61 (F8, `perDay` a prueba de dos procesos) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -84,6 +84,8 @@ sin fondos antes de que una compra falle contra él.
 | T58 | Rail `policy_rail` por tenant: desplegado y fondeado sin CLI, la primera vez que un tenant con wallet real paga; verificado en testnet con dos tenants en rails distintos y un tercero rechazado por `per_day` | ✅ cerrado 2026-09-11 |
 | T60 | `scripts/check-rail-balances.ts`: lee el saldo USDC real de cada rail de tenant, avisa si está bajo — completa los tres entregables de F6 | ✅ cerrado 2026-09-11 |
 | — | Rename a AgentPey (ejecuta `P-11`): scope de npm, contenido y docs vivos, repo de GitHub. Render, pendiente del usuario | ✅ cerrado 2026-09-11 (sin numerar) |
+| — | Migración del rail compartido al contrato de T57 (`withdraw`/`set_owner`) | ✅ cerrado 2026-09-12 (sin numerar) |
+| T61 | F8: `spentOn` lee Postgres en vivo (no un caché), `append` serializa `seq` con un advisory lock — `perDay` aguanta dos procesos de verdad | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -1856,3 +1858,60 @@ en el medio); `POST /api/session/start` contra
 `"policyRail":"CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA"`
 — el contrato nuevo, en producción real, no solo en testnet desde la
 compu. Nada pendiente de este hito.
+
+---
+
+## T61 · `perDay` a prueba de dos procesos (F8, primer hito de hardening) — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** El límite diario de gasto
+del camino de cuenta clásica (`perDay`) se calculaba a partir de un
+número que cada proceso guardaba en su propia memoria, actualizado solo
+por sus propias compras — si algún día este piloto corriera con más de
+un proceso al mismo tiempo, cada uno podía dejar pasar compras que, entre
+los dos, superaban el límite, porque ninguno se enteraba de lo que
+gastaba el otro. Ahora el límite se calcula siempre contra la base de
+datos real, en el momento, así que da igual cuántos procesos estén
+corriendo — todos ven el mismo número.
+
+**Un segundo problema, encontrado escribiendo la prueba, no leyendo el
+código.** Al armar un test con dos "procesos" (dos instancias de la
+vault) vivos a la vez, la prueba hizo caer todo con un error de la base
+de datos: los dos intentaban escribir su primera compra con el mismo
+número de secuencia interno, y la base los rechazó por chocar. Esto no
+tiene que ver con el límite diario en sí — es un problema más profundo:
+sin arreglarlo, dos procesos ni siquiera podían escribir una compra al
+mismo tiempo sin romperse, así que arreglar solo la lectura no alcanzaba
+para el objetivo real de este hito. Se le mostró el hallazgo al usuario
+antes de ampliar el trabajo, y el usuario pidió explícitamente
+resolverlo como parte del mismo hito.
+
+**Evidencia técnica** (`C-67`):
+
+- `packages/vault/src/postgres-vault.ts`: el mapa `totals` en memoria se
+  eliminó — `spentOn()` ahora hace una consulta SQL en vivo contra
+  Postgres en cada llamada. `append()` (la función que escribe cada
+  registro) ahora abre una transacción, toma un lock del lado de la base
+  de datos (no del proceso) identificado por el `tenantId`, lee la punta
+  real de la cadena **dentro** de esa transacción, y recién ahí escribe
+  — cualquier otro proceso que quiera escribir la misma cadena espera su
+  turno, en vez de chocar.
+- 8 tests de integración contra Postgres real, tres nuevos: una
+  instancia ya viva que ve el gasto de otra sin reiniciarse, dos
+  instancias compitiendo por el mismo límite diario donde la segunda ve
+  correctamente lo que la primera ya gastó, y dos instancias escribiendo
+  **al mismo tiempo de verdad** (no una después de la otra) — la prueba
+  que antes del arreglo rompía todo, y ahora deja la cadena completa y
+  sin daños.
+- `checkDailyLimit` (la función que decide si una compra pasa o no) no
+  se tocó — sigue siendo exactamente la misma, solo cambia de dónde
+  viene el número que recibe. Nada del camino `policy_rail` (ya cubierto
+  por el propio contrato Soroban) se tocó tampoco.
+- Suite completa del monorepo (`typecheck`/`build`/`test`) sin
+  regresiones, incluida la integración del panel de estado (T59), que
+  lee esta misma base.
+
+Pendiente: T62 (verificación de CA de Postgres), T63 (logging
+estructurado), T64 (prueba de carga que reproduce la condición de
+carrera — ahora con algo real que medir), T65 (revisión final de F8) —
+los cuatro siguientes de `PLATAFORMA-PARTNERS.md` § F8, delegables a
+Codex salvo T65.

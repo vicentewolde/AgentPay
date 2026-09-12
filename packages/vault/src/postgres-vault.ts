@@ -106,52 +106,77 @@ export async function createPostgresMandateVault(options: PostgresMandateVaultOp
     entry: row.entry,
   }));
 
-  const totals = new Map<string, Map<string, Map<string, bigint>>>();
   const seenIntents = new Set<string>();
-
   for (const record of records) {
-    if (record.entry.kind !== "granted") continue;
-    seenIntents.add(record.entry.intentId);
-    const scaled = scaleAmount(record.entry.amount);
-    const bySubject = totals.get(record.entry.subject) ?? new Map<string, Map<string, bigint>>();
-    totals.set(record.entry.subject, bySubject);
-    const byCurrency = bySubject.get(record.entry.currency) ?? new Map<string, bigint>();
-    bySubject.set(record.entry.currency, byCurrency);
-    const day = record.entry.at.slice(0, record.entry.at.indexOf("T"));
-    byCurrency.set(day, (byCurrency.get(day) ?? 0n) + scaled);
+    if (record.entry.kind === "granted") seenIntents.add(record.entry.intentId);
   }
 
-  // Serialises appends within this process: each call's insert only starts
-  // once the previous one has committed and pushed its record into `records`,
-  // so two overlapping calls can never compute the same `seq`/`prevHash`.
-  // Same limit as the file backend (V-7): durable within one process writing
-  // this tenant's rows, not across more than one process at a time.
-  let writeQueue: Promise<void> = Promise.resolve();
+  /**
+   * Serialises appends to this tenant's chain across every writer connected
+   * to this Postgres — not just within this process. `seq`/`prevHash` used
+   * to come from this instance's own local `records` array (`records.length`,
+   * `records.at(-1)`), which is exactly what let two live instances of this
+   * same tenant's vault both compute `seq = 0` and collide on the table's own
+   * primary key the moment both tried to append (found writing this ticket's
+   * own test, not by inspection). `pg_advisory_xact_lock` is a Postgres-side
+   * lock keyed by `tenantId`: whichever writer — this process or another one
+   * entirely — asks for it first holds it until its transaction commits or
+   * rolls back, and every other asker (any process) blocks until then. The
+   * `seq`/`prevHash` this reads are the real, current tail of the chain,
+   * always read inside that same lock, so no other writer can move the tail
+   * out from under it between the read and the insert.
+   */
+  async function append(entry: VaultEntry): Promise<VaultRecord> {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtext($1)::bigint)", [tenantId]);
 
-  function append(entry: VaultEntry): Promise<VaultRecord> {
-    const result = writeQueue.then(async () => {
-      const seq = records.length;
-      const prevHash = records.at(-1)?.hash ?? "";
+      const { rows: tail } = await client.query<{ seq: number; hash: string }>(
+        "select seq, hash from vault_records where tenant_id = $1 order by seq desc limit 1",
+        [tenantId],
+      );
+      const seq = (tail[0]?.seq ?? -1) + 1;
+      const prevHash = tail[0]?.hash ?? "";
       const record: VaultRecord = { seq, prevHash, hash: computeHash(seq, prevHash, entry), entry };
-      await pool.query(
+
+      await client.query(
         "insert into vault_records (tenant_id, seq, prev_hash, hash, entry) values ($1, $2, $3, $4, $5)",
         [tenantId, record.seq, record.prevHash, record.hash, JSON.stringify(record.entry)],
       );
+      await client.query("commit");
       records.push(record);
       return record;
-    });
-    // Keep the queue alive even if this append failed, so a later append
-    // is not permanently blocked behind a rejected promise.
-    writeQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   return {
+    // G4: reads the running total straight from Postgres on every call,
+    // instead of an in-memory cache built once at construction — two
+    // processes (two Render instances, or this same process before and
+    // after a restart) share one source of truth for `perDay`, not one
+    // cache each that never learns about the other's writes. `checkDailyLimit`
+    // itself is untouched (M-10 / this ticket's own scope): only where the
+    // total it is handed comes from changes.
     async spentOn(subject, currency, at) {
-      const total = totals.get(subject)?.get(currency)?.get(utcDayKey(at)) ?? 0n;
+      const { rows } = await pool.query<{ entry: VaultEntry }>(
+        `select entry from vault_records
+         where tenant_id = $1
+           and entry->>'kind' = 'granted'
+           and entry->>'subject' = $2
+           and entry->>'currency' = $3
+           and left(entry->>'at', 10) = $4`,
+        [tenantId, subject, currency, utcDayKey(at)],
+      );
+      let total = 0n;
+      for (const row of rows) {
+        if (row.entry.kind === "granted") total += scaleAmount(row.entry.amount);
+      }
       return unscaleAmount(total);
     },
 
@@ -161,7 +186,7 @@ export async function createPostgresMandateVault(options: PostgresMandateVaultOp
       // Validates and throws `InvalidAmount` before anything is written —
       // same rule as the file backend: a rejected entry stays retryable
       // under the same intentId, not silently and permanently dropped.
-      const scaled = scaleAmount(entry.amount);
+      scaleAmount(entry.amount);
 
       await append({
         kind: "granted",
@@ -171,13 +196,6 @@ export async function createPostgresMandateVault(options: PostgresMandateVaultOp
         amount: entry.amount,
         at: entry.at.toISOString(),
       });
-
-      const bySubject = totals.get(entry.subject) ?? new Map<string, Map<string, bigint>>();
-      totals.set(entry.subject, bySubject);
-      const byCurrency = bySubject.get(entry.currency) ?? new Map<string, bigint>();
-      bySubject.set(entry.currency, byCurrency);
-      const day = utcDayKey(entry.at);
-      byCurrency.set(day, (byCurrency.get(day) ?? 0n) + scaled);
 
       seenIntents.add(entry.intentId);
     },
