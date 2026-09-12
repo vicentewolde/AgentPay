@@ -2658,3 +2658,81 @@ Documentación tocada: `BITACORA.md` (nuevo hito T70),
 `apps/web/src/server.ts`.
 
 ---
+
+### C-73 · T71: el panel de métricas reutiliza el cálculo real, nunca lo duplica; el saldo de rail queda inyectado · `Vigente`
+**Fecha:** 2026-09-12
+
+El usuario pidió el panel completo de métricas/alertas (no la
+alternativa más chica de "solo alertar por saldo bajo de rail" que se
+había ofrecido): uso de `perDay` cerca del límite, rechazos recientes,
+saldo de `policy_rail`, agregados al `status-dashboard` (T59) existente.
+
+**La decisión de fondo: cada número que el panel muestra se calcula
+exactamente como el camino de autorización real lo calcula, nunca con
+su propia copia de la lógica.** `readPerDayUsage()` llama
+`vault.spentOn(subject, currency, hoy)` — la misma función que
+`PolicyRail.authorise()` (`apps/agent/src/policy/policy-rail.ts`) usa
+antes de decidir si un gasto entra en el límite diario — en vez de
+sumar montos del historial del vault a mano. Reimplementar esa suma en
+el dashboard habría sido una segunda fuente de verdad que podía
+divergir de la real (por ejemplo, si `checkDailyLimit`/`spentOn`
+cambiara su regla de qué cuenta como "hoy" en UTC) sin que nada lo
+detectara — el panel mentiría con confianza. La única lectura nueva de
+verdad que el `VaultReader`/`StatusDirectory` del dashboard ganaron es
+exactamente esa: `spentOn` (ya existía en `MandateVault`, solo faltaba
+exponerse en la interfaz de solo lectura) y `listAgents` (ya existía en
+`Directory`, mismo caso).
+
+**Por qué el Mandato activo se re-valida con `agentPayMandateSchema` en
+vez de asumir que `document` ya es válido.** `@agentpey/directory`
+guarda `document` como un `z.record(z.string(), z.unknown())` a
+propósito (`entities.ts`: "storing a signed document and judging one
+are different jobs") — nunca depende de `@agentpey/mandate`. El
+dashboard sí necesita leer `credentialSubject.grant.limits`, así que
+tiene que volver a validar en ese borde, mismo criterio que
+`wallet-session-store.ts` ya aplica a sus propias filas de Postgres. Un
+documento que no parsea (el caso más común en los tests: fixtures
+viejas con `{ version: 1 }`) hace que `readPerDayUsage` devuelva
+`undefined` — "no hay nada que medir" — en vez de romper la página
+entera.
+
+**Por qué el saldo de rail es una función inyectada
+(`readBalance: (railContractId: string) => Promise<string>`), no una
+llamada directa a `@stellar/stellar-sdk` dentro de `status.ts`.** Mismo
+seam que `vaultFactory` ya establece para Postgres: `status.ts` es
+lógica pura, testeable con dobles simples en memoria, sin abrir una
+conexión real a nada. La implementación real
+(`apps/status-dashboard/src/rail-balance.ts`, nuevo) es la única pieza
+que sabe qué es Stellar — una simulación `balance()` SEP-41 sobre el
+contrato SAC de USDC, la misma llamada que
+`scripts/check-rail-balances.ts` (T60) ya hacía como script de
+operador. Verificada con una corrida real contra el rail compartido de
+testnet (`POLICY_RAIL_CONTRACT_ID` de `render.yaml`,
+`CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA`): devolvió
+el saldo real, `0.0490000`.
+
+**Umbrales elegidos, con su motivo:** `PERDAY_WARNING_RATIO = 0.8` —
+80% del límite diario, para avisar con margen de una compra más antes
+del corte, no en el corte mismo (mismo espíritu que `LOW_USDC_WARNING`
+ya aplicaba al saldo de rail desde T60, reusado tal cual acá, no
+reinventado).
+
+**Alternativa descartada:** el alcance mínimo que se había ofrecido
+como opción ("solo conectar `check-rail-balances.ts` a un aviso real,
+saltear `perDay`/rechazos"). El usuario eligió explícitamente el panel
+completo — el saldo de rail por sí solo no contestaba las otras dos
+preguntas operativas (¿un tenant está por chocar con su límite? ¿qué
+se le rechazó y por qué?) que sí importan para acompañar un piloto
+externo (F9).
+
+Documentación tocada: `BITACORA.md` (nuevo hito T71),
+`PLATAFORMA-PARTNERS.md` (nota de F8). Archivos tocados:
+`apps/status-dashboard/src/status.ts`,
+`apps/status-dashboard/src/status.test.ts` (nuevo),
+`apps/status-dashboard/src/rail-balance.ts` (nuevo),
+`apps/status-dashboard/src/server.ts`,
+`apps/status-dashboard/src/server.test.ts`,
+`apps/status-dashboard/src/server.integration.test.ts`,
+`apps/status-dashboard/package.json`.
+
+---

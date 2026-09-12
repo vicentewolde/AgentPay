@@ -12,7 +12,7 @@
 
 ## Estado actual
 
-**Fecha:** 2026-09-12 · **Último hito cerrado:** T70 (limpieza activa de filas vencidas del flujo de wallet) · **Fase 6: en curso**
+**Fecha:** 2026-09-12 · **Último hito cerrado:** T71 (panel completo de métricas/alertas en el status-dashboard) · **Fase 6: en curso**
 
 Un visitante ya puede conectar una wallet Stellar real (Freighter), firmar
 de verdad su propio Mandato, y cada tenant deriva y ancla su propia
@@ -75,7 +75,13 @@ contra el servidor real y testnet real. Con eso cerrado, quedaba un
 hueco anotado pero sin ticket: ninguna de esas filas efímeras se
 borraba de verdad al vencer, solo dejaban de leerse. T70 lo cierra: un
 barrido periódico dentro del propio servidor borra las filas vencidas
-de las cuatro tablas que tienen `expires_at`.
+de las cuatro tablas que tienen `expires_at`. Con retención cerrada, el
+usuario pidió el panel completo de métricas/alertas que quedaba sin
+ticket desde el alcance original de F8: T71 lo agrega al
+`status-dashboard` (T59) ya existente — cuánto de su límite diario
+lleva gastado cada tenant hoy, sus rechazos más recientes, y el saldo
+USDC de su `policy_rail` si tiene uno — todo de solo lectura, sin
+ninguna ruta nueva capaz de escribir.
 
 ### Progreso
 
@@ -115,6 +121,7 @@ de las cuatro tablas que tienen `expires_at`.
 | T68 | `G12`, segundo hito: ese store llega a `apps/web` sobre Postgres; `agentpass` se reconstruye por request en el flujo de anclaje de wallet | ✅ cerrado 2026-09-12 |
 | T69 | `G12`, tercer hito: los últimos cuatro stores en memoria del flujo de wallet (desafíos, sesiones pendientes, dirección por sesión) pasan a Postgres — **`G12` completo** | ✅ cerrado 2026-09-12 |
 | T70 | Limpieza activa: barrido periódico borra filas vencidas de `wallet_challenges`/`pending_wallet_sessions`/`pending_consent_sessions`/`sdk_pending_writes`, que antes solo dejaban de leerse | ✅ cerrado 2026-09-12 |
+| T71 | Panel completo de métricas/alertas en `status-dashboard`: uso de `perDay` hoy, rechazos recientes, saldo USDC del `policy_rail` de cada tenant — todo de solo lectura | ✅ cerrado 2026-09-12 |
 
 ---
 
@@ -2427,3 +2434,111 @@ Pendiente: nada de retención. Sigue sin decidir, a pedido explícito
 del usuario: métricas/alertas (el usuario pidió un panel completo —
 `perDay` cerca del límite, rechazos, saldo de rail — próximo hito) y
 F9 (partner real y métrica de éxito, ambos sin decidir todavía).
+
+---
+
+## T71 · Panel completo de métricas/alertas — cerrado 2026-09-12
+
+**Qué quedó funcionando, en palabras llanas.** El `status-dashboard`
+(T59) ya mostraba, por tenant, el historial de mandatos y la cadena del
+vault — pero alguien mirando ese panel no podía responder tres
+preguntas operativas sin ir a buscar los datos a mano: ¿este tenant
+está por chocar con su límite de gasto diario? ¿qué se le rechazó
+últimamente, y por qué? ¿el rail que paga sus compras tiene fondos? El
+usuario pidió el panel completo — no el mínimo de "solo saldo de rail"
+que se había ofrecido como alternativa más chica — y este hito agrega
+las tres respuestas a la misma página de solo lectura, sin agregar
+ninguna ruta capaz de escribir nada.
+
+**Evidencia técnica** (`C-73`):
+
+- `apps/status-dashboard/src/status.ts` gana tres piezas de lectura
+  nuevas, cada una reutilizando exactamente el mismo cálculo que el
+  camino de autorización real ya hace, nunca una reimplementación
+  aparte:
+  - `readPerDayUsage()` — encuentra el Mandato activo del tenant (ni
+    revocado ni vencido, el más reciente si hay más de uno), valida su
+    documento contra `agentPayMandateSchema` (el mismo zod que
+    `@agentpey/mandate` define — un documento guardado como registro
+    opaco en `@agentpey/directory` no se asume válido solo porque ya
+    se guardó), y llama `vault.spentOn(subject, currency, hoy)` — la
+    **misma** lectura que `PolicyRail.authorise()`
+    (`apps/agent/src/policy/policy-rail.ts`) hace antes de decidir,
+    aquí solo leída, nunca realimentada a ninguna decisión. Marca
+    `nearLimit` a partir de un 80% del límite (`PERDAY_WARNING_RATIO`)
+    — con margen antes del corte, no en el corte mismo.
+  - `recentRefusals()` — no es una lectura nueva: el vault ya
+    registraba cada rechazo (`VaultRefusedEntry`, Fase 5) y el
+    dashboard ya los leía para la tabla de "vault records"; esta
+    función solo filtra y ordena lo que `readVaultStatus` ya trae.
+  - `readRailBalances()` — lista los agentes del tenant
+    (`Directory.listAgents`, ya existente) y para cada uno con
+    `policyRailContractId` no nulo llama a un lector de saldo
+    **inyectado** — mismo patrón que `vaultFactory` ya usa para
+    Postgres — así que `status.ts` sigue sin saber qué es Stellar.
+- `apps/status-dashboard/src/rail-balance.ts` (nuevo): la única pieza
+  que sí sabe qué es Stellar — una simulación `balance()` SEP-41 sobre
+  el contrato USDC, la misma llamada que `scripts/check-rail-balances.ts`
+  (T60) ya hace como script de operador; ahora también alcanzable por
+  tenant desde el dashboard, no solo como listado completo por CLI.
+  Verificado con una corrida real contra el rail compartido en testnet
+  (`CANSQJH7KPQTBUXPA42BBWZGZRKLWQZUFVF3SLQOUWKHEX4L3JP7YEDA`,
+  el mismo `POLICY_RAIL_CONTRACT_ID` de `render.yaml`): devolvió
+  `0.0490000`, el saldo real de esa cuenta.
+- `apps/status-dashboard/src/server.ts`: una ruta nueva,
+  `/api/status/metrics/:tenantId`, GET-only como todas las demás, que
+  junta las tres lecturas; la página HTML existente gana tres
+  secciones nuevas (uso de `perDay`, rechazos recientes, saldo de
+  rails), con una clase CSS `.warn` para lo que necesita atención.
+
+**Verificado en cuatro niveles, el último visual:**
+
+1. 9 tests unitarios nuevos (`status.test.ts`) sobre las tres funciones
+   de lectura: ratio y bandera de `perDay` calculados bien, ningún
+   Mandato activo devuelve `undefined` en vez de tirar error, un
+   documento que no parsea como `AgentPayMandate` se trata igual que
+   "no hay Mandato" en lugar de romper la página, un rail sin dueño se
+   salta, un fallo de red al leer el saldo se convierte en un string
+   de error en vez de tumbar la ruta entera.
+2. Suite completa del monorepo (932 tests) sin regresiones; el test
+   HTTP existente (`server.test.ts`) extendido para cubrir la ruta
+   nueva y la sección nueva de la página.
+3. Test de integración contra Postgres real (`server.integration.test.ts`):
+   un tenant sembrado de punta a punta (partner, principal, agente,
+   Mandato válido, un gasto y un rechazo reales en el vault) confirma
+   que `/api/status/metrics/:id` lee de la base real los mismos
+   números que se escribieron.
+4. **Verificación visual real**, no solo HTTP: un tenant sembrado a
+   propósito con un gasto al 85% de su límite diario y un rechazo
+   reciente, el servidor real levantado (`pnpm --filter
+   @agentpey/status-dashboard run dev`), y la página cargada en el
+   navegador — capturada con screenshot. Las tres secciones nuevas
+   aparecen con los datos correctos, y la línea de `perDay` se muestra
+   en el color de alerta (`— near the daily limit`). Datos de prueba
+   borrados de Postgres al terminar.
+
+**Por qué el saldo de rail queda inyectado y no llamado directo desde
+`status.ts`.** Mismo criterio que `vaultFactory` — un módulo de lectura
+puro no debería tener que saber de Postgres ni de Stellar para ser
+testeable con un doble simple. `rail-balance.ts` es la única pieza que
+sabe hablar con la red real; todo lo demás la recibe como una función.
+
+**Qué NO se tocó, a propósito.** `checkMandate`/`checkScope`/
+`checkDailyLimit`/`PolicyRail.authorise()` — la lectura de `perDay` es
+exactamente la misma que esas funciones ya hacen, nunca una copia con
+su propia lógica que pudiera divergir. Ninguna ruta del dashboard gana
+un método de escritura: `readRailBalances` solo simula `balance()`,
+nunca `transfer`.
+
+Documentación tocada: `DECISIONES.md` (`C-73`), `PLATAFORMA-PARTNERS.md`
+(nota de F8 actualizada), este archivo. Archivos tocados:
+`apps/status-dashboard/src/status.ts`,
+`apps/status-dashboard/src/status.test.ts` (nuevo),
+`apps/status-dashboard/src/rail-balance.ts` (nuevo),
+`apps/status-dashboard/src/server.ts`,
+`apps/status-dashboard/src/server.test.ts`,
+`apps/status-dashboard/src/server.integration.test.ts`,
+`apps/status-dashboard/package.json`.
+
+Pendiente: nada de métricas/alertas. F9 sigue sin arrancar — el partner
+real y la métrica de éxito del piloto siguen sin decidir.

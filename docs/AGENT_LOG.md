@@ -3965,3 +3965,62 @@ completo de métricas/alertas (`perDay` cerca del límite, rechazos,
 saldo de rail) — arranca en una sesión/hito aparte, no encadenado a
 este. F9 sigue sin arrancar: falta que el usuario decida el partner
 real y la métrica de éxito del piloto.
+
+---
+
+## 2026-09-12 (8) — main / cc/t71-metrics-alerts-panel
+
+Agente: Claude Code
+
+Qué: mergeado y pusheado `cc/t70-retention-cleanup` (fast-forward) con
+confirmación explícita del usuario. Misma sesión, T71: el panel
+completo de métricas/alertas que el usuario eligió (no la alternativa
+más chica de "solo saldo de rail"). Se agregó al `status-dashboard`
+(T59) ya existente, sin ninguna ruta nueva capaz de escribir:
+
+- `readPerDayUsage()` — cuánto del `perDay` de su Mandato activo lleva
+  gastado cada tenant hoy, llamando el mismo `vault.spentOn()` que
+  `PolicyRail.authorise()` usa antes de decidir — nunca una suma
+  propia que pudiera divergir. Marca `nearLimit` al 80%.
+- `recentRefusals()` — los rechazos que el vault ya registraba (Fase
+  5), ahora proyectados en su propia sección en vez de mezclados en la
+  tabla general de vault records.
+- `readRailBalances()` + `rail-balance.ts` (nuevo) — el saldo USDC del
+  `policy_rail` de cada agente del tenant, misma simulación SEP-41 que
+  `scripts/check-rail-balances.ts` (T60) ya hacía como script de
+  operador, ahora por tenant desde el dashboard.
+
+Verificado en cuatro niveles: 9 tests unitarios nuevos sobre las tres
+funciones de lectura, suite completa (932 tests) sin regresiones, un
+test de integración contra Postgres real (tenant sembrado de punta a
+punta), y verificación visual real — un tenant sembrado con un gasto
+al 85% de su límite y un rechazo reciente, servidor real levantado,
+página cargada en el navegador y capturada con screenshot mostrando
+las tres secciones nuevas con los datos correctos y el aviso en rojo.
+Se verificó además `rail-balance.ts` contra el rail compartido real de
+testnet (`POLICY_RAIL_CONTRACT_ID` de `render.yaml`), devolviendo su
+saldo real (`0.0490000`). Datos de prueba borrados de Postgres al
+terminar; scripts de siembra/limpieza temporales, borrados del repo.
+
+Por qué: seguía la conversación acordada al cerrar T70 — con retención
+resuelta, el usuario confirmó seguir directo con el panel completo de
+métricas/alertas en la misma sesión.
+
+Documentación tocada: `docs/fase-6-agentguard-comercializacion/BITACORA.md`
+(hito T71), `DECISIONES.md` (`C-73`), `PLATAFORMA-PARTNERS.md` (nota
+de F8 — el alcance original completo, cerrado en tres rondas). Archivos
+tocados: `apps/status-dashboard/src/status.ts`,
+`apps/status-dashboard/src/status.test.ts` (nuevo),
+`apps/status-dashboard/src/rail-balance.ts` (nuevo),
+`apps/status-dashboard/src/server.ts`,
+`apps/status-dashboard/src/server.test.ts`,
+`apps/status-dashboard/src/server.integration.test.ts`,
+`apps/status-dashboard/package.json`.
+
+Pendiente: mergear `cc/t71-metrics-alerts-panel` a `main` y pushear (a
+confirmar con el usuario). Con esto, el alcance completo original de
+F8 queda cubierto de punta a punta (perDay/G4, G11, G12, logging,
+métricas, alertas, retención — repartido en tres rondas: T61–T66,
+T67–T69, T70–T71). F9 sigue sin arrancar: falta que el usuario decida
+el partner real y la métrica de éxito del piloto — ninguna de las dos
+respondidas todavía.

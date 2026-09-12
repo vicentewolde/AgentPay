@@ -1,11 +1,15 @@
 import type { AddressInfo } from "node:net";
 
-import type { MandateRecord, Tenant } from "@agentpey/directory";
+import { stellarAddressToDid } from "@agentpass/core";
+import type { AgentInstance, MandateRecord, Tenant } from "@agentpey/directory";
 import type { VaultRecord } from "@agentpey/vault";
+import { Keypair } from "@stellar/stellar-sdk";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createStatusServer } from "./server.js";
 import type { StatusDirectory, VaultReader } from "./status.js";
+
+const AGENT_DID = stellarAddressToDid(Keypair.random().publicKey(), "testnet");
 
 const createdAt = new Date("2026-09-11T12:00:00.000Z");
 const tenant: Tenant = {
@@ -70,19 +74,60 @@ const records: readonly VaultRecord[] = [
 const vault: VaultReader = {
   list: () => records,
   verify: () => ({ ok: true }),
+  spentOn: async () => "8.00",
+};
+
+/** A second, more recent Mandate — `document: { version: 1 }` above can't be parsed as an `AgentPayMandate`, so perDay usage needs one that can. */
+const richMandate: MandateRecord = {
+  ...mandate,
+  id: "mandate_01J7QW8VQEJPAXEPAYSTATUS02",
+  document: {
+    "@context": ["https://www.w3.org/ns/credentials/v2"],
+    type: ["VerifiableCredential", "AgentPayMandate"],
+    mandateId: "22222222-2222-4222-8222-222222222222",
+    issuer: AGENT_DID,
+    validFrom: "2026-09-11T12:00:00.000Z",
+    validUntil: "2099-01-01T00:00:00.000Z",
+    credentialSubject: {
+      id: AGENT_DID,
+      grant: { actions: ["catalog:read"], venues: [], assets: [], limits: { perTx: "1.00", perDay: "10.00", currency: "USDC" } },
+    },
+    credentialStatus: { type: "AgentPassRegistry2026", registry: "CBDWMXZEE44NJ3RA6RS7K4EK36KDFW5S7KHP276HCMM4I52MIUUHEF5B" },
+  },
+  validUntil: new Date("2099-01-01T00:00:00.000Z"),
+  createdAt: new Date("2026-09-12T00:00:00.000Z"),
+};
+
+const railedAgent: AgentInstance = {
+  id: "agent_01J7QW8VQEJPAXEPAYSTATUS02",
+  tenantId: tenant.id,
+  keyIndex: 0,
+  address: "GDRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILR",
+  did: "did:stellar:testnet:GDRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILRAILR",
+  label: null,
+  status: "active",
+  onchainState: "anchored",
+  policyRailContractId: "CRAILCONTRACTIDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  createdAt,
+  updatedAt: createdAt,
 };
 
 function readOnlyDirectory(): StatusDirectory {
   return {
     findTenant: async (id) => (id === tenant.id ? tenant : undefined),
-    listMandates: async (id) => (id === tenant.id ? [mandate] : []),
+    listMandates: async (id) => (id === tenant.id ? [mandate, richMandate] : []),
+    listAgents: async (id) => (id === tenant.id ? [railedAgent] : []),
   };
 }
 
 const servers: ReturnType<typeof createStatusServer>[] = [];
 
 async function start() {
-  const server = createStatusServer({ directory: readOnlyDirectory(), vaultFactory: async () => vault });
+  const server = createStatusServer({
+    directory: readOnlyDirectory(),
+    vaultFactory: async () => vault,
+    readRailBalance: async (contractId) => (contractId === railedAgent.policyRailContractId ? "0.0010000" : "1.0000000"),
+  });
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
@@ -101,7 +146,7 @@ describe("status dashboard HTTP server", () => {
     expect(mandates.status).toBe(200);
     await expect(mandates.json()).resolves.toMatchObject({
       tenant: { id: tenant.id },
-      mandates: [{ id: mandate.id, hash: mandate.mandateHash }],
+      mandates: [{ id: richMandate.id, hash: richMandate.mandateHash }, { id: mandate.id, hash: mandate.mandateHash }],
     });
 
     const vaultResponse = await fetch(`${baseUrl}/api/status/vault/${tenant.id}`);
@@ -119,9 +164,36 @@ describe("status dashboard HTTP server", () => {
     await expect(page.text()).resolves.toContain("Vault chain: <span class=\"ok\">healthy</span>");
   });
 
+  it("T71: reports perDay usage, recent rejections, and rail balances for a tenant", async () => {
+    const baseUrl = await start();
+
+    const response = await fetch(`${baseUrl}/api/status/metrics/${tenant.id}`);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      tenant: { id: tenant.id, label: tenant.label, status: tenant.status },
+      perDay: {
+        subject: AGENT_DID,
+        currency: "USDC",
+        perDayLimit: "10.00",
+        spentToday: "8.00",
+        ratio: 0.8,
+        nearLimit: true,
+      },
+      rejections: [{ at: "2026-09-11T12:01:00.000Z", intentId: "intent-refused", code: "MandateAmountExceeded", reason: "amount exceeds per-transaction limit" }],
+      railBalances: [{ agentId: railedAgent.id, contractId: railedAgent.policyRailContractId, usdc: "0.0010000", low: true }],
+    });
+
+    const page = await fetch(`${baseUrl}/?tenantId=${tenant.id}`);
+    const html = await page.text();
+    expect(html).toContain("near the daily limit");
+    expect(html).toContain("MandateAmountExceeded");
+    expect(html).toContain("0.0010000");
+    expect(html).toContain("— low");
+  });
+
   it("rejects every non-GET method on every dashboard route", async () => {
     const baseUrl = await start();
-    const routes = ["/", `/api/status/mandates?tenantId=${tenant.id}`, `/api/status/vault/${tenant.id}`];
+    const routes = ["/", `/api/status/mandates?tenantId=${tenant.id}`, `/api/status/vault/${tenant.id}`, `/api/status/metrics/${tenant.id}`];
     const methods = ["POST", "PUT", "PATCH", "DELETE"] as const;
 
     for (const route of routes) {

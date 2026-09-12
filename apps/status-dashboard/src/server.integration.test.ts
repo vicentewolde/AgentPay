@@ -23,6 +23,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createStatusServer } from "./server.js";
 
 const ENV_PATH = fileURLToPath(new URL("../../../.env.local", import.meta.url));
+const REGISTRY = "CBDWMXZEE44NJ3RA6RS7K4EK36KDFW5S7KHP276HCMM4I52MIUUHEF5B";
 
 async function loadDatabaseUrl(): Promise<string> {
   const contents = await readFile(ENV_PATH, "utf8").catch(() => "");
@@ -110,18 +111,57 @@ describe("status dashboard against Postgres", () => {
       validUntil: new Date("2026-09-12T00:00:00.000Z"),
       anchorTx: "fixture-mandate-anchor",
     });
+    // T71: a second, more recent Mandate that actually parses as an
+    // `AgentPayMandate` — the fixture above never did, so perDay usage needs
+    // one that does, to exercise the happy path against real Postgres too.
+    await directory.recordMandate({
+      tenantId: tenant.id,
+      agentId: agent.id,
+      principalId: principal.id,
+      mandateHash: "b".repeat(64),
+      signatureKind: "platform-jws",
+      document: {
+        "@context": ["https://www.w3.org/ns/credentials/v2"],
+        type: ["VerifiableCredential", "AgentPayMandate"],
+        mandateId: randomUUID(),
+        issuer: principal.did,
+        validFrom: "2026-09-11T00:00:00.000Z",
+        validUntil: "2099-01-01T00:00:00.000Z",
+        credentialSubject: {
+          id: agent.did,
+          grant: { actions: ["catalog:read"], venues: [], assets: [], limits: { perTx: "1.00", perDay: "10.00", currency: "USDC" } },
+        },
+        credentialStatus: { type: "AgentPassRegistry2026", registry: REGISTRY },
+      },
+      jws: "fixture-jws-2",
+      validFrom: new Date("2026-09-11T00:00:00.000Z"),
+      validUntil: new Date("2099-01-01T00:00:00.000Z"),
+      anchorTx: "fixture-mandate-anchor-2",
+    });
     const vault = await createPostgresMandateVault({ connectionString, tenantId: tenant.id });
+    // `readPerDayUsage` (T71) reads `spentOn` against *today* (real wall-clock
+    // `now`, not injectable through the HTTP route) — so this fixture has to
+    // land in today's UTC day too, not a fixed past date, or the metrics
+    // assertion below reads a stale $0.00 instead of this recorded amount.
     await vault.record({
-      subject: principal.did,
+      subject: agent.did,
       intentId: "fixture-payment",
       currency: "USDC",
       amount: "2.50",
-      at: new Date("2026-09-11T12:00:00.000Z"),
+      at: new Date(),
+    });
+    await vault.recordRefusal({
+      subject: agent.did,
+      intentId: "fixture-refused",
+      code: "MandateDailyLimitExceeded",
+      reason: "over perDay",
+      details: {},
     });
 
     const server = createStatusServer({
       directory,
       vaultFactory: (tenantId) => createPostgresMandateVault({ connectionString, tenantId }),
+      readRailBalance: async () => "0.00",
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const address = server.address() as AddressInfo;
@@ -130,13 +170,21 @@ describe("status dashboard against Postgres", () => {
     try {
       const mandates = await fetch(`${baseUrl}/api/status/mandates?tenantId=${tenant.id}`);
       expect(mandates.status).toBe(200);
-      await expect(mandates.json()).resolves.toMatchObject({ mandates: [{ hash: "a".repeat(64) }] });
+      await expect(mandates.json()).resolves.toMatchObject({ mandates: [{ hash: "b".repeat(64) }, { hash: "a".repeat(64) }] });
 
       const status = await fetch(`${baseUrl}/api/status/vault/${tenant.id}`);
       expect(status.status).toBe(200);
       await expect(status.json()).resolves.toMatchObject({
         verification: { ok: true },
-        records: [{ kind: "granted", amount: "2.50 USDC" }],
+        records: [{ kind: "refused", detail: "MandateDailyLimitExceeded: over perDay" }, { kind: "granted", amount: "2.50 USDC" }],
+      });
+
+      const metrics = await fetch(`${baseUrl}/api/status/metrics/${tenant.id}`);
+      expect(metrics.status).toBe(200);
+      await expect(metrics.json()).resolves.toMatchObject({
+        perDay: { subject: agent.did, currency: "USDC", perDayLimit: "10.00", spentToday: "2.5000000" },
+        rejections: [{ code: "MandateDailyLimitExceeded", reason: "over perDay", intentId: "fixture-refused" }],
+        railBalances: [],
       });
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));

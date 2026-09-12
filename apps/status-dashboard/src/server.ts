@@ -9,9 +9,16 @@ import { createDirectory, type Directory } from "@agentpey/directory";
 import { createPostgresMandateVault, type VaultRecord } from "@agentpey/vault";
 import { z } from "zod";
 
+import { readRailUsdcBalance } from "./rail-balance.js";
 import {
   readMandatesStatus,
+  readPerDayUsage,
+  readRailBalances,
   readVaultStatus,
+  recentRefusals,
+  type PerDayUsage,
+  type RailBalance,
+  type RefusalSummary,
   type StatusDirectory,
   type VaultReaderFactory,
 } from "./status.js";
@@ -24,6 +31,8 @@ const tenantIdSchema = z.string().trim().min(1).max(200);
 export interface StatusDashboardDependencies {
   readonly directory: StatusDirectory;
   readonly vaultFactory: VaultReaderFactory;
+  /** T71: a SEP-41 `balance()` simulation of one rail's address — never a `transfer`. */
+  readonly readRailBalance: (railContractId: string) => Promise<string>;
 }
 
 type Json = null | boolean | number | string | Json[] | { readonly [key: string]: Json };
@@ -65,7 +74,47 @@ function vaultJson(records: readonly VaultRecord[]): Json[] {
   });
 }
 
-function renderPage(tenantId: string | undefined, mandates: Awaited<ReturnType<typeof readMandatesStatus>> | undefined, vault: Awaited<ReturnType<typeof readVaultStatus>> | undefined): string {
+function perDayJson(perDay: PerDayUsage | undefined): Json {
+  if (perDay === undefined) return null;
+  const { subject, currency, perDayLimit, spentToday, ratio, nearLimit } = perDay;
+  return { subject, currency, perDayLimit, spentToday, ratio, nearLimit };
+}
+
+function refusalsJson(refusals: readonly RefusalSummary[]): Json[] {
+  return refusals.map(({ at, intentId, code, reason }) => ({ at, intentId, code, reason }));
+}
+
+function railBalancesJson(balances: readonly RailBalance[]): Json[] {
+  return balances.map(({ agentId, contractId, usdc, low }) => ({ agentId, contractId, usdc, low }));
+}
+
+function renderMetrics(perDay: PerDayUsage | undefined, refusals: readonly RefusalSummary[], railBalances: readonly RailBalance[]): string {
+  const perDaySection =
+    perDay === undefined
+      ? "<p>No active Mandate to measure perDay usage against.</p>"
+      : `<p class="${perDay.nearLimit ? "warn" : ""}">${escapeHtml(perDay.spentToday)} / ${escapeHtml(perDay.perDayLimit)} ${escapeHtml(perDay.currency)} spent today (${Math.round(perDay.ratio * 100)}%)${perDay.nearLimit ? " — near the daily limit" : ""}</p>`;
+
+  const refusalRows = refusals
+    .map((r) => `<tr><td>${escapeHtml(r.at)}</td><td>${escapeHtml(r.code)}</td><td>${escapeHtml(r.reason)}</td><td>${escapeHtml(r.intentId)}</td></tr>`)
+    .join("");
+
+  const railRows = railBalances
+    .map(
+      (r) =>
+        `<tr><td>${escapeHtml(r.agentId)}</td><td>${escapeHtml(r.contractId)}</td><td class="${r.low ? "warn" : ""}">${escapeHtml(r.usdc)}${r.low ? " — low" : ""}</td></tr>`,
+    )
+    .join("");
+
+  return `<h3>perDay usage today</h3>${perDaySection}<h3>Recent rejections</h3><table><thead><tr><th>At</th><th>Code</th><th>Reason</th><th>Intent</th></tr></thead><tbody>${refusalRows || "<tr><td colspan=\"4\">No rejections.</td></tr>"}</tbody></table><h3>Rail balances</h3><table><thead><tr><th>Agent</th><th>Rail contract</th><th>USDC</th></tr></thead><tbody>${railRows || "<tr><td colspan=\"3\">No rail deployed for this tenant yet.</td></tr>"}</tbody></table>`;
+}
+
+function renderPage(
+  tenantId: string | undefined,
+  mandates: Awaited<ReturnType<typeof readMandatesStatus>> | undefined,
+  vault: Awaited<ReturnType<typeof readVaultStatus>> | undefined,
+  perDay: PerDayUsage | undefined,
+  railBalances: readonly RailBalance[],
+): string {
   const mandateRows = mandates?.mandates
     .map(
       (mandate) => `<tr><td>${escapeHtml(mandate.createdAt.toISOString())}</td><td>${escapeHtml(mandate.id)}</td><td>${escapeHtml(mandate.mandateHash)}</td><td>${mandate.revokedAt === null ? "active" : "revoked"}</td></tr>`,
@@ -79,13 +128,14 @@ function renderPage(tenantId: string | undefined, mandates: Awaited<ReturnType<t
     .join("") ?? "";
   const health = vault === undefined ? "—" : vault.verification.ok ? "healthy" : `broken at sequence ${vault.verification.brokenAtSeq}`;
   const tenant = tenantId === undefined ? "" : escapeHtml(tenantId);
+  const metrics = tenantId === undefined ? "" : renderMetrics(perDay, recentRefusals(vault?.records ?? []), railBalances);
 
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AgentPey status</title>
-<style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#18212f}input,button{font:inherit;padding:.5rem}table{border-collapse:collapse;width:100%;margin:1rem 0 2rem}th,td{border:1px solid #c9d2dc;padding:.55rem;text-align:left;vertical-align:top;word-break:break-word}th{background:#edf2f7}.ok{color:#08783f;font-weight:700}</style>
+<style>body{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#18212f}input,button{font:inherit;padding:.5rem}table{border-collapse:collapse;width:100%;margin:1rem 0 2rem}th,td{border:1px solid #c9d2dc;padding:.55rem;text-align:left;vertical-align:top;word-break:break-word}th{background:#edf2f7}.ok{color:#08783f;font-weight:700}.warn{color:#9a3412;font-weight:700}</style>
 </head><body><h1>AgentPey internal status</h1><p>Read-only operational view. It cannot start payments, revoke mandates, or write records.</p>
 <form method="get"><label for="tenantId">Tenant ID</label> <input id="tenantId" name="tenantId" value="${tenant}" required> <button type="submit">Load status</button></form>
-${tenantId === undefined ? "<p>Enter a tenant ID to inspect its mandate history and vault chain.</p>" : `<h2>Tenant ${tenant}</h2><h3>Vault chain: <span class="${vault?.verification.ok ? "ok" : ""}">${escapeHtml(health)}</span></h3><h3>Recent mandates</h3><table><thead><tr><th>Created</th><th>ID</th><th>Hash</th><th>Status</th></tr></thead><tbody>${mandateRows || "<tr><td colspan=\"4\">No mandates.</td></tr>"}</tbody></table><h3>Recent vault records</h3><table><thead><tr><th>Seq</th><th>At</th><th>Kind</th><th>Amount</th><th>Detail</th></tr></thead><tbody>${vaultRows || "<tr><td colspan=\"5\">No vault records.</td></tr>"}</tbody></table>`}
+${tenantId === undefined ? "<p>Enter a tenant ID to inspect its mandate history and vault chain.</p>" : `<h2>Tenant ${tenant}</h2><h3>Vault chain: <span class="${vault?.verification.ok ? "ok" : ""}">${escapeHtml(health)}</span></h3>${metrics}<h3>Recent mandates</h3><table><thead><tr><th>Created</th><th>ID</th><th>Hash</th><th>Status</th></tr></thead><tbody>${mandateRows || "<tr><td colspan=\"4\">No mandates.</td></tr>"}</tbody></table><h3>Recent vault records</h3><table><thead><tr><th>Seq</th><th>At</th><th>Kind</th><th>Amount</th><th>Detail</th></tr></thead><tbody>${vaultRows || "<tr><td colspan=\"5\">No vault records.</td></tr>"}</tbody></table>`}
 </body></html>`;
 }
 
@@ -132,7 +182,9 @@ export function createStatusServer(dependencies: StatusDashboardDependencies): S
   return createServer(async (request: IncomingMessage, response: ServerResponse) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const vaultMatch = /^\/api\/status\/vault\/([^/]+)$/.exec(url.pathname);
-    const knownRoute = url.pathname === "/" || url.pathname === "/api/status/mandates" || vaultMatch !== null;
+    const metricsMatch = /^\/api\/status\/metrics\/([^/]+)$/.exec(url.pathname);
+    const knownRoute =
+      url.pathname === "/" || url.pathname === "/api/status/mandates" || vaultMatch !== null || metricsMatch !== null;
 
     if (knownRoute && request.method !== "GET") {
       methodNotAllowed(response);
@@ -169,18 +221,35 @@ export function createStatusServer(dependencies: StatusDashboardDependencies): S
         });
         return;
       }
+      if (metricsMatch !== null) {
+        const tenantId = tenantIdFromPath(metricsMatch[1] ?? "");
+        const [vault, perDay, railBalances] = await Promise.all([
+          readVaultStatus(dependencies.directory, dependencies.vaultFactory, tenantId),
+          readPerDayUsage(dependencies.directory, dependencies.vaultFactory, tenantId),
+          readRailBalances(dependencies.directory, tenantId, dependencies.readRailBalance),
+        ]);
+        sendJson(response, 200, {
+          tenant: { id: vault.tenant.id, label: vault.tenant.label ?? null, status: vault.tenant.status },
+          perDay: perDayJson(perDay),
+          rejections: refusalsJson(recentRefusals(vault.records)),
+          railBalances: railBalancesJson(railBalances),
+        });
+        return;
+      }
 
       const tenantId = url.searchParams.get("tenantId");
       if (tenantId === null) {
-        sendHtml(response, 200, renderPage(undefined, undefined, undefined));
+        sendHtml(response, 200, renderPage(undefined, undefined, undefined, undefined, []));
         return;
       }
       const parsedTenantId = parseTenantId(tenantId);
-      const [mandates, vault] = await Promise.all([
+      const [mandates, vault, perDay, railBalances] = await Promise.all([
         readMandatesStatus(dependencies.directory, parsedTenantId),
         readVaultStatus(dependencies.directory, dependencies.vaultFactory, parsedTenantId),
+        readPerDayUsage(dependencies.directory, dependencies.vaultFactory, parsedTenantId),
+        readRailBalances(dependencies.directory, parsedTenantId, dependencies.readRailBalance),
       ]);
-      sendHtml(response, 200, renderPage(parsedTenantId, mandates, vault));
+      sendHtml(response, 200, renderPage(parsedTenantId, mandates, vault, perDay, railBalances));
     } catch (error) {
       errorResponse(response, error);
     }
@@ -206,6 +275,7 @@ async function main(): Promise<void> {
   const server = createStatusServer({
     directory,
     vaultFactory: (tenantId) => createPostgresMandateVault({ connectionString, tenantId }),
+    readRailBalance: readRailUsdcBalance,
   });
   server.listen(PORT, () => console.log(`Status dashboard listening on http://localhost:${PORT} (repo: ${REPO_ROOT})`));
 }

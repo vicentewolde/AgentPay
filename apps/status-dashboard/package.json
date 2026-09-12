@@ -11,12 +11,14 @@
   },
   "dependencies": {
     "@agentpass/core": "workspace:*",
+    "@agentpey/agent": "workspace:*",
     "@agentpey/directory": "workspace:*",
+    "@agentpey/mandate": "workspace:*",
     "@agentpey/vault": "workspace:*",
+    "@stellar/stellar-sdk": "^17.0.1",
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@stellar/stellar-sdk": "^17.0.1",
     "@types/pg": "^8.11.0",
     "pg": "^8.13.0"
   }

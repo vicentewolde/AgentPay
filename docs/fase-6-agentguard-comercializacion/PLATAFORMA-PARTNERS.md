@@ -1190,9 +1190,20 @@ Claude Code congele el contrato.
 > del propio proceso de `apps/web` (cada 15 minutos, sin infraestructura
 > nueva) barre lo vencido. Ver `DECISIONES.md` → `C-72`.
 >
-> Métricas y alertas siguen sin ticket — el usuario pidió un panel
-> completo (`perDay` cerca del límite, rechazos, saldo de rail),
-> trabajo real para el próximo hito, no resuelto ni descartado.
+> **Métricas y alertas se resolvieron después, mismo día (T71).** El
+> panel completo que el usuario pidió — uso de `perDay` cerca del
+> límite, rechazos recientes, saldo USDC del `policy_rail` de cada
+> tenant — se agregó al `status-dashboard` (T59) existente, de solo
+> lectura, sin ninguna ruta nueva capaz de escribir. Cada número
+> reutiliza exactamente el cálculo real (`spentOn`, el mismo que
+> `PolicyRail.authorise()` usa) en vez de duplicarlo. Ver
+> `DECISIONES.md` → `C-73`.
+>
+> Con esto, la sección "Alcance" original de F8 (`perDay`/`spentOn`,
+> `G4`, `G11`, `G12`, logs estructurados, métricas, alertas, política de
+> retención) queda cubierta de punta a punta, aunque llegó en tres
+> rondas separadas (F8 en sí, T61–T66; `G12`, T67–T69; y esto, T70–T71)
+> en vez de en el hito único que el borrador original imaginaba.
 
 ---
 
